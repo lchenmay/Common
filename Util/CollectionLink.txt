@@ -1,0 +1,394 @@
+﻿namespace Util
+
+open System
+open System.Collections.Generic
+open System.Collections.Concurrent
+open CollectionModDict
+
+module CollectionLink =
+
+    //type LinkItem<'v> = {
+    //    mutable prev: LinkItem<'v> option;
+    //    mutable next: LinkItem<'v> option;
+    //    mutable data:'v }
+
+    //type Link<'k,'v> = 
+    //    {
+    //        name: string;
+    //        mutable head: LinkItem<'v> option;
+    //        mutable rear: LinkItem<'v> option;
+    //        map: Dictionary<'k,LinkItem<'v>> }
+        
+    //    member this.append(key,data) =
+    //        let item = {prev=None;next=None;data=data}
+    //        lock(this)(fun() ->
+    //            if(this.map.ContainsKey(key)=false)then
+    //                if(this.rear.IsSome) then
+    //                    let rear = this.rear.Value
+    //                    rear.next <- Some item
+    //                    item.prev <- Some rear
+    //                else
+    //                    this.head <- Some item
+    //                this.rear <- Some item
+    //                this.map.Add(key,item))
+
+    //    member this.inserthead(key,data) =
+    //        let item = {prev=None;next=None;data=data}
+    //        lock(this)(fun() ->
+    //            if(this.map.ContainsKey(key)=false)then
+    //                if(this.head.IsSome) then
+    //                    let head = this.rear.Value
+    //                    head.prev <- Some item
+    //                    item.next <- Some head
+    //                else
+    //                    this.rear <- Some item
+    //                this.head <- Some item
+    //                this.map.Add(key,item))
+
+    //    member this.find(key) =
+    //        lock(this)(fun () ->
+    //            if(this.map.ContainsKey(key)) then
+    //                Some this.map.[key]
+    //            else
+    //                None)
+
+    //    member this.remove(key) =
+    //        lock(this)(fun () ->
+    //            if(this.map.ContainsKey(key)) then
+    //                let item = this.map.[key]
+    //                if(this.map.Count = 1) then
+    //                    this.head <- None
+    //                    this.rear <- None
+    //                else
+    //                    if(item.prev.IsNone) then
+    //                        let next = item.next.Value
+    //                        next.prev <- None
+    //                        this.head <- Some next
+    //                    if(item.next.IsNone) then
+    //                        let prev = item.prev.Value
+    //                        prev.next <- None
+    //                        this.rear <- Some prev
+    //                item.prev <- None
+    //                item.next <- None
+    //                this.map.Remove(key) |> ignore)
+
+    //    member this.Item
+    //        with get(key) = this.map.[key]
+    //        and set(key) value =
+    //            lock(this)(fun () ->
+    //                if(this.map.ContainsKey(key)) then
+    //                    this.map.[key].data <- value
+    //                else
+    //                    this.append(key,value))
+
+    //    member this.tryFind(predicate) =
+    //        lock(this)(fun () ->
+    //            if(this.head.IsNone) then
+    //                None
+    //            else
+    //                let mutable res = None
+    //                let mutable current = this.head
+    //                while(res.IsNone && current.IsSome) do
+    //                    if(current.Value.data |> predicate) then
+    //                        res <- Some(current.Value)
+    //                    current <- current.Value.next
+    //                res)
+
+    //    member this.tryFindBack(predicate) =
+    //        lock(this)(fun () ->
+    //            if(this.rear.IsNone) then
+    //                None
+    //            else
+    //                let mutable res = None
+    //                let mutable current = this.rear
+    //                while(res.IsNone && current.IsSome) do
+    //                    if(current.Value.data |> predicate) then
+    //                        res <- Some(current.Value)
+    //                    current <- current.Value.prev
+    //                res)
+
+    //    member this.movehead(item) =
+    //        if(item.prev.IsSome) then
+    //            let prev = item.prev.Value
+    //            prev.next <- item.next
+
+    //            if(item.next.IsSome) then
+    //                let next = item.next.Value
+    //                next.prev <- item.prev
+    //            else
+    //                this.rear <- item.prev
+
+    //            let head = this.head
+    //            item.prev <- None
+    //            item.next <- head
+    //            head.Value.prev <- Some(item)
+    //            this.head <- Some(item)
+
+    //    member this.array(key) =
+    //        lock(this)(fun () ->
+    //            if(this.head.IsNone) then
+    //                [||]
+    //            else
+    //                let res = new ResizeArray<'v>()
+    //                let mutable current = this.head
+    //                while(current.IsSome) do
+    //                    res.Add(current.Value.data)
+    //                    current <- current.Value.next
+    //                res.ToArray())
+         
+
+    //let create_link(name) = {
+    //    name = name;
+    //    head = None;
+    //    rear = None;
+    //    map = new Dictionary<'k,LinkItem<'v>>() }
+
+    type LinearCachedItem<'k,'v> = {
+        k: 'k;
+        mutable accessedat: DateTime;
+        mutable reloadedat: DateTime;
+        mutable prev: LinearCachedItem<'k,'v> option;
+        mutable next: LinearCachedItem<'k,'v> option;
+        mutable data:'v }
+
+    type LinearCache<'k,'v> =
+        {
+            storage: ConcurrentDictionary<'k,'v>
+            size: int
+            name: string
+            mutable total:int64
+            mutable outdate:int64
+            mutable head: LinearCachedItem<'k,'v> option
+            mutable rear: LinearCachedItem<'k,'v> option
+            loader:int64->'v option }
+
+        member private this.movehead item =
+            if item.prev.IsSome then
+                let prev = item.prev.Value
+                prev.next <- item.next
+
+                if item.next.IsSome then
+                    let next = item.next.Value
+                    next.prev <- item.prev
+                else
+                    this.rear <- item.prev
+
+                let head = this.head
+                item.prev <- None
+                item.next <- head
+                head.Value.prev <- Some item
+                this.head <- Some item
+
+        //member private this.findCenter() =
+        //    let mutable head = this.head;
+        //    let mutable i = 0;
+        //    while (i*2 < this.size) && head.Value.next.IsSome do
+        //        head <- head.Value.next
+        //        i <- i + 1
+        //    head
+
+        //member private this.moveAfter(item, toItem) =
+        //    if(item.next.IsSome) then
+        //        let next = item.next.Value
+        //        next.prev <- item.prev
+        //        if(item.prev.IsSome) then
+        //            let prev = item.prev.Value
+        //            prev.next <- item.next
+
+        //        else
+        //            this.head <- item.next
+
+        //        let center = toItem
+
+        //        if (center.next.IsSome) then
+        //            let cnext = center.next.Value
+        //            center.next <- Some(item)
+        //            cnext.prev <- Some(item)
+        //            item.prev <- Some(center)
+        //            item.next <- Some(cnext)
+        //        else    
+        //            item.prev <- Some(center)
+        //            item.next <- None
+        //            center.next <- Some(item)
+        //            this.rear <- Some(item)
+
+        //member private this.moveToCenter(item) =
+        //    let center = this.findCenter().Value
+        //    this.moveAfter(item, center)
+            
+
+        //member private this.moveup(item:LinearCachedItem<'k,'v> option,num) =
+        //    if item.IsSome then
+        //        let mutable head = item;
+        //        let mutable i = 0;
+        //        while (i < num ) && head.Value.prev.IsSome do
+        //            head <- head.Value.prev
+        //            i <- i + 1
+        //        if head.Value.prev.IsNone then this.movehead(item.Value)
+        //        else this.moveAfter(item.Value, head.Value)
+
+        member private this.removerear() =
+            match this.rear with
+            | Some rear ->
+                if this.storage.TryRemove rear.k then
+                    let rear = this.rear.Value
+                    let prev = rear.prev.Value
+                    prev.next <- None
+                    this.rear <- Some prev
+            | None -> ()
+
+        member this.append (k,v) =
+
+            let item =
+                {
+                    k = k;
+                    accessedat = DateTime.UtcNow;
+                    reloadedat = DateTime.UtcNow;
+                    prev = None;
+                    next = None;
+                    data = v }
+
+            lock(this)(fun () ->
+                if(this.storage.Count = 0) then
+                    this.head <- Some item
+                    this.rear <- Some item
+                    this.storage.[k] <- item
+                else
+                    let head = this.head
+                    item.next <- head
+                    head.Value.prev <- Some(item)
+                    this.head <- Some(item)
+                    this.movehead(item)
+                    this.storage.[k] <- item
+                    while(this.storage.count >= this.size) do
+                        this.removerear()
+                        this.outdate <- System.Threading.Interlocked.Increment(&this.outdate))
+
+        member this.remove(id) = 
+            lock(this)(fun () ->
+                if(this.storage.ContainsKey(id)) then
+                    match this.load id with
+                    | Some(v) ->
+                        let head = this.head.Value
+                        this.storage.remove(id)
+                        let next = head.next.Value
+                        next.prev <- None
+                        this.head <- Some(next)
+                    | None -> ())
+
+        member this.reload k =
+
+            use cw = new Util.Perf.CodeWrapper("LinearCache." + this.name)
+
+            let loadedo = 
+                use cw = new Util.Perf.CodeWrapper("LinearCache.loader." + this.name)
+                this.loader k
+            
+            lock(this)(fun () ->
+                if(loadedo.IsSome)then
+                    if this.storage.ContainsKey k then
+                        let item = this.storage.[k]
+                        item.data <- loadedo.Value
+                        this.movehead(item)
+                    else
+                        this.append(k,loadedo.Value)
+                    Some(loadedo.Value)
+                else
+                    None)
+
+        member this.load k =
+
+            use cw = new Util.Perf.CodeWrapper("LinearCache<" + this.name + ">.load")
+  
+            this.total <- System.Threading.Interlocked.Increment(&this.total)
+            if this.storage.ContainsKey k then
+                let item = this.storage.[k]
+                lock this (fun()->
+                    this.movehead(item)
+                    item.accessedat <- DateTime.UtcNow)
+                Some item.data
+            else
+                let loaded = 
+                    use cw = new Util.Perf.CodeWrapper("LinearCache<" + this.name + ">.loader")
+                    this.loader id
+                
+                lock this (fun()->
+                    if this.storage.ContainsKey id then
+                        Some this.storage.[id].data
+                    else
+                        match loaded with
+                        | Some v ->
+                            this.append(id,v) |> ignore
+                            loaded
+                        | None -> None)
+
+        member this.take(foward_backward)(max) = 
+            lock(this)(fun () ->
+                let res = new System.Collections.Generic.List<'v>()
+                let mutable n = if(foward_backward)then this.head else this.rear
+                while(n.IsSome)do
+                    let v = n.Value
+
+                    res.Add(v.data)
+
+                    if(foward_backward)then
+                        n <- v.next
+                    else
+                        n <- v.prev
+                    if(max > 0)then
+                        if(res.Count = max)then
+                            n <- None
+                res)
+
+        member this.monitor(max,populater)(key) = 
+            let data = 
+                let sb = new System.Text.StringBuilder()
+                
+                let asc = (this.take(true)(max + max + 1)).ToArray()
+                if(asc.Length < max + max + 1) then
+                    asc
+                    |> Array.map(fun item -> "{\"item\":\"[" + System.Web.HttpUtility.JavaScriptStringEncode(populater(item)) + "]\"}")
+                    |> Util.Text.fastConcat(",")
+                    |> sb.Append
+                    |> ignore
+                else
+                    (this.take(true)(max)).ToArray()
+                    |> Array.map(fun item -> "{\"item\":\"[" + System.Web.HttpUtility.JavaScriptStringEncode(populater(item)) + "]\"},")
+                    |> String.Concat
+                    |> sb.Append
+                    |> ignore
+                    sb.Append("{\"item\":\" ... \"}") |> ignore
+                    (this.take(false)(max)).ToArray()
+                    |> Array.rev
+                    |> Array.map(fun item -> ",{\"item\":\"[" + System.Web.HttpUtility.JavaScriptStringEncode(populater(item)) + "]\"}")
+                    |> String.Concat
+                    |> sb.Append
+                    |> ignore
+                sb.ToString()
+
+            let utilization = 
+                if this.total = 0 then
+                    0.0
+                else
+                    float(int64(this.storage.count) + this.outdate) / (float this.total)
+
+            [|  "{\"Key\":\"" + key + "\"";
+                ",\"Size\":" + this.size.ToString();
+                ",\"Occupied\":" + this.storage.count.ToString();
+                ",\"Total\":" + this.total.ToString();
+                ",\"Outdate\":" + this.outdate.ToString();
+                ",\"Utilization\":\"" + (utilization * 100.0).ToString("0.00") + "\"";
+                ",\"Data\":[" + data + "]}"  |]
+            |> String.Concat
+
+
+    let createLinearcache<'k,'v>(name,loader,size) =
+        {
+            name = name
+            storage = new ConcurrentDictionary<'k,'v>()// createMDInt64<LinearCachedItem<'k,'v>>(8);
+            size= size
+            total = 0L
+            outdate = 0L
+            head = None
+            rear = None
+            loader = loader }

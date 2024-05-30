@@ -1,0 +1,99 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <PackageId>GNodeUtils</PackageId>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Company />
+  </PropertyGroup>
+
+  <ItemGroup>
+	  <Compile Include="OS\Perf.fs" />
+	  <Compile Include="OS\ObjectConvert.fs" />
+	  <Compile Include="OS\TextConsole.fs" />
+	  <Compile Include="OS\Console.fs" />
+	  <Compile Include="OS\Concurrent.fs" />
+	  <Compile Include="OS\Runtime.fs" />
+	  <Compile Include="AssemblyInfo.fs" />
+	  <Compile Include="Math\Cat.fs" />
+	  <Compile Include="Math\Math.fs" />
+	  <Compile Include="Math\Prob.fs" />
+	  <Compile Include="Math\LinearAlgebra.fs" />
+	  <Compile Include="Collection\Collection.fs" />
+	  <Compile Include="Collection\CollectionModDict.fs" />
+	  <Compile Include="Collection\CollectionSortedAccessor.fs" />
+	  <Compile Include="Collection\LinearCache.fs" />
+	  <Compile Include="Math\Combinatorics.fs" />
+	  <Compile Include="SD\Base64.fs" />
+	  <Compile Include="SD\Text.fs" />
+	  <Compile Include="SD\Time.fs" />
+	  <Compile Include="SD\Json.fs" />
+	  <Compile Include="SD\Bin.fs" />
+	  <Compile Include="SD\Crypto.fs" />
+	  <Compile Include="OS\FileSys.fs" />
+	  <Compile Include="OS\Log.fs" />
+	  <Compile Include="Measures.fs" />
+	  <Compile Include="OS\OS.fs" />
+	  <Compile Include="DB\Db.fs" />
+    <Compile Include="DB\DbQuery.fs" />
+    <Compile Include="DB\DbTx.fs" />
+    <Compile Include="Media\DirectX.fs" />
+    <Compile Include="Media\Graphics.fs" />
+    <Compile Include="Media\VideoDecorder.fs" />
+    <Compile Include="Network\Diff.fs" />
+    <Compile Include="Network\HtmlFilter.fs" />
+    <Compile Include="Network\Tcp.fs" />
+    <Compile Include="Network\Http.fs" />
+    <Compile Include="Network\TcpServer.fs" />
+    <Compile Include="Network\HttpServer.fs" />
+    <Compile Include="Network\HttpClient.fs" />
+    <Compile Include="Network\Html.fs" />
+    <Compile Include="Network\Browser.fs" />
+    <Compile Include="Network\Zmq.fs" />
+    <Compile Include="Network\IA.fs" />
+    <Compile Include="Type\Orm.fs" />
+    <Compile Include="Type\SrOrm.fs" />
+    <Compile Include="Type\TypeSys.fs" />
+    <Compile Include="Type\LangPackTypeScript.fs" />
+    <Compile Include="Type\CodeRobotI.fs" />
+    <Compile Include="Type\CodeRobotIIFs.fs" />
+    <Compile Include="Type\CodeRobotIITs.fs" />
+    <Compile Include="Type\CodeRobotIII.fs" />
+    <Compile Include="Type\CodeRobot.fs" />
+    <Compile Include="Boost.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="CHTCHSConv" Version="1.0.0" />
+    <PackageReference Include="Crypto.RIPEMD" Version="1.0.3" />
+    <PackageReference Include="FSharp.Control.AsyncSeq" Version="3.2.1" />
+    <PackageReference Include="FSharp.Stats" Version="0.5.0" />
+    <PackageReference Include="FSharpx.Async" Version="1.14.1" />
+    <PackageReference Include="NetMQ" Version="4.0.1.13" />
+    <PackageReference Include="SHA3.Net" Version="2.0.0" />
+    <PackageReference Include="SharpDX" Version="4.2.0" />
+    <PackageReference Include="SharpDX.Direct2D1" Version="4.2.0" />
+    <PackageReference Include="SharpDX.DXGI" Version="4.2.0" />
+    <PackageReference Include="SharpDX.Mathematics" Version="4.2.0" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.5.2" />
+
+    <PackageReference Include="System.Diagnostics.Process" Version="4.3.0">
+      <GeneratePathProperty></GeneratePathProperty>
+    </PackageReference>
+
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="SHA3" Version="1.0.0">
+      <GeneratePathProperty></GeneratePathProperty>
+    </PackageReference>
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="8.0.300" />
+  </ItemGroup>
+
+</Project>

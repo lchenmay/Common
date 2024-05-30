@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <RestoreSuccess Condition=" '$(RestoreSuccess)' == '' ">True</RestoreSuccess>
+    <RestoreTool Condition=" '$(RestoreTool)' == '' ">NuGet</RestoreTool>
+    <ProjectAssetsFile Condition=" '$(ProjectAssetsFile)' == '' ">$(MSBuildThisFileDirectory)project.assets.json</ProjectAssetsFile>
+    <NuGetPackageRoot Condition=" '$(NuGetPackageRoot)' == '' ">$(UserProfile)\.nuget\packages\</NuGetPackageRoot>
+    <NuGetPackageFolders Condition=" '$(NuGetPackageFolders)' == '' ">C:\Users\RR\.nuget\packages\;C:\Program Files (x86)\Microsoft Visual Studio\Shared\NuGetPackages</NuGetPackageFolders>
+    <NuGetProjectStyle Condition=" '$(NuGetProjectStyle)' == '' ">PackageReference</NuGetProjectStyle>
+    <NuGetToolVersion Condition=" '$(NuGetToolVersion)' == '' ">6.10.0</NuGetToolVersion>
+  </PropertyGroup>
+  <ItemGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <SourceRoot Include="C:\Users\RR\.nuget\packages\" />
+    <SourceRoot Include="C:\Program Files (x86)\Microsoft Visual Studio\Shared\NuGetPackages\" />
+  </ItemGroup>
+  <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <PkgSystem_ServiceProcess_ServiceController Condition=" '$(PkgSystem_ServiceProcess_ServiceController)' == '' ">C:\Users\RR\.nuget\packages\system.serviceprocess.servicecontroller\8.0.0</PkgSystem_ServiceProcess_ServiceController>
+    <PkgSystem_Management Condition=" '$(PkgSystem_Management)' == '' ">C:\Users\RR\.nuget\packages\system.management\8.0.0</PkgSystem_Management>
+    <PkgSystem_IdentityModel_Tokens_Jwt Condition=" '$(PkgSystem_IdentityModel_Tokens_Jwt)' == '' ">C:\Users\RR\.nuget\packages\system.identitymodel.tokens.jwt\7.5.2</PkgSystem_IdentityModel_Tokens_Jwt>
+    <PkgSystem_Diagnostics_PerformanceCounter Condition=" '$(PkgSystem_Diagnostics_PerformanceCounter)' == '' ">C:\Users\RR\.nuget\packages\system.diagnostics.performancecounter\8.0.0</PkgSystem_Diagnostics_PerformanceCounter>
+    <PkgSystem_Data_SqlClient Condition=" '$(PkgSystem_Data_SqlClient)' == '' ">C:\Users\RR\.nuget\packages\system.data.sqlclient\4.8.6</PkgSystem_Data_SqlClient>
+    <PkgSharpDX Condition=" '$(PkgSharpDX)' == '' ">C:\Users\RR\.nuget\packages\sharpdx\4.2.0</PkgSharpDX>
+    <PkgSharpDX_Mathematics Condition=" '$(PkgSharpDX_Mathematics)' == '' ">C:\Users\RR\.nuget\packages\sharpdx.mathematics\4.2.0</PkgSharpDX_Mathematics>
+    <PkgSharpDX_DXGI Condition=" '$(PkgSharpDX_DXGI)' == '' ">C:\Users\RR\.nuget\packages\sharpdx.dxgi\4.2.0</PkgSharpDX_DXGI>
+    <PkgSharpDX_Direct2D1 Condition=" '$(PkgSharpDX_Direct2D1)' == '' ">C:\Users\RR\.nuget\packages\sharpdx.direct2d1\4.2.0</PkgSharpDX_Direct2D1>
+    <PkgSHA3_Net Condition=" '$(PkgSHA3_Net)' == '' ">C:\Users\RR\.nuget\packages\sha3.net\2.0.0</PkgSHA3_Net>
+    <PkgNetMQ Condition=" '$(PkgNetMQ)' == '' ">C:\Users\RR\.nuget\packages\netmq\4.0.1.13</PkgNetMQ>
+    <PkgFSharp_Core Condition=" '$(PkgFSharp_Core)' == '' ">C:\Users\RR\.nuget\packages\fsharp.core\8.0.300</PkgFSharp_Core>
+    <PkgFSharp_Control_AsyncSeq Condition=" '$(PkgFSharp_Control_AsyncSeq)' == '' ">C:\Users\RR\.nuget\packages\fsharp.control.asyncseq\3.2.1</PkgFSharp_Control_AsyncSeq>
+    <PkgFSharpx_Async Condition=" '$(PkgFSharpx_Async)' == '' ">C:\Users\RR\.nuget\packages\fsharpx.async\1.14.1</PkgFSharpx_Async>
+    <PkgFSharp_Stats Condition=" '$(PkgFSharp_Stats)' == '' ">C:\Users\RR\.nuget\packages\fsharp.stats\0.5.0</PkgFSharp_Stats>
+    <PkgCrypto_RIPEMD Condition=" '$(PkgCrypto_RIPEMD)' == '' ">C:\Users\RR\.nuget\packages\crypto.ripemd\1.0.3</PkgCrypto_RIPEMD>
+    <PkgCHTCHSConv Condition=" '$(PkgCHTCHSConv)' == '' ">C:\Users\RR\.nuget\packages\chtchsconv\1.0.0</PkgCHTCHSConv>
+    <PkgBCrypt_Net-Next Condition=" '$(PkgBCrypt_Net-Next)' == '' ">C:\Users\RR\.nuget\packages\bcrypt.net-next\4.0.3</PkgBCrypt_Net-Next>
+  </PropertyGroup>
+</Project>

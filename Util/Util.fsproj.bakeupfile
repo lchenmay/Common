@@ -1,0 +1,80 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Math.fs" />
+    <Compile Include="Prob.fs" />
+    <Compile Include="LinearAlgebra.fs" />
+    <Compile Include="Runtime.fs" />
+    <Compile Include="Cat.fs" />
+    <Compile Include="Console.fs" />
+    <Compile Include="Concurrent.fs" />
+    <Compile Include="Perf.fs" />
+    <Compile Include="Text.fs" />
+    <Compile Include="Time.fs" />
+    <Compile Include="Collection.fs" />
+    <Compile Include="CollectionModDict.fs" />
+    <Compile Include="CollectionSortedAccessor.fs" />
+    <Compile Include="LinearCache.fs" />
+    <Compile Include="StateMachine.fs" />
+    <Compile Include="Crypto.fs" />
+    <Compile Include="Bin.fs" />
+    <Compile Include="FileSys.fs" />
+    <Compile Include="Log.fs" />
+    <Compile Include="Measures.fs" />
+    <Compile Include="Database.fs" />
+    <Compile Include="Combinatorics.fs" />
+    <Compile Include="Json.fs" />
+    <Compile Include="Tcp.fs" />
+    <Compile Include="Http.fs" />
+    <Compile Include="HighPerfNet.fs" />
+    <Compile Include="TcpServer.fs" />
+    <Compile Include="HttpServer.fs" />
+    <Compile Include="HttpClient.fs" />
+    <Compile Include="Html.fs" />
+    <Compile Include="Browser.fs" />
+    <Compile Include="Orm.fs" />
+    <Compile Include="SrOrm.fs" />
+    <Compile Include="TextConsole.fs" />
+    <Compile Include="WinAPI.fs" />
+    <Compile Include="ObjectConvert.fs" />
+    <Compile Include="Base64.fs" />
+    <Compile Include="JWT.fs" />
+    <Compile Include="HtmlFilter.fs" />
+    <Compile Include="JsonValue.fs" />
+    <Compile Include="VideoDecorder.fs" />
+    <Compile Include="Diff.fs" />
+    <Compile Include="ZMQ.fs" />
+    <Compile Include="Boost.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="CHTCHSConv" Version="1.0.0" />
+    <PackageReference Include="FSharp.Control.AsyncSeq" Version="3.2.1" />
+    <PackageReference Include="FSharp.Stats" Version="0.4.11" />
+    <PackageReference Include="FSharpx.Async" Version="1.14.1" />
+    <PackageReference Include="NetMQ" Version="4.0.1.12" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="SharpDX" Version="4.2.0" />
+    <PackageReference Include="SharpDX.Direct2D1" Version="4.2.0" />
+    <PackageReference Include="SharpDX.DXGI" Version="4.2.0" />
+    <PackageReference Include="SharpDX.Mathematics" Version="4.2.0" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.5" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.30.1" />
+
+    <PackageReference Include="System.Diagnostics.Process" Version="4.3.0">
+      <GeneratePathProperty></GeneratePathProperty>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="7.0.300" />
+  </ItemGroup>
+
+</Project>

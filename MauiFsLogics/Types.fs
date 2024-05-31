@@ -1,4 +1,4 @@
-﻿module AioLogics.Types
+﻿module MauiFsLogics.Types
 
 open System
 open System.Collections.Generic
@@ -9,8 +9,10 @@ open Microsoft.Maui.Controls
 open Microsoft.Maui.Layouts
 
 type Runtime = {
-mutable spa: ContentPage }
+mutable layout: AbsoluteLayout }
 
 let runtime = {
-    spa = new ContentPage() }
+    layout = new AbsoluteLayout() }
+
+
 

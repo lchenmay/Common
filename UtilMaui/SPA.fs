@@ -8,8 +8,18 @@ open Microsoft.Maui.Graphics
 open Microsoft.Maui.Controls
 open Microsoft.Maui.Layouts
 
-type SpaRuntime = {
-mutable page: ContentPage }
+let pages = new Stack<string>()
 
-let runtime = {
-    page = new ContentPage() }
+let route (layout:AbsoluteLayout) page =
+
+    pages.Push page
+
+    layout.Children.Clear()
+
+    match page with
+    | "/" -> layout.Children.Add(new Label(Text = "OK"))
+    | "abc" -> ()
+    | "def" -> ()
+    | _ -> pages.Pop() |> ignore
+
+

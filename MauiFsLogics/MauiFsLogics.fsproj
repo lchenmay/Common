@@ -16,9 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\BizType\BizType.fsproj" />
-    <ProjectReference Include="..\..\..\UtilMaui\UtilMaui.fsproj" />
-    <ProjectReference Include="..\..\..\Util\Util.fsproj" />
     <ProjectReference Include="..\UtilMaui\UtilMaui.fsproj" />
     <ProjectReference Include="..\Util\Util.fsproj" />
   </ItemGroup>

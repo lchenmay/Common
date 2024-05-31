@@ -6,25 +6,23 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="General.fs" />
-    <Compile Include="DataService.fs" />
-    <Compile Include="Skia.fs" />
-    <Compile Include="Layout.fs" />
-    <Compile Include="SPA.fs" />
+    <Compile Include="Types.fs" />
   </ItemGroup>
 
-
-	
   <ItemGroup>
     <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.40" />
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.40" />
     <PackageReference Include="SkiaSharp.Views.Maui.Controls" Version="2.88.8" />
-    <PackageReference Include="SkiaSharp.Views.Maui.Core" Version="2.88.8" />
   </ItemGroup>
-	
+
   <ItemGroup>
+    <ProjectReference Include="..\..\..\BizType\BizType.fsproj" />
+    <ProjectReference Include="..\..\..\UtilMaui\UtilMaui.fsproj" />
+    <ProjectReference Include="..\..\..\Util\Util.fsproj" />
+    <ProjectReference Include="..\UtilMaui\UtilMaui.fsproj" />
     <ProjectReference Include="..\Util\Util.fsproj" />
   </ItemGroup>
-	
+
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="8.0.300" />
   </ItemGroup>

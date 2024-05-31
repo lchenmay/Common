@@ -63,6 +63,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\MauiFsLogics\MauiFsLogics.fsproj" />
 	  <ProjectReference Include="..\UtilMaui\UtilMaui.fsproj" />
 	  <ProjectReference Include="..\Util\Util.fsproj" />
 	</ItemGroup>

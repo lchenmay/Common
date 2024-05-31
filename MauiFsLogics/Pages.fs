@@ -23,6 +23,7 @@ let renderPage2 (layout:AbsoluteLayout) =
 let renderPage3 (layout:AbsoluteLayout) = 
     layout.Children.Add(new Label(Text = "Page 3"))
 
+
 let pages = new Stack<string>()
 
 let router (layout:AbsoluteLayout) page = 

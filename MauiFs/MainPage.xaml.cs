@@ -1,7 +1,6 @@
 ﻿namespace MauiFs
 {
     using MauiFsLogics;
-    using MauiFsLogics.Pages;
 
     public partial class MainPage : ContentPage
     {
@@ -10,7 +9,7 @@
             InitializeComponent();
 
             Types.runtime.layout = this.layout;
-            router(Types.runtime.layout, "/");
+            Pages.routing(Types.runtime.layout, "1");
         }
     }
 

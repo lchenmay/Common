@@ -36,3 +36,6 @@
 /MauiFs/obj
 /MauiFs/Platforms
 /MauiFs/Resources
+/MauiFsLogics/bin/Debug/net8.0
+/MauiFsLogics/obj/Debug
+/MauiFsLogics/obj

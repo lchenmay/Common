@@ -10,7 +10,6 @@
     <Compile Include="DataService.fs" />
     <Compile Include="Skia.fs" />
     <Compile Include="Layout.fs" />
-    <Compile Include="SPA.fs" />
   </ItemGroup>
 
 

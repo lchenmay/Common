@@ -750,40 +750,43 @@ let ok (w:TextBlockWriter) =
     "{\"Error\":\"OK\"}" |> w.newline
     None
 
-let httpEcho runtime branch output req =
+let httpEcho folder runtime branch output req =
 
     let x = 
         req 
         |> req__ApiCtx runtime
 
-    match 
-        x
-        |> Suc
-        |> bind(fun h -> branch x) with
-    | Suc x ->
-        let e = 
-            match x.procedureo with
-            | Some p ->
-                use cw = new CodeWrapper("Api." + x.api)
-                try
-                    p x
-                with ex -> 
-                    x.w.clear()
-                    [|  "{\"Error\":\"Failed\",\"Response\":\""
-                        ex.Message
-                        "\"}" |]
-                    |> x.w.multiLine
-                    Error.Internal
-            | None -> 
-                Error.OK
+    if x.service.Length * x.api.Length > 0 then
+        match 
+            x
+            |> Suc
+            |> bind(fun h -> branch x) with
+        | Suc x ->
+            let e = 
+                match x.procedureo with
+                | Some p ->
+                    use cw = new CodeWrapper("Api." + x.api)
+                    try
+                        p x
+                    with ex -> 
+                        x.w.clear()
+                        [|  "{\"Error\":\"Failed\",\"Response\":\""
+                            ex.Message
+                            "\"}" |]
+                        |> x.w.multiLine
+                        Error.Internal
+                | None -> 
+                    Error.OK
 
-        if e <> Error.OK then
-            if x.w.count() = 0 then
-                "{\"Error\":\"" + e.ToString() + "\"}" |> x.w.newline
-    | Fail(e, x) -> "{\"Error\":\"" + e.ToString() + "\"}" |> x.w.newline
+            if e <> Error.OK then
+                if x.w.count() = 0 then
+                    "{\"Error\":\"" + e.ToString() + "\"}" |> x.w.newline
+        | Fail(e, x) -> "{\"Error\":\"" + e.ToString() + "\"}" |> x.w.newline
 
-    x.w.text()
-    |> str__StandardResponse "application/json"
+        x.w.text()
+        |> str__StandardResponse "application/json"
+    else
+        fileService folder req
 
 let wsReqRep dst (dataType:WebSocketMessageType, utf8Bytes:byte[]) =
     // let dst = "ws://127.0.0.1:" + testport.ToString()

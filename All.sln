@@ -9,9 +9,11 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Util", "Util\Util.fsproj", 
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "UtilMaui", "UtilMaui\UtilMaui.fsproj", "{41C55857-1FC1-4832-968F-29ACD52B9410}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MauiFs", "MauiFs\MauiFs.csproj", "{CA6ABFD3-1673-472B-AB92-01EB58BD65FD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MauiFs", "MauiFs\MauiFs.csproj", "{CA6ABFD3-1673-472B-AB92-01EB58BD65FD}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "MauiFsLogics", "MauiFsLogics\MauiFsLogics.fsproj", "{5C3EFA04-C9A4-456F-AE22-0677464FBE3D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlazorApp", "BlazorApp\BlazorApp.csproj", "{D1E3BB7A-FA51-4A08-A2AB-5C98C86A1BF7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -37,6 +39,10 @@ Global
 		{5C3EFA04-C9A4-456F-AE22-0677464FBE3D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5C3EFA04-C9A4-456F-AE22-0677464FBE3D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5C3EFA04-C9A4-456F-AE22-0677464FBE3D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1E3BB7A-FA51-4A08-A2AB-5C98C86A1BF7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1E3BB7A-FA51-4A08-A2AB-5C98C86A1BF7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1E3BB7A-FA51-4A08-A2AB-5C98C86A1BF7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1E3BB7A-FA51-4A08-A2AB-5C98C86A1BF7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

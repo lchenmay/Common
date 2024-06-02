@@ -52,15 +52,6 @@
     <Compile Include="Network\Browser.fs" />
     <Compile Include="Network\Zmq.fs" />
     <Compile Include="Network\IA.fs" />
-    <Compile Include="Type\Orm.fs" />
-    <Compile Include="Type\SrOrm.fs" />
-    <Compile Include="Type\TypeSys.fs" />
-    <Compile Include="Type\LangPackTypeScript.fs" />
-    <Compile Include="Type\CodeRobotI.fs" />
-    <Compile Include="Type\CodeRobotIIFs.fs" />
-    <Compile Include="Type\CodeRobotIITs.fs" />
-    <Compile Include="Type\CodeRobotIII.fs" />
-    <Compile Include="Type\CodeRobot.fs" />
     <Compile Include="Boost.fs" />
   </ItemGroup>
 

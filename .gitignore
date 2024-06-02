@@ -40,3 +40,6 @@
 /MauiFsLogics/obj/Debug
 /MauiFsLogics/obj
 /.vs/ProjectEvaluation
+/BlazorApp/bin/Debug/net8.0
+/BlazorApp/obj
+/Util/obj/Debug/net8.0/Util.fsproj.AssemblyReference.cache

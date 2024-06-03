@@ -38,6 +38,7 @@
 	  <Compile Include="DB\Db.fs" />
     <Compile Include="DB\DbQuery.fs" />
     <Compile Include="DB\DbTx.fs" />
+    <Compile Include="DB\Orm.fs" />
     <Compile Include="Media\DirectX.fs" />
     <Compile Include="Media\Graphics.fs" />
     <Compile Include="Media\VideoDecorder.fs" />

@@ -37,12 +37,16 @@ let rand__color() =
 
     let r = new Random()
 
-    let bin = Array.zeroCreate 6
+    let bin = Array.zeroCreate 3
     r.NextBytes bin
-    bin
-    |> Array.map(fun b -> b.ToString("{0:X2}"))
-    |> String.Concat
+    
+    let s = 
+        bin
+        |> Array.map(fun b -> 
+            b.ToString("X").PadLeft(2,'0'))
+        |> String.Concat
 
+    "#" + s
 
 let drawText (ctx:Canvas2DContext) (x,y) s = 
     ctx.FillTextAsync(s, x, y)

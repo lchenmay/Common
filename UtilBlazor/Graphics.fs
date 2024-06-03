@@ -1,5 +1,7 @@
 ﻿module UtilBlazor.Graphics
 
+open System
+
 open Blazor.Extensions
 open Blazor.Extensions.Canvas
 open Blazor.Extensions.Canvas.Canvas2D
@@ -31,6 +33,17 @@ let essential =
 
     """
 
+let rand__color() = 
+
+    let r = new Random()
+
+    let bin = Array.zeroCreate 6
+    r.NextBytes bin
+    bin
+    |> Array.map(fun b -> b.ToString("{0:X2}"))
+    |> String.Concat
+
+
 let drawText (ctx:Canvas2DContext) (x,y) s = 
     ctx.FillTextAsync(s, x, y)
 
@@ -42,4 +55,14 @@ let drawLine (ctx:Canvas2DContext) (l,t,r,b) =
         do! ctx.ClosePathAsync()
         do! ctx.StrokeAsync()
     }
-    
+
+let circle = 2.0 * System.Math.PI    
+
+let drawCircle (ctx:Canvas2DContext) color r (x,y) = 
+    task{
+        do! ctx.BeginPathAsync()
+        do! ctx.ArcAsync(x, y, r, 0, circle,false)
+        do! ctx.SetFillStyleAsync color
+        do! ctx.FillAsync()
+        do! ctx.StrokeAsync()
+    }

@@ -43,3 +43,6 @@
 /BlazorApp/bin/Debug/net8.0
 /BlazorApp/obj
 /Util/obj/Debug/net8.0/Util.fsproj.AssemblyReference.cache
+/.vs/Common-All
+/UtilBlazor/bin/Debug/net8.0
+/UtilBlazor/obj

@@ -126,7 +126,7 @@ let drawPath (ctx:Canvas2DContext) (points:(float * float)[]) =
                     p <- next
                     t)
                 |> Task.WhenAll
-            do! ctx.ClosePathAsync()
+            //do! ctx.ClosePathAsync()
             do! ctx.StrokeAsync()
     }
 

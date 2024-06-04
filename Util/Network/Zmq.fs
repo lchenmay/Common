@@ -533,7 +533,9 @@ let wsReceive zweb client =
                     zweb.disconnector.ToArray() |> Array.iter(fun h -> h client)
                 | _ -> ()  
 
-let fileService root req = 
+let fileService output root req = 
+
+    req.pathline |> output
 
     if req.pathline = "/" || req.pathline = "/nm" then
         Path.Combine(root, "index.html")
@@ -786,7 +788,7 @@ let httpEcho folder runtime branch output req =
         x.w.text()
         |> str__StandardResponse "application/json"
     else
-        fileService folder req
+        fileService output folder req
 
 let wsReqRep dst (dataType:WebSocketMessageType, utf8Bytes:byte[]) =
     // let dst = "ws://127.0.0.1:" + testport.ToString()

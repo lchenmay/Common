@@ -50,3 +50,7 @@
 /Util/obj/Release
 /UtilBlazor/bin/Release/net8.0
 /Util/obj/Debug/net8.0/Util.assets.cache
+/Util/obj/project.assets.json
+/Util/obj/project.nuget.cache
+/Util/obj/Util.fsproj.nuget.dgspec.json
+/Util/obj/Util.fsproj.nuget.g.props

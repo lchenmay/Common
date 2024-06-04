@@ -46,3 +46,6 @@
 /.vs/Common-All
 /UtilBlazor/bin/Debug/net8.0
 /UtilBlazor/obj
+/Util/bin/Release
+/Util/obj/Release
+/UtilBlazor/bin/Release/net8.0

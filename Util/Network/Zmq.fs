@@ -533,12 +533,12 @@ let wsReceive zweb client =
                     zweb.disconnector.ToArray() |> Array.iter(fun h -> h client)
                 | _ -> ()  
 
-let fileService output root req = 
+let fileService output root defaultHtml req = 
 
     req.pathline |> output
 
-    if req.pathline = "/" || req.pathline = "/nm" then
-        Path.Combine(root, "index.html")
+    if req.pathline = "/" then
+        Path.Combine(root, defaultHtml)
         |> IO.File.ReadAllText
         |> str__StandardResponse "text/html"
     elif req.path.Length > 0 then
@@ -752,7 +752,7 @@ let ok (w:TextBlockWriter) =
     "{\"Error\":\"OK\"}" |> w.newline
     None
 
-let httpEcho folder runtime branch output req =
+let httpEcho folder defaultHtml runtime branch output req =
 
     let x = 
         req 
@@ -788,7 +788,7 @@ let httpEcho folder runtime branch output req =
         x.w.text()
         |> str__StandardResponse "application/json"
     else
-        fileService output folder req
+        fileService output folder defaultHtml req
 
 let wsReqRep dst (dataType:WebSocketMessageType, utf8Bytes:byte[]) =
     // let dst = "ws://127.0.0.1:" + testport.ToString()

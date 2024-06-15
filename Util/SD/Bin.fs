@@ -9,7 +9,7 @@ open System.Numerics
 
 open Util.Perf
 open Util.Collection
-
+open Util.Json
 
 type ByteArrayComparer() = 
     interface IEqualityComparer<byte[]> with
@@ -284,6 +284,16 @@ let bin__str(bi:BinIndexed) =
     let res = Encoding.UTF8.GetString(bin,index.Value,count)
     index.Value <- index.Value + count
     res
+
+let json__bin (bb:BytesBuilder) (json:Json) =
+    json
+    |> json__strFinal
+    |> str__bin bb
+let bin__json(bi:BinIndexed) =
+    bi
+    |> bin__str
+    |> str__root
+
 
 let bytes__bin (bb:BytesBuilder) (bs:byte[]) =
     bs.Length |> BitConverter.GetBytes |> bb.append

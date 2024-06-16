@@ -54,3 +54,5 @@
 /Util/obj/project.nuget.cache
 /Util/obj/Util.fsproj.nuget.dgspec.json
 /Util/obj/Util.fsproj.nuget.g.props
+/UtilWebServer/obj
+/UtilWebServer/bin/Debug/net8.0

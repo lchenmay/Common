@@ -16,13 +16,19 @@ open Util.Db
 open Util.DbQuery
 open Util.DbTx
 
-let empty__DbLog (loc,sql,exn) = {
+let empty__DbLog (loc,dte) = {
     location = loc |> checkEscape
-    content = exn.ToString() |> checkEscape
-    sql = sql |> checkEscape }
+    content = 
+        match dte.exno with
+        | Some exn -> exn.ToString() |> checkEscape
+        | None -> ""
+    sql = 
+        match dte.sqlo with
+        | Some sql -> sql.text |> checkEscape
+        | None -> "" }
 
 // Set during init, provided a DB log table or a file logger
-let mutable dbLoggero:(string * DbTxError * Ctx -> unit) option = None
+let mutable dbLoggero:(DbLog -> unit) option = None
 
 let dbLogger = fun (loc,dte,ctx) -> 
 

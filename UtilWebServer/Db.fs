@@ -23,7 +23,10 @@ let loggedPipeline (loc:string) conn pretx =
         | Suc ctx -> true
         | Fail(dte,ctx) -> 
             match dbLoggero with
-            | Some logger -> logger (loc,dte,ctx)
+            | Some logger -> 
+                (loc,dte) 
+                |> empty__DbLog 
+                |> logger
             | None -> ()
             false
     else

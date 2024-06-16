@@ -35,6 +35,17 @@
 	  <Compile Include="OS\Log.fs" />
 	  <Compile Include="Measures.fs" />
 	  <Compile Include="OS\OS.fs" />
+	  <Compile Include="Network\Diff.fs" />
+	  <Compile Include="Network\HtmlFilter.fs" />
+	  <Compile Include="Network\Tcp.fs" />
+	  <Compile Include="Network\Http.fs" />
+	  <Compile Include="Network\TcpServer.fs" />
+	  <Compile Include="Network\HttpServer.fs" />
+	  <Compile Include="Network\HttpClient.fs" />
+	  <Compile Include="Network\Html.fs" />
+	  <Compile Include="Network\Browser.fs" />
+	  <Compile Include="Network\Zmq.fs" />
+	  <Compile Include="Network\IA.fs" />
 	  <Compile Include="DB\Db.fs" />
     <Compile Include="DB\DbQuery.fs" />
     <Compile Include="DB\DbTx.fs" />
@@ -42,17 +53,6 @@
     <Compile Include="Media\DirectX.fs" />
     <Compile Include="Media\Graphics.fs" />
     <Compile Include="Media\VideoDecorder.fs" />
-    <Compile Include="Network\Diff.fs" />
-    <Compile Include="Network\HtmlFilter.fs" />
-    <Compile Include="Network\Tcp.fs" />
-    <Compile Include="Network\Http.fs" />
-    <Compile Include="Network\TcpServer.fs" />
-    <Compile Include="Network\HttpServer.fs" />
-    <Compile Include="Network\HttpClient.fs" />
-    <Compile Include="Network\Html.fs" />
-    <Compile Include="Network\Browser.fs" />
-    <Compile Include="Network\Zmq.fs" />
-    <Compile Include="Network\IA.fs" />
     <Compile Include="Boost.fs" />
   </ItemGroup>
 

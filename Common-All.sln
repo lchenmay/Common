@@ -15,7 +15,9 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "MauiFsLogics", "MauiFsLogic
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorApp", "BlazorApp\BlazorApp.csproj", "{D1E3BB7A-FA51-4A08-A2AB-5C98C86A1BF7}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "UtilBlazor", "UtilBlazor\UtilBlazor.fsproj", "{95DDF886-C754-49BB-A8D4-EAD05041743D}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "UtilBlazor", "UtilBlazor\UtilBlazor.fsproj", "{95DDF886-C754-49BB-A8D4-EAD05041743D}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "UtilWebServer", "UtilWebServer\UtilWebServer.fsproj", "{C06CABCA-89ED-4ED7-A664-43D2F6D74118}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -49,6 +51,10 @@ Global
 		{95DDF886-C754-49BB-A8D4-EAD05041743D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{95DDF886-C754-49BB-A8D4-EAD05041743D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{95DDF886-C754-49BB-A8D4-EAD05041743D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C06CABCA-89ED-4ED7-A664-43D2F6D74118}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C06CABCA-89ED-4ED7-A664-43D2F6D74118}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C06CABCA-89ED-4ED7-A664-43D2F6D74118}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C06CABCA-89ED-4ED7-A664-43D2F6D74118}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

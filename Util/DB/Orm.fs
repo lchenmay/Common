@@ -481,7 +481,7 @@ let mergeAll conn output metadata fields where keying incomings =
 
     match 
         pretx
-        |> pipeline conn output with
+        |> pipeline conn with
     | Suc ctx ->
         ()
     | Fail(dte,ctx) -> 
@@ -512,7 +512,7 @@ let commitCheckBrokenFK conn output dom fk cod zeroOrRemove where =
 
     match 
         pretx
-        |> pipeline conn output with
+        |> pipeline conn with
     | Suc(ctx) ->
         ()
     | Fail(dte,ctx) -> 

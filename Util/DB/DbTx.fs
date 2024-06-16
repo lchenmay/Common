@@ -37,7 +37,7 @@ let connect x =
     with ex ->
         Fail({exno=Some(ex);sqlo=None},x)
 
-let commitc output (suc,fail)(x:Ctx) =
+let commitc (suc,fail)(x:Ctx) =
     let mutable current = None
     let mutable sqltrans = None
 
@@ -91,16 +91,11 @@ let commitc output (suc,fail)(x:Ctx) =
                 x.sqlconno.Value.Close()
 
     with ex ->
-        //if(sqltrans.IsSome) then
-        //    let tx = sqltrans.Value
-        //    tx.Rollback()
-
         let sqls = sqlTexts |> Seq.toArray |> String.concat ";\n"
-        output $"-------------"
-        output $"Database.commitc: sqls with err: \n{sqls}"
-        output $"-------------"
-        output $"Database.commitc: \n{ex}"
-        fail({exno=Some(ex);sqlo=current},x)
+        ({
+            exno = Some ex
+            sqlo = current },x)
+        |> fail
 
 let private _suc(x) = Suc(x)
 let private _fail(dte,x) = Fail(dte,x)
@@ -114,14 +109,14 @@ let tx conn output (lines:Sql[]) =
         count=[||] }
     |> Suc
     |> bind connect
-    |> bind (commitc output (_suc,_fail))
+    |> bind (commitc (_suc,_fail))
 
 let txOne conn output line = tx conn output [|str__sql(line)|]
 
 let txOneSql conn output sql = tx conn output [|sql|]
 
 // transactions with continuation
-let txc(conn,output,suc,fail) lines =
+let txc(conn,suc,fail) lines =
     use cw = new CodeWrapper("Db.txc")
 
     {   conn = conn;
@@ -130,7 +125,7 @@ let txc(conn,output,suc,fail) lines =
         count = [||] }
     |> Suc
     |> bind connect
-    |> bind(commitc output (suc,fail))
+    |> bind(commitc (suc,fail))
 
 type PreTx<'context> = 
     {
@@ -158,11 +153,10 @@ let opctx__pretx(ctx:'context) =
         fails = new ResizeArray<DbTxError*Ctx->unit>();
         sqls = new ResizeArray<Sql>() }
 
-let pipeline conn output pretx = 
+let pipeline conn pretx = 
     pretx.sqls
     |> txc(
         conn,
-        output,
         (fun ctx -> 
             pretx.sucs 
             |> Seq.iter(fun handler -> handler(ctx))

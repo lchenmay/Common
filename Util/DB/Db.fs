@@ -16,6 +16,11 @@ open Util.Collection
 open Util.OS
 open Util.Bin
 
+type DbLog = {
+location: string
+content: string
+sql: string }
+
 let SqlParameter__bin (bb:BytesBuilder) (sp:SqlParameter) = 
     sp.ParameterName |> str__bin bb
     sp.DbType |> EnumToValue |> int32__bin bb

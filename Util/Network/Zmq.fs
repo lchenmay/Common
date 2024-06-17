@@ -537,6 +537,8 @@ let fileService output root defaultHtml req =
 
     req.pathline |> output
 
+    //  https://cha.in/t/a1Bz9S
+
     if req.pathline = "/" then
         Path.Combine(root, defaultHtml)
         |> IO.File.ReadAllText

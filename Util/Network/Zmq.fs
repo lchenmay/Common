@@ -533,11 +533,7 @@ let wsReceive zweb client =
                     zweb.disconnector.ToArray() |> Array.iter(fun h -> h client)
                 | _ -> ()  
 
-let fileService output root defaultHtml req = 
-
-    req.pathline |> output
-
-    //  https://cha.in/t/a1Bz9S
+let fileService root defaultHtml req = 
 
     if req.pathline = "/" then
         Path.Combine(root, defaultHtml)
@@ -577,9 +573,8 @@ let reqhandler apiService fileServiceo output req =
         | Some fileService -> req |> fileService
         | None -> [||]
 
-let httpHandler
-    (reqhandler: (string -> unit) -> HttpRequest -> byte array)
-    output 
+let reqhandler__httpHandler
+    (reqhandler: HttpRequest -> byte[])
     zweb =
 
     match zweb.inboundHttp.TryDequeue() with
@@ -589,17 +584,16 @@ let httpHandler
                 let reqo,(headers,body) = bs__httpRequest p.bin
                 match reqo with
                 | Some req ->
-                    let repbin = req |> reqhandler output
+                    let repbin = req |> reqhandler
                     if repbin.Length > 0 then
                         repbin 
                         |> create__pakcet p.client
                         |> pushHttpPacket zweb
                 | None -> ()
-            //with ex -> ex.Message |> output
         } |> Async.Start
     | _ -> Thread.Sleep 10
 
-let startTcpService (output:string->unit) zweb httpHandler wsHandler =
+let startTcpService zweb httpHandler wsHandler =
 
     // Receiving/Sending thread
     async {
@@ -654,7 +648,7 @@ let startTcpService (output:string->unit) zweb httpHandler wsHandler =
     //    asyncCycler (fun _ -> httpHandler output zweb)
     //    Thread.Sleep 10
     //    "Http echo " + i.ToString() + " started" |> output)
-    asyncCycler (fun _ -> httpHandler output zweb)
+    asyncCycler (fun _ -> httpHandler zweb)
 
     // ws queue
     asyncCycler (fun _ -> 
@@ -672,9 +666,15 @@ let startTcpService (output:string->unit) zweb httpHandler wsHandler =
                 | None -> ()
             } |> Async.Start)
 
-let lauchWebServer output httpHandler wsHandler zweb =    
+let lauchWebServer 
+        output 
+        httpHandler 
+        wsHandler 
+        zweb =    
                 
-    startTcpService output zweb httpHandler wsHandler
+    zweb.disconnector.Add(fun bin -> ())
+
+    startTcpService zweb httpHandler wsHandler
 
     if logLevelQualificate zweb LogLevel.Production then
         "TCP service started at " + zweb.port.ToString()
@@ -754,43 +754,58 @@ let ok (w:TextBlockWriter) =
     "{\"Error\":\"OK\"}" |> w.newline
     None
 
-let httpEcho folder defaultHtml runtime branch output req =
+let httpEcho 
+        plugino 
+        folder 
+        defaultHtml 
+        runtime 
+        branch 
+        req =
 
-    let x = 
-        req 
-        |> req__ApiCtx runtime
+    let repo = 
+        match plugino with
+        | Some plugin -> plugin req
+        | None -> None
 
-    if x.service.Length * x.api.Length > 0 then
-        match 
-            x
-            |> Suc
-            |> bind(fun h -> branch x) with
-        | Suc x ->
-            let e = 
-                match x.procedureo with
-                | Some p ->
-                    use cw = new CodeWrapper("Api." + x.api)
-                    try
-                        p x
-                    with ex -> 
-                        x.w.clear()
-                        [|  "{\"Error\":\"Failed\",\"Response\":\""
-                            ex.Message
-                            "\"}" |]
-                        |> x.w.multiLine
-                        Error.Internal
-                | None -> 
-                    Error.OK
+    if repo.IsSome then
+        repo.Value
+    else 
+        let x = 
+            req 
+            |> req__ApiCtx runtime
 
-            if e <> Error.OK then
-                if x.w.count() = 0 then
-                    "{\"Error\":\"" + e.ToString() + "\"}" |> x.w.newline
-        | Fail(e, x) -> "{\"Error\":\"" + e.ToString() + "\"}" |> x.w.newline
+        if x.service.Length * x.api.Length > 0 then
 
-        x.w.text()
-        |> str__StandardResponse "application/json"
-    else
-        fileService output folder defaultHtml req
+            match 
+                x
+                |> Suc
+                |> bind(fun h -> branch x) with
+            | Suc x ->
+                let e = 
+                    match x.procedureo with
+                    | Some p ->
+                        use cw = new CodeWrapper("Api." + x.api)
+                        try
+                            p x
+                        with ex -> 
+                            x.w.clear()
+                            [|  "{\"Error\":\"Failed\",\"Response\":\""
+                                ex.Message
+                                "\"}" |]
+                            |> x.w.multiLine
+                            Error.Internal
+                    | None -> 
+                        Error.OK
+
+                if e <> Error.OK then
+                    if x.w.count() = 0 then
+                        "{\"Error\":\"" + e.ToString() + "\"}" |> x.w.newline
+            | Fail(e, x) -> "{\"Error\":\"" + e.ToString() + "\"}" |> x.w.newline
+
+            x.w.text()
+            |> str__StandardResponse "application/json"
+        else
+            fileService folder defaultHtml req
 
 let wsReqRep dst (dataType:WebSocketMessageType, utf8Bytes:byte[]) =
     // let dst = "ws://127.0.0.1:" + testport.ToString()

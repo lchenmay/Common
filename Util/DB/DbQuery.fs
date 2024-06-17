@@ -38,7 +38,7 @@ type DbQueryError =
 let connect x =
     try
         x.sqlconno <- Some(new SqlConnection(x.conn))
-        Suc(x)
+        Suc x
     with ex ->
         System.Console.WriteLine $"-------------"
         System.Console.WriteLine $"Database.connect: {ex}"
@@ -63,7 +63,7 @@ let noneQuery(conn)(sql:string) =
     |> bind(connect)
     |> bind(execNoneQuery(sql))
 
-let line_handler(handler)(x:Ctx) =
+let line_handler handler (x:Ctx) =
     use cw = new Util.Perf.CodeWrapper("db.line_handler")
     let mutable sql = ""
     let uncommited = "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;"
@@ -105,7 +105,7 @@ let line_handler(handler)(x:Ctx) =
 let read(x:Ctx) = 
     x
     |> line_handler(fun(array,x) -> 
-        x.lines.Add(array)
+        x.lines.Add array
         true)
 
 let multiline_handle(conn,handler) sql =

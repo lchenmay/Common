@@ -10,6 +10,7 @@
     <Compile Include="DbLogger.fs" />
     <Compile Include="Db.fs" />
     <Compile Include="Common.fs" />
+    <Compile Include="Init.fs" />
   </ItemGroup>
 
   <ItemGroup>

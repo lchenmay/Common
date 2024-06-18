@@ -31,7 +31,5 @@ let output:string -> unit =
         Console.OutputEncoding <- Encoding.Unicode
         Console.WriteLine
 
-let port = 12077
-
-let zweb = create__ZWeb 2 port LogLevel.All false [||]
+let port__zweb port = create__ZWeb 2 port LogLevel.All false [||]
 

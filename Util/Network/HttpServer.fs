@@ -11,6 +11,7 @@ open System.Security.Authentication
 open System.Text
 open System.Text.RegularExpressions
 
+open Util.Text
 open Util.Bin
 open Util.Http
 open Util.TcpServer
@@ -209,3 +210,33 @@ let str__StandardResponse mime (str:string) =
     str 
     |> Encoding.UTF8.GetBytes 
     |> bin__StandardResponse mime
+
+
+let incomingProcess (bin:byte[]) = 
+    
+    let txt = bin |> Encoding.ASCII.GetString
+
+    if 
+        txt.StartsWith "GET" 
+        || txt.StartsWith "POST" 
+        || txt.StartsWith "OPTIONS" then
+
+        let key = regex_match rxSecWebSocketKey txt
+
+        if key.Length > 0 then
+            let s = 
+                key.Trim() + webSocketUUID
+                |> Encoding.UTF8.GetBytes
+                |> System.Security.Cryptography.SHA1.Create().ComputeHash
+                |> Convert.ToBase64String
+
+            [|  binSecWebSocketKey
+                s + crlf + crlf |> Encoding.UTF8.GetBytes |]
+            |> Array.concat
+            |> HttpRequestWithWS.WebSocketUpgrade
+        else
+            bin
+            |> bs__httpRequest
+            |> HttpRequestWithWS.Echo
+    else
+        HttpRequestWithWS.InvalidRequest

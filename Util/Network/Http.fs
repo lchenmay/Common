@@ -118,6 +118,11 @@ let empty__HttpResponse() =
         gzip = true }
 
 
+type HttpRequestWithWS = 
+| Echo of (HttpRequest option) * (string * string)
+| WebSocketUpgrade of byte[]
+| InvalidRequest
+
 let chunkedreading(stream:Stream,buffer,bin:ResizeArray<byte>,body_starting:int) =
     let mutable index = body_starting
     let mutable keep = true
@@ -251,3 +256,4 @@ let checkHttpUpgrade (bin:byte[]) =
             [||], true
     else
         [||], true
+

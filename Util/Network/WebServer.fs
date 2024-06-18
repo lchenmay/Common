@@ -41,7 +41,7 @@ state: ConnState }
 
 type Engine<'Runtime> = {
 output: string -> unit
-plugino: (HttpRequest -> byte[]) option
+plugino: (HttpRequest -> byte[] option) option
 folder: string
 defaultHtml: string
 runtime: 'Runtime
@@ -74,6 +74,38 @@ let checkoutConn engine id client =
 
         idleSince = DateTime.UtcNow
         state = ConnState.Idle }
+
+let fileService root defaultHtml req = 
+
+    if req.pathline = "/" then
+        Path.Combine(root, defaultHtml)
+        |> IO.File.ReadAllText
+        |> str__StandardResponse "text/html"
+    elif req.path.Length > 0 then
+        let file = Array.append [|root|] req.path |> Path.Combine
+        if File.Exists file then
+            let filename = req.path[req.path.Length - 1]
+            match (Path.GetExtension filename).ToLower() with
+            | ".jpg" | ".png" | ".gif" | ".ico" as ext -> 
+                file
+                |> IO.File.ReadAllBytes
+                |> bin__StandardResponse ("image/" + (ext.Substring 1))
+            | ".css" | ".html" | ".javascript" | ".txt" | ".xml" as ext ->
+                file
+                |> IO.File.ReadAllText
+                |> str__StandardResponse ("text/" + (ext.Substring 1))
+            | ".js" ->
+                file
+                |> IO.File.ReadAllText
+                |> str__StandardResponse "text/javascript; charset=utf-8"
+            | ".mp4" ->
+                file
+                |> IO.File.ReadAllBytes
+                |> bin__StandardResponse "video/mp4"
+            | _ -> [||]
+        else [||]
+    else [||]
+
 
 let prepEngine 
     output
@@ -108,6 +140,9 @@ let prepEngine
 
 let startEngine engine = 
 
+    "Listening at: " + engine.port.ToString()
+    |> engine.output
+
     (fun _ ->
         engine.listener.Start()
         while true do 
@@ -139,28 +174,47 @@ let startEngine engine =
 
                     bb.bytes()
 
-                match checkHttpUpgrade incoming with
-                | _,false -> 
+                match incomingProcess incoming with
+                | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
 
-                    ()
-                | upgrade,_ ->
+                    match reqo with
+                    | Some req ->
 
-                    if upgrade.Length > 0 then
-                        stream.Write(upgrade,0,upgrade.Length)
-                        stream.Flush()
-                    else
+                        let outgoing =
+                        
+                            let repo = 
+                                match engine.plugino with
+                                | Some plugin -> plugin req
+                                | None -> None
 
-                        let outgoing = [||]
+                            match repo with
+                            | Some v -> v
+                            | None -> 
+                                fileService 
+                                    engine.folder 
+                                    engine.defaultHtml 
+                                    req
+
                         stream.Write(outgoing,0,outgoing.Length)
                         stream.Flush()
-                        stream.Close()
-                        conn.client.Close()
-                
-                        conn.buffer
-                        |> engine.buffers.Push
 
-                        engine.connsRcv.Remove(conn.id,ref conn)
-                        |> ignore)
+                    | None -> ()
+
+                    stream.Close()
+                    conn.client.Close()
+                
+                    conn.buffer
+                    |> engine.buffers.Push
+
+                    engine.connsRcv.Remove(conn.id,ref conn)
+                    |> ignore
+
+                | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
+
+                    stream.Write(upgrade,0,upgrade.Length)
+                    stream.Flush()
+
+                | _ -> ())
         ())
     |> Util.Concurrent.asyncProcess
 

@@ -11,7 +11,6 @@
     <Compile Include="Db.fs" />
     <Compile Include="Common.fs" />
     <Compile Include="Auth.fs" />
-    <Compile Include="Auth3rdParty.fs" />
     <Compile Include="Init.fs" />
     <Compile Include="Json.fs" />
   </ItemGroup>

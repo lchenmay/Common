@@ -222,17 +222,32 @@ let httpUpgradeWebSocket str =
     else
         [||]
 
+let webSocketUUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
 let checkHttpUpgrade (bin:byte[]) = 
     if bin.Length > 10 then
         let starting = Encoding.ASCII.GetString(bin, 0, 10)
         if starting.StartsWith "GET" || starting.StartsWith "POST" || starting.StartsWith("OPTIONS") then
             let upgrade =
-                bin 
-                |> Encoding.UTF8.GetString
-                |> httpUpgradeWebSocket
+                let key = 
+                    bin 
+                    |> Encoding.UTF8.GetString
+                    |> regex_match rxSecWebSocketKey
+
+                if key.Length > 0 then
+                    let s = 
+                        key.Trim() + webSocketUUID
+                        |> Encoding.UTF8.GetBytes
+                        |> System.Security.Cryptography.SHA1.Create().ComputeHash
+                        |> Convert.ToBase64String
+
+                    [|  binSecWebSocketKey
+                        s + crlf + crlf |> Encoding.UTF8.GetBytes |]
+                    |> Array.concat
+                else
+                    [||]
             upgrade, upgrade.Length > 0
         else
             [||], true
     else
         [||], true
-

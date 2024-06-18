@@ -45,6 +45,7 @@
 	  <Compile Include="Network\Html.fs" />
 	  <Compile Include="Network\Browser.fs" />
 	  <Compile Include="Network\Zmq.fs" />
+	  <Compile Include="Network\WebServer.fs" />
 	  <Compile Include="Network\IA.fs" />
 	  <Compile Include="DB\Db.fs" />
     <Compile Include="DB\DbQuery.fs" />

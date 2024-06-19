@@ -13,6 +13,7 @@
     <Compile Include="Auth.fs" />
     <Compile Include="Init.fs" />
     <Compile Include="Json.fs" />
+    <Compile Include="Api.fs" />
   </ItemGroup>
 
   <ItemGroup>

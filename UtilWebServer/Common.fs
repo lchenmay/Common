@@ -31,5 +31,12 @@ let output:string -> unit =
         Console.OutputEncoding <- Encoding.Unicode
         Console.WriteLine
 
+type Host = {
+mutable zmq: bool
+port: int
+conn: string
+defaultHtml: string
+fsDir: string }
+
 let port__zweb port = create__ZWeb 2 port LogLevel.All false [||]
 

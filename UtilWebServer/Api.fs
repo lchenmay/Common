@@ -15,10 +15,11 @@ open Util.Zmq
 
 open UtilWebServer.DbLogger
 
-let apiHandler branch json api = 
+let ok = "Er",Json.Str "OK"
+let er er = "Er",er.ToString() |> Json.Str
 
-    let mutable ero = ref None
-
-    branch api json ero
-    |> Array.map(fun (k,v) -> k,(Json.Str v))
+let apiHandler branch json =
+    json
+    |> tryFindStrByAtt "api"
+    |> branch json
     |> Json.Braket

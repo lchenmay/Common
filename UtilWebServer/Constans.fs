@@ -28,6 +28,7 @@ let freqBizCodes =
         "GOOGLE"
         "FACEBOOK"
         "INSTAGRAM"
+        "PINTEREST"
         "COINDESK"
         "GAB"
         "GETTR"

@@ -130,10 +130,12 @@ let hex__bytes (hex:string) =
 
 let private hex_line(sb:List<string>,buffer:char[],col) =
     let mutable s = ""
-    [| 0..buffer.Length-1 |] |> Array.iter(fun k->
+    [| 0..buffer.Length-1 |] 
+    |> Array.iter(fun k->
         s <- s+ buffer.[k].ToString())
     sb.Add(s+Util.Text.crlf)
-    [| 0..buffer.Length - 1 |] |> Array.map(fun i-> ' ')
+    [| 0..buffer.Length - 1 |] 
+    |> Array.map(fun i-> ' ')
 
 let hex(bs:byte[]) =
     let sb = new List<string>()
@@ -141,10 +143,14 @@ let hex(bs:byte[]) =
     let hex_length = 4
     let dec_length = 4
     let row_length = hex_length + 1 + dec_length
-    let mutable buffer = [| 0..row_length + 1 + col*4 |] |> Array.map(fun i-> ' ')
+
+    let mutable buffer = 
+        [| 0..row_length + 1 + col * 4 |] 
+        |> Array.map(fun i-> ' ')
     let mutable row = 0
-    [| 0..bs.Length-1 |]
-    |> Array.iter(fun ii->
+
+    [| 0 .. bs.Length - 1 |]
+    |> Array.iter(fun ii ->
 
         let i = ii % col
 
@@ -158,7 +164,7 @@ let hex(bs:byte[]) =
             | CR -> "CR".ToCharArray()
             | LF -> "LF".ToCharArray()
             | 32uy -> "  ".ToCharArray()
-            | _ -> (b.ToString "x").ToCharArray()
+            | _ -> (b.ToString "X").PadLeft(2,'0').ToCharArray()
         cs.CopyTo(buffer, row_length + 1 + i * 3)
 
         let c =
@@ -169,10 +175,13 @@ let hex(bs:byte[]) =
                 '?'
             else
                 b |> char
+
         buffer.[row_length + 1 + i + col * 3 + 1] <- c
+
         if((i+1)%col=0)then
             row <- row + 1
             buffer <- hex_line(sb,buffer,col))
+
     buffer <- hex_line(sb,buffer,col)
     sb.Add(Util.Text.crlf + bs.Length.ToString("N0") + " bytes" + Util.Text.crlf)
     sb |> Seq.filter(fun item->item<>null)|> String.Concat

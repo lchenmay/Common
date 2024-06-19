@@ -280,6 +280,7 @@ let startEngine engine =
             incoming
             |> hex
             |> engine.output
+
             ()))
     |> Util.Concurrent.asyncCycler
 

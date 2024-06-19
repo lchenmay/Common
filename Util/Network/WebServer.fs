@@ -75,6 +75,17 @@ let checkoutConn engine id client =
         idleSince = DateTime.UtcNow
         state = ConnState.Idle }
 
+let drop engine (stream:Stream) conn = 
+    stream.Close()
+    conn.client.Close()
+                
+    conn.buffer
+    |> engine.buffers.Push
+
+    engine.connsRcv.Remove(conn.id,ref conn)
+    |> ignore
+
+
 let fileService root defaultHtml req = 
 
     if req.pathline = "/" then
@@ -138,6 +149,59 @@ let prepEngine
         connsRcv = new ConcurrentDictionary<int64,Conn>()
         connsKeep = new ConcurrentDictionary<int64,Conn>() }
 
+let processConn engine conn = 
+    let bb,bin = conn.buffer.bb,conn.buffer.bin
+    let stream = conn.client.GetStream() :> Stream
+
+    let incoming = 
+        let mutable keep = true
+        while keep do
+
+            let count = stream.Read(bin, 0, bin.Length)
+
+            bb.append(bin,count)
+            if count < bin.Length then
+                keep <- false
+
+        bb.bytes()
+
+    match incomingProcess incoming with
+    | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
+
+        match reqo with
+        | Some req ->
+
+            let outgoing =
+                        
+                let repo = 
+                    match engine.plugino with
+                    | Some plugin -> plugin req
+                    | None -> None
+
+                match repo with
+                | Some v -> v
+                | None -> 
+                    fileService 
+                        engine.folder 
+                        engine.defaultHtml 
+                        req
+
+            stream.Write(outgoing,0,outgoing.Length)
+            stream.Flush()
+
+        | None -> ()
+
+        drop engine stream conn
+
+    | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
+
+        stream.Write(upgrade,0,upgrade.Length)
+        stream.Flush()
+
+    | _ -> 
+        drop engine stream conn
+
+
 let startEngine engine = 
 
     "Listening at: " + engine.port.ToString()
@@ -157,65 +221,7 @@ let startEngine engine =
         while true do 
             engine.connsRcv.ToArray()
             |> Array.Parallel.iter(fun item -> 
-
-                let conn = item.Value
-                let bb,bin = conn.buffer.bb,conn.buffer.bin
-                let stream = conn.client.GetStream() :> Stream
-
-                let incoming = 
-                    let mutable keep = true
-                    while keep do
-
-                        let count = stream.Read(bin, 0, bin.Length)
-
-                        bb.append(bin,count)
-                        if count < bin.Length then
-                            keep <- false
-
-                    bb.bytes()
-
-                match incomingProcess incoming with
-                | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
-
-                    match reqo with
-                    | Some req ->
-
-                        let outgoing =
-                        
-                            let repo = 
-                                match engine.plugino with
-                                | Some plugin -> plugin req
-                                | None -> None
-
-                            match repo with
-                            | Some v -> v
-                            | None -> 
-                                fileService 
-                                    engine.folder 
-                                    engine.defaultHtml 
-                                    req
-
-                        stream.Write(outgoing,0,outgoing.Length)
-                        stream.Flush()
-
-                    | None -> ()
-
-                    stream.Close()
-                    conn.client.Close()
-                
-                    conn.buffer
-                    |> engine.buffers.Push
-
-                    engine.connsRcv.Remove(conn.id,ref conn)
-                    |> ignore
-
-                | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
-
-                    stream.Write(upgrade,0,upgrade.Length)
-                    stream.Flush()
-
-                | _ -> ())
-        ())
+                processConn engine item.Value))
     |> Util.Concurrent.asyncProcess
 
 

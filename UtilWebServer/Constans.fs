@@ -9,4 +9,8 @@ let freqBizCodes =
     [|  "X"
         "GOOGLE"
         "FACEBOOK"
-        "INSTAGRAM" |]
+        "INSTAGRAM"
+        "COINDESK"
+        "GAB"
+        "GETTR"
+        "GNEWS" |]

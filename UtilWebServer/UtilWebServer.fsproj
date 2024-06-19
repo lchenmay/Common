@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Constans.fs" />
     <Compile Include="FileSys.fs" />
     <Compile Include="DbLogger.fs" />
     <Compile Include="Db.fs" />

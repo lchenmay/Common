@@ -6,6 +6,7 @@ open System
 open System.Collections.Generic
 open System.Data.SqlClient
 open System.Text
+open System.Threading
 
 open Util.Text
 
@@ -29,6 +30,23 @@ let empty__DbLog (loc,dte) = {
 
 // Set during init, provided a DB log table or a file logger
 let mutable dbLoggero:(DbLog -> unit) option = None
+
+let createDbLogger metadata conn log__p log = 
+    
+    let p = log__p log
+
+    let pretx = None |> opctx__pretx
+
+    let tid = Interlocked.Increment metadata.id
+
+    (tid,pretx.dt,pretx.dt,tid,p)
+    |> build_create_sql metadata
+    |> pretx.sqls.Add
+
+    pretx
+    |> pipeline conn
+    |> ignore
+
 
 let dbLogger = fun (loc,dte,ctx) -> 
 

@@ -13,6 +13,7 @@ open System.Collections.Generic
 open System.Collections.Concurrent
 
 open Util.Cat
+open Util.CollectionModDict
 open Util.Bin
 open Util.Text
 open Util.Perf
@@ -37,7 +38,7 @@ id: int64
 client: TcpClient
 buffer: Buffer
 mutable idleSince: DateTime
-state: ConnState }
+mutable state: ConnState }
 
 type Engine<'Runtime> = {
 output: string -> unit
@@ -50,11 +51,11 @@ port:int
 listener: TcpListener
 buffers: ConcurrentStack<Buffer>
 connId: ref<int64>
-connsRcv: ConcurrentDictionary<int64,Conn>
-connsKeep: ConcurrentDictionary<int64,Conn> }
+queue: ModDict<int64,Conn>
+keeps: ConcurrentDictionary<int64,Conn> }
 with override this.ToString() = 
         [|  "ID " + this.connId.Value.ToString() 
-            "ConnRcv " + this.connsRcv.Count.ToString() |]
+            "ConnRcv " + this.queue.count.ToString() |]
         |> String.concat crlf
 
 let bufferAsNull = {
@@ -81,9 +82,6 @@ let drop engine (stream:Stream) conn =
                 
     conn.buffer
     |> engine.buffers.Push
-
-    engine.connsRcv.Remove(conn.id,ref conn)
-    |> ignore
 
 
 let fileService root defaultHtml req = 
@@ -146,24 +144,45 @@ let prepEngine
         listener = new TcpListener(IPAddress.Any, port)
         buffers = buffers
         connId = ref 0L
-        connsRcv = new ConcurrentDictionary<int64,Conn>()
-        connsKeep = new ConcurrentDictionary<int64,Conn>() }
+        queue = createMDInt64<Conn> 8
+        keeps = new ConcurrentDictionary<int64,Conn>() }
 
-let processConn engine conn = 
+let recv conn = 
+
     let bb,bin = conn.buffer.bb,conn.buffer.bin
     let stream = conn.client.GetStream() :> Stream
 
-    let incoming = 
-        let mutable keep = true
-        while keep do
+    let mutable keep = true
+    while keep do
+        let count = stream.Read(bin, 0, bin.Length)
 
-            let count = stream.Read(bin, 0, bin.Length)
+        bb.append(bin,count)
+        if count < bin.Length then
+            keep <- false
 
-            bb.append(bin,count)
-            if count < bin.Length then
-                keep <- false
+    let bin = bb.bytes()
+    bb.clear()
+    stream,bin
 
-        bb.bytes()
+
+let recvIncoming engine conn = 
+
+    [|  "Conn [" + conn.id.ToString() + "]"
+        " = " + conn.state.ToString() |]
+    |> String.Concat
+    |> engine.output
+
+    "Conn [" + conn.id.ToString() + "] Receving ..."
+    |> engine.output
+    
+    let stream,incoming = recv conn
+
+    "Incomining " + incoming.Length.ToString() + " bytes"
+    |> engine.output
+
+    incoming
+    |> hex
+    |> engine.output
 
     match incomingProcess incoming with
     | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
@@ -191,14 +210,30 @@ let processConn engine conn =
 
         | None -> ()
 
+        "Drop"
+        |> engine.output
+
         drop engine stream conn
 
     | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
 
+        "Upgrade"
+        |> engine.output
+
         stream.Write(upgrade,0,upgrade.Length)
         stream.Flush()
 
+        conn.state <- ConnState.Keep
+        engine.keeps[conn.id] <- conn
+
+        "Rcv -> Keep"
+        |> engine.output
+
     | _ -> 
+
+        "Drop"
+        |> engine.output
+
         drop engine stream conn
 
 
@@ -207,21 +242,44 @@ let startEngine engine =
     "Listening at: " + engine.port.ToString()
     |> engine.output
 
+    engine.listener.Start()
+
     (fun _ ->
-        engine.listener.Start()
-        while true do 
-            let client = engine.listener.AcceptTcpClient()
-            let id = Interlocked.Increment engine.connId
-            engine.connsRcv[id] <- checkoutConn engine id client
-            //s.Close()
+        let client = engine.listener.AcceptTcpClient()
+        let id = Interlocked.Increment engine.connId
+
+        let conn = checkoutConn engine id client
+        engine.queue[conn.id] <- conn
+
+        "Client accepted [" + id.ToString() + "], Queue = " + engine.queue.count.ToString()
+        |> engine.output
+
+        //s.Close()
         ())
-    |> Util.Concurrent.asyncProcess
+    |> Util.Concurrent.asyncCycler
 
     (fun _ ->
-        while true do 
-            engine.connsRcv.ToArray()
-            |> Array.Parallel.iter(fun item -> 
-                processConn engine item.Value))
-    |> Util.Concurrent.asyncProcess
+        engine.queue.array()
+        |> Array.Parallel.iter(fun conn -> 
+            recvIncoming engine conn)
+        engine.queue.clear())
+    |> Util.Concurrent.asyncCycler
 
+    (fun _ ->
+        engine.keeps.Values
+        |> Seq.toArray
+        |> Array.Parallel.iter(fun conn -> 
+            "Conn [" + conn.id.ToString() + "] Receving ..."
+            |> engine.output
+    
+            let stream,incoming = recv conn
+
+            "Incomining " + incoming.Length.ToString() + " bytes"
+            |> engine.output
+
+            incoming
+            |> hex
+            |> engine.output
+            ()))
+    |> Util.Concurrent.asyncCycler
 

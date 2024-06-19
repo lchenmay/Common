@@ -75,6 +75,13 @@ type ModDict<'k,'v> =
         |> Array.iter(fun m -> lock m (fun () -> array.AddRange(m.Keys)))
         array
 
+    member this.clear() =
+        lock this (fun _ ->
+            this.mods
+            |> Array.iter(fun m -> 
+                lock m (fun () -> m.Clear()))
+            this.count <- 0)
+
     member this.array_mdi() =
         let array = new List<ModDictItem<'k,'v>>()
         this.mods

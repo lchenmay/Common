@@ -55,7 +55,7 @@ listener: TcpListener
 buffers: ConcurrentStack<Buffer>
 connId: ref<int64>
 queue: ModDict<int64,Conn>
-keeps: ConcurrentDictionary<int64,Conn> }
+keeps: ModDict<int64,Conn> }
 with override this.ToString() = 
         [|  "ID " + this.connId.Value.ToString() 
             "ConnRcv " + this.queue.count.ToString() |]
@@ -64,7 +64,7 @@ with override this.ToString() =
 let engine__monitor engine = 
     [|  ("connId", engine.connId.ToString() |> Json.Str)
         ("queue", engine.queue.count.ToString() |> Json.Str)
-        ("keeps", engine.keeps.Count.ToString() |> Json.Str) |]
+        ("keeps", engine.keeps.count.ToString() |> Json.Str) |]
     |> Json.Braket
 
 let bufferAsNull = {
@@ -86,15 +86,27 @@ let checkoutConn engine id client =
         idleSince = DateTime.UtcNow
         state = ConnState.Idle }
 
-let drop engine conn = 
-    conn.ns.Close()
-    conn.client.Close()
+let drop engine (collectiono:ModDict<int64,Conn> option) conn = 
+
+    match collectiono with
+    | Some collection ->
+        if collection.ContainsKey conn.id then
+            collection.remove conn.id
+    | None -> ()
+
+    try
+        conn.ns.Close()
+    with
+    | ex -> ()
+
+    try
+        conn.client.Close()
+    with
+    | ex -> ()
                 
     conn.buffer
     |> engine.buffers.Push
 
-    if engine.queue.ContainsKey conn.id then
-        engine.queue.remove conn.id
 
 
 let fileService root defaultHtml req = 
@@ -158,19 +170,25 @@ let prepEngine
         buffers = buffers
         connId = ref 0L
         queue = createMDInt64<Conn> 8
-        keeps = new ConcurrentDictionary<int64,Conn>() }
+        keeps = createMDInt64<Conn> 8 }
 
 let read conn = 
 
-    let bb,bin = conn.buffer.bb,conn.buffer.bin
+    try
+        let bb,bin = conn.buffer.bb,conn.buffer.bin
 
-    let bs = Array.zeroCreate conn.client.Available
-    let count = conn.ns.Read(bs, 0, bs.Length)
-    bb.append bs
+        let bs = Array.zeroCreate conn.client.Available
+        let count = conn.ns.Read(bs, 0, bs.Length)
+        bb.append bs
 
-    let bin = bb.bytes()
-    bb.clear()
-    bin
+        let bin = bb.bytes()
+        bb.clear()
+
+        bin
+        |> Some
+
+     with
+    | ex -> None
 
 
 let rcv engine conn = 
@@ -184,61 +202,60 @@ let rcv engine conn =
         "Conn [" + conn.id.ToString() + "] Receving ..."
         |> engine.output
     
-        let incoming = read conn
 
-        "Incomining " + incoming.Length.ToString() + " bytes"
-        |> engine.output
+        match read conn with
+        | Some incoming -> 
 
-        incoming
-        |> hex
-        |> engine.output
+            "Incomining " + incoming.Length.ToString() + " bytes"
+            |> engine.output
 
-        match incomingProcess incoming with
-        | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
+            incoming
+            |> hex
+            |> engine.output
 
-            match reqo with
-            | Some req ->
+            match incomingProcess incoming with
+            | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
 
-                let outgoing =
+                match reqo with
+                | Some req ->
+
+                    let outgoing =
                         
-                    let repo = engine.echo req
+                        let repo = engine.echo req
 
-                    match repo with
-                    | Some v -> v
-                    | None -> 
-                        fileService 
-                            engine.folder 
-                            engine.defaultHtml 
-                            req
+                        match repo with
+                        | Some v -> v
+                        | None -> 
+                            fileService 
+                                engine.folder 
+                                engine.defaultHtml 
+                                req
 
-                conn.ns.Write(outgoing,0,outgoing.Length)
+                    try
+                        conn.ns.Write(outgoing,0,outgoing.Length)
+                    with
+                    | ex -> ()
 
-            | None -> ()
+                | None -> ()
 
-            "Drop"
-            |> engine.output
+            | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
 
-            drop engine conn
+                "Upgrade"
+                |> engine.output
 
-        | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
+                conn.ns.Write(upgrade,0,upgrade.Length)
 
-            "Upgrade"
-            |> engine.output
+                conn.state <- ConnState.Keep
+                engine.keeps[conn.id] <- conn
 
-            conn.ns.Write(upgrade,0,upgrade.Length)
+                "Rcv -> Keep"
+                |> engine.output
 
-            conn.state <- ConnState.Keep
-            engine.keeps[conn.id] <- conn
-
-            "Rcv -> Keep"
-            |> engine.output
-
-        | _ -> 
-
-            "Drop"
-            |> engine.output
-
-            drop engine conn
+            | _ -> ()
+        | None -> ()
+        
+        if conn.state <> ConnState.Keep then
+            drop engine (Some engine.queue) conn
     }
 
 let cycleAccept engine = 
@@ -278,8 +295,8 @@ let cycleRcv engine =
 let cycleWs engine =
 
     let all = 
-        engine.keeps.Values 
-        |> Seq.toArray
+        engine.keeps.array()
+        |> Array.filter(fun conn -> conn.ns.DataAvailable)
 
     let items = 
         all
@@ -296,29 +313,35 @@ let cycleWs engine =
         "Conn [" + conn.id.ToString() + "] Receving ..."
         |> engine.output
     
-        let incoming = read conn
+        match read conn with
+        | Some incoming ->
 
-        "Incomining " + incoming.Length.ToString() + " bytes"
-        |> engine.output
+            "Incomining " + incoming.Length.ToString() + " bytes"
+            |> engine.output
 
-        incoming
-        |> hex
-        |> engine.output
-
-        match wsDecode incoming with
-        | Some bs -> 
-            engine.output "Decoded:"
-            bs
+            incoming
             |> hex
             |> engine.output
-        | None -> engine.output "Decode failed"
+
+            match wsDecode incoming with
+            | Some bs -> 
+                engine.output "Decoded:"
+                bs
+                |> hex
+                |> engine.output
+            | None -> engine.output "Decode failed"
                     
-        match engine.wsHandler incoming with
-        | Some rep -> 
-            rep
-            |> wsEncode
-            |> conn.ns.Write
-        | None -> ())
+            match engine.wsHandler incoming with
+            | Some rep -> 
+                try
+                    rep
+                    |> wsEncode
+                    |> conn.ns.Write
+                with
+                | ex -> drop engine (Some engine.keeps) conn
+            | None -> ()
+            
+        | None -> drop engine (Some engine.keeps) conn)
 
 let startEngine engine = 
 
@@ -330,14 +353,22 @@ let startEngine engine =
     let exHandler note (ex:exn) =
         ex.ToString() |> engine.output
         note |> engine.output
+        ()
 
     (fun _ -> cycleAccept engine)
     |> threadCyclerIntervalTry ThreadPriority.Highest 1000 (exHandler "Accept")
     
     (fun _ -> cycleRcv engine)
-    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 1000 (exHandler "Rcv")
+    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 1000 (fun ex ->
+        ex.ToString() |> engine.output
+        "Rcv" |> engine.output
+        ())
+
 
     (fun _ -> cycleWs engine)
-    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 1000 (exHandler "WS")
+    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 1000 (fun ex ->
+        ex.ToString() |> engine.output
+        "WS" |> engine.output
+        ())
     
 

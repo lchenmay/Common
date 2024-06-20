@@ -14,11 +14,13 @@ open System.Collections.Concurrent
 
 open Util.Cat
 open Util.CollectionModDict
+open Util.Concurrent
 open Util.Bin
 open Util.Text
 open Util.Perf
 open Util.Http
 open Util.HttpServer
+open Util.WebSocket
 open Util.Concurrent
 
 type ConnState = 
@@ -57,6 +59,12 @@ with override this.ToString() =
         [|  "ID " + this.connId.Value.ToString() 
             "ConnRcv " + this.queue.count.ToString() |]
         |> String.concat crlf
+
+let engine__monitor engine = 
+    [|  ("connId", engine.connId.ToString() |> Json.Str)
+        ("queue", engine.queue.count.ToString() |> Json.Str)
+        ("keeps", engine.keeps.Count.ToString() |> Json.Str) |]
+    |> Json.Braket
 
 let bufferAsNull = {
     bb = new BytesBuilder()
@@ -150,15 +158,14 @@ let prepEngine
 let recv conn = 
 
     let bb,bin = conn.buffer.bb,conn.buffer.bin
-    let stream = conn.client.GetStream() :> Stream
+    let stream = conn.client.GetStream() // :> Stream
 
-    let mutable keep = true
-    while keep do
-        let count = stream.Read(bin, 0, bin.Length)
+    while stream.DataAvailable = false do
+        ()
 
-        bb.append(bin,count)
-        if count < bin.Length then
-            keep <- false
+    let bs = Array.zeroCreate conn.client.Available
+    let count = stream.Read(bs, 0, bs.Length)
+    bb.append bs
 
     let bin = bb.bytes()
     bb.clear()
@@ -167,75 +174,152 @@ let recv conn =
 
 let recvIncoming engine conn = 
 
-    [|  "Conn [" + conn.id.ToString() + "]"
-        " = " + conn.state.ToString() |]
-    |> String.Concat
-    |> engine.output
+    async{
+        [|  "Conn [" + conn.id.ToString() + "]"
+            " = " + conn.state.ToString() |]
+        |> String.Concat
+        |> engine.output
 
-    "Conn [" + conn.id.ToString() + "] Receving ..."
-    |> engine.output
+        "Conn [" + conn.id.ToString() + "] Receving ..."
+        |> engine.output
     
-    let stream,incoming = recv conn
+        let stream,incoming = recv conn
 
-    "Incomining " + incoming.Length.ToString() + " bytes"
-    |> engine.output
+        "Incomining " + incoming.Length.ToString() + " bytes"
+        |> engine.output
 
-    incoming
-    |> hex
-    |> engine.output
+        incoming
+        |> hex
+        |> engine.output
 
-    match incomingProcess incoming with
-    | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
+        match incomingProcess incoming with
+        | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
 
-        match reqo with
-        | Some req ->
+            match reqo with
+            | Some req ->
 
-            let outgoing =
+                let outgoing =
                         
-                let repo = 
-                    match engine.plugino with
-                    | Some plugin -> plugin req
-                    | None -> None
+                    let repo = 
+                        match engine.plugino with
+                        | Some plugin -> plugin req
+                        | None -> None
 
-                match repo with
-                | Some v -> v
-                | None -> 
-                    fileService 
-                        engine.folder 
-                        engine.defaultHtml 
-                        req
+                    match repo with
+                    | Some v -> v
+                    | None -> 
+                        fileService 
+                            engine.folder 
+                            engine.defaultHtml 
+                            req
 
-            stream.Write(outgoing,0,outgoing.Length)
+                stream.Write(outgoing,0,outgoing.Length)
+                stream.Flush()
+
+            | None -> ()
+
+            "Drop"
+            |> engine.output
+
+            drop engine stream conn
+
+        | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
+
+            "Upgrade"
+            |> engine.output
+
+            stream.Write(upgrade,0,upgrade.Length)
             stream.Flush()
 
-        | None -> ()
+            conn.state <- ConnState.Keep
+            engine.keeps[conn.id] <- conn
 
-        "Drop"
-        |> engine.output
+            "Rcv -> Keep"
+            |> engine.output
 
-        drop engine stream conn
+        | _ -> 
 
-    | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
+            "Drop"
+            |> engine.output
 
-        "Upgrade"
-        |> engine.output
+            drop engine stream conn
+    }
 
-        stream.Write(upgrade,0,upgrade.Length)
-        stream.Flush()
+let cycleAccept engine = 
+    async{
+        while true do
+            try
+                let client = engine.listener.AcceptTcpClient()
+                let id = Interlocked.Increment engine.connId
 
-        conn.state <- ConnState.Keep
-        engine.keeps[conn.id] <- conn
+                let conn = checkoutConn engine id client
+                engine.queue[conn.id] <- conn
 
-        "Rcv -> Keep"
-        |> engine.output
+                "Client accepted [" + id.ToString() + "], Queue = " + engine.queue.count.ToString()
+                |> engine.output
 
-    | _ -> 
+                //s.Close()
+            with
+            | ex ->
+                ex.ToString() |> engine.output
+                "Accepting thread" |> engine.output
+    }
 
-        "Drop"
-        |> engine.output
+let cycleRcv engine = 
+    async{
+        while true do
+            try
+                let items = engine.queue.array()
 
-        drop engine stream conn
+                items
+                |> Array.iter(fun conn -> 
+                    recvIncoming engine conn
+                    |> Async.Start)
+                engine.queue.clear()
+            with
+            | ex ->
+                ex.ToString() |> engine.output
+                "Rcving thread" |> engine.output
+    }
 
+let cycleWs engine =
+    async{
+        while true do
+            try
+                engine.keeps.Values
+                |> Seq.toArray
+                |> Array.Parallel.iter(fun conn -> 
+                    "Conn [" + conn.id.ToString() + "] Receving ..."
+                    |> engine.output
+    
+                    let stream,incoming = recv conn
+
+                    "Incomining " + incoming.Length.ToString() + " bytes"
+                    |> engine.output
+
+                    incoming
+                    |> hex
+                    |> engine.output
+
+                    match wsDecode incoming with
+                    | Some bs -> 
+                        engine.output "Decoded:"
+                        bs
+                        |> hex
+                        |> engine.output
+                    | None -> engine.output "Decode failed"
+                    
+                    match engine.wsHandler incoming with
+                    | Some rep -> 
+                        rep
+                        |> wsEncode
+                        |> stream.Write
+                    | None -> ())
+            with
+            | ex ->
+                ex.ToString() |> engine.output
+                "Ws thread" |> engine.output
+    }
 
 let startEngine engine = 
 
@@ -244,43 +328,13 @@ let startEngine engine =
 
     engine.listener.Start()
 
-    (fun _ ->
-        let client = engine.listener.AcceptTcpClient()
-        let id = Interlocked.Increment engine.connId
-
-        let conn = checkoutConn engine id client
-        engine.queue[conn.id] <- conn
-
-        "Client accepted [" + id.ToString() + "], Queue = " + engine.queue.count.ToString()
-        |> engine.output
-
-        //s.Close()
-        ())
-    |> Util.Concurrent.asyncCycler
-
-    (fun _ ->
-        engine.queue.array()
-        |> Array.Parallel.iter(fun conn -> 
-            recvIncoming engine conn)
-        engine.queue.clear())
-    |> Util.Concurrent.asyncCycler
-
-    (fun _ ->
-        engine.keeps.Values
-        |> Seq.toArray
-        |> Array.Parallel.iter(fun conn -> 
-            "Conn [" + conn.id.ToString() + "] Receving ..."
-            |> engine.output
+    cycleAccept engine 
+    |> Async.Start
     
-            let stream,incoming = recv conn
+    cycleRcv engine
+    |> Async.Start
 
-            "Incomining " + incoming.Length.ToString() + " bytes"
-            |> engine.output
-
-            incoming
-            |> hex
-            |> engine.output
-
-            ()))
-    |> Util.Concurrent.asyncCycler
+    cycleWs engine
+    |> Async.Start
+    
 

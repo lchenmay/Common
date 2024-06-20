@@ -116,7 +116,7 @@ let asyncCyclerIntervalTS (interval:TimeSpan) body =
     |> Async.Ignore
     |> Async.Start
 
-let asyncCyclerTry body exception_handler = 
+let asyncCyclerTry exception_handler body = 
     async{
         while true do
             try

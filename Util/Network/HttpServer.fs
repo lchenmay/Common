@@ -230,9 +230,14 @@ let incomingProcess (bin:byte[]) =
                 |> System.Security.Cryptography.SHA1.Create().ComputeHash
                 |> Convert.ToBase64String
 
-            [|  binSecWebSocketKey
-                s + crlf + crlf |> Encoding.UTF8.GetBytes |]
-            |> Array.concat
+            [|  "HTTP/1.1 101 Switching Protocols"
+                "Connection: Upgrade"
+                "Upgrade: websocket"
+                "Sec-WebSocket-Accept: " + s
+                "Sec-WebSocket-Protocol: binary"
+                crlf    |]
+            |> String.concat crlf
+            |> Encoding.ASCII.GetBytes
             |> HttpRequestWithWS.WebSocketUpgrade
         else
             bin

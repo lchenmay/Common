@@ -38,6 +38,7 @@ bin: byte[] }
 type Conn = {
 id: int64 
 client: TcpClient
+ns: NetworkStream
 buffer: Buffer
 mutable idleSince: DateTime
 mutable state: ConnState }
@@ -75,6 +76,7 @@ let checkoutConn engine id client =
     {
         id = id
         client = client 
+        ns = client.GetStream()
         buffer = 
             let r = ref bufferAsNull
             while engine.buffers.TryPop r = false do
@@ -84,8 +86,8 @@ let checkoutConn engine id client =
         idleSince = DateTime.UtcNow
         state = ConnState.Idle }
 
-let drop engine (stream:Stream) conn = 
-    stream.Close()
+let drop engine conn = 
+    conn.ns.Close()
     conn.client.Close()
                 
     conn.buffer
@@ -158,18 +160,14 @@ let prepEngine
 let recv conn = 
 
     let bb,bin = conn.buffer.bb,conn.buffer.bin
-    let stream = conn.client.GetStream() // :> Stream
-
-    while stream.DataAvailable = false do
-        ()
 
     let bs = Array.zeroCreate conn.client.Available
-    let count = stream.Read(bs, 0, bs.Length)
+    let count = conn.ns.Read(bs, 0, bs.Length)
     bb.append bs
 
     let bin = bb.bytes()
     bb.clear()
-    stream,bin
+    bin
 
 
 let recvIncoming engine conn = 
@@ -183,7 +181,7 @@ let recvIncoming engine conn =
         "Conn [" + conn.id.ToString() + "] Receving ..."
         |> engine.output
     
-        let stream,incoming = recv conn
+        let incoming = recv conn
 
         "Incomining " + incoming.Length.ToString() + " bytes"
         |> engine.output
@@ -213,23 +211,21 @@ let recvIncoming engine conn =
                             engine.defaultHtml 
                             req
 
-                stream.Write(outgoing,0,outgoing.Length)
-                stream.Flush()
+                conn.ns.Write(outgoing,0,outgoing.Length)
 
             | None -> ()
 
             "Drop"
             |> engine.output
 
-            drop engine stream conn
+            drop engine conn
 
         | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
 
             "Upgrade"
             |> engine.output
 
-            stream.Write(upgrade,0,upgrade.Length)
-            stream.Flush()
+            conn.ns.Write(upgrade,0,upgrade.Length)
 
             conn.state <- ConnState.Keep
             engine.keeps[conn.id] <- conn
@@ -242,84 +238,88 @@ let recvIncoming engine conn =
             "Drop"
             |> engine.output
 
-            drop engine stream conn
+            drop engine conn
     }
 
 let cycleAccept engine = 
-    async{
-        while true do
-            try
-                let client = engine.listener.AcceptTcpClient()
-                let id = Interlocked.Increment engine.connId
 
-                let conn = checkoutConn engine id client
-                engine.queue[conn.id] <- conn
+    "Accept" |> engine.output
 
-                "Client accepted [" + id.ToString() + "], Queue = " + engine.queue.count.ToString()
-                |> engine.output
+    let client = engine.listener.AcceptTcpClient()
+    let id = Interlocked.Increment engine.connId
 
-                //s.Close()
-            with
-            | ex ->
-                ex.ToString() |> engine.output
-                "Accepting thread" |> engine.output
-    }
+    let conn = checkoutConn engine id client
+    engine.queue[conn.id] <- conn
+
+    "Client accepted [" + id.ToString() + "], Queue = " + engine.queue.count.ToString()
+    |> engine.output
+
+    //s.Close()
 
 let cycleRcv engine = 
-    async{
-        while true do
-            try
-                let items = engine.queue.array()
 
-                items
-                |> Array.iter(fun conn -> 
-                    recvIncoming engine conn
-                    |> Async.Start)
-                engine.queue.clear()
-            with
-            | ex ->
-                ex.ToString() |> engine.output
-                "Rcving thread" |> engine.output
-    }
+    let all = engine.queue.array()
+
+    let items = 
+        all
+        |> Array.filter(fun conn -> conn.ns.DataAvailable)
+
+    [|  "Rcv " + items.Length.ToString() 
+        " / "
+        + all.Length.ToString() |]
+    |> String.Concat
+    |> engine.output
+
+    items
+    |> Array.iter(fun conn -> 
+        recvIncoming engine conn
+        |> Async.Start)
+    engine.queue.clear()
 
 let cycleWs engine =
-    async{
-        while true do
-            try
-                engine.keeps.Values
-                |> Seq.toArray
-                |> Array.Parallel.iter(fun conn -> 
-                    "Conn [" + conn.id.ToString() + "] Receving ..."
-                    |> engine.output
+
+    let all = 
+        engine.keeps.Values 
+        |> Seq.toArray
+
+    let items = 
+        all
+        |> Array.filter(fun conn -> conn.ns.DataAvailable)
     
-                    let stream,incoming = recv conn
+    [|  "Ws " + items.Length.ToString() 
+        " / "
+        + all.Length.ToString() |]
+    |> String.Concat
+    |> engine.output
 
-                    "Incomining " + incoming.Length.ToString() + " bytes"
-                    |> engine.output
+    items
+    |> Array.Parallel.iter(fun conn -> 
+        "Conn [" + conn.id.ToString() + "] Receving ..."
+        |> engine.output
+    
+        let incoming = recv conn
 
-                    incoming
-                    |> hex
-                    |> engine.output
+        "Incomining " + incoming.Length.ToString() + " bytes"
+        |> engine.output
 
-                    match wsDecode incoming with
-                    | Some bs -> 
-                        engine.output "Decoded:"
-                        bs
-                        |> hex
-                        |> engine.output
-                    | None -> engine.output "Decode failed"
+        incoming
+        |> hex
+        |> engine.output
+
+        match wsDecode incoming with
+        | Some bs -> 
+            engine.output "Decoded:"
+            bs
+            |> hex
+            |> engine.output
+        | None -> engine.output "Decode failed"
                     
-                    match engine.wsHandler incoming with
-                    | Some rep -> 
-                        rep
-                        |> wsEncode
-                        |> stream.Write
-                    | None -> ())
-            with
-            | ex ->
-                ex.ToString() |> engine.output
-                "Ws thread" |> engine.output
-    }
+        match engine.wsHandler incoming with
+        | Some rep -> 
+            rep
+            |> wsEncode
+            |> conn.ns.Write
+        | None -> ())
 
 let startEngine engine = 
 
@@ -328,13 +328,17 @@ let startEngine engine =
 
     engine.listener.Start()
 
-    cycleAccept engine 
-    |> Async.Start
-    
-    cycleRcv engine
-    |> Async.Start
+    let exHandler note (ex:exn) =
+        ex.ToString() |> engine.output
+        note |> engine.output
 
-    cycleWs engine
-    |> Async.Start
+    (fun _ -> cycleAccept engine)
+    |> threadCyclerIntervalTry ThreadPriority.Highest 1000 (exHandler "Accept")
+    
+    (fun _ -> cycleRcv engine)
+    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 1000 (exHandler "Rcv")
+
+    (fun _ -> cycleWs engine)
+    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 1000 (exHandler "WS")
     
 

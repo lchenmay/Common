@@ -127,22 +127,55 @@ let asyncCyclerTry exception_handler body =
     |> Async.Ignore
     |> Async.Start
 
-let asyncCyclerIntervalTry(interval:int)(body,exception_handler) = 
+let asyncCyclerIntervalTry interval exception_handler body = 
     async{
         while true do
             try
                 body()
             with
             | ex -> ex |> exception_handler
-            System.Threading.Thread.Sleep interval
+
+            if interval > 0 then
+                System.Threading.Thread.Sleep interval
     }
     |> Async.Ignore
     |> Async.Start
+
+let threadCyclerIntervalTry priority interval exception_handler body = 
+
+    let f() =
+        while true do
+            try
+                body()
+            with
+            | ex -> ex |> exception_handler
+
+            if interval > 0 then
+                System.Threading.Thread.Sleep interval
+
+    let t = new Thread(f)
+    t.Priority <- ThreadPriority.Highest
+    t.Start()
 
 let asyncInNewThread body = 
     async {
         do! Async.SwitchToNewThread()
         do! async { body() }
+    }
+    |> Async.StartImmediate
+
+let asyncTryInNewThread interval exception_handler body = 
+    async {
+        do! Async.SwitchToNewThread()
+        do! async { 
+            while true do
+                try
+                    body()
+                with
+                | ex -> ex |> exception_handler
+                
+                if interval > 0 then
+                    System.Threading.Thread.Sleep interval }
     }
     |> Async.StartImmediate
 

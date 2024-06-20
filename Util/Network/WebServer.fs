@@ -45,7 +45,7 @@ mutable state: ConnState }
 
 type Engine<'Runtime> = {
 output: string -> unit
-plugino: (HttpRequest -> byte[] option) option
+echo: HttpRequest -> byte[] option
 folder: string
 defaultHtml: string
 runtime: 'Runtime
@@ -128,7 +128,7 @@ let fileService root defaultHtml req =
 
 let prepEngine 
     output
-    plugino
+    echo
     folder
     defaultHtml
     runtime
@@ -145,7 +145,7 @@ let prepEngine
 
     {
         output = output
-        plugino = plugino
+        echo = echo
         folder = folder
         defaultHtml = defaultHtml
         runtime = runtime
@@ -198,10 +198,7 @@ let rcv engine conn =
 
                 let outgoing =
                         
-                    let repo = 
-                        match engine.plugino with
-                        | Some plugin -> plugin req
-                        | None -> None
+                    let repo = engine.echo req
 
                     match repo with
                     | Some v -> v

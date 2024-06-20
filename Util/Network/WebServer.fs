@@ -93,6 +93,9 @@ let drop engine conn =
     conn.buffer
     |> engine.buffers.Push
 
+    if engine.queue.ContainsKey conn.id then
+        engine.queue.remove conn.id
+
 
 let fileService root defaultHtml req = 
 
@@ -271,7 +274,6 @@ let cycleRcv engine =
     |> Array.iter(fun conn -> 
         rcv engine conn
         |> Async.Start)
-    engine.queue.clear()
 
 let cycleWs engine =
 

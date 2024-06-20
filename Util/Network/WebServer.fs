@@ -157,7 +157,7 @@ let prepEngine
         queue = createMDInt64<Conn> 8
         keeps = new ConcurrentDictionary<int64,Conn>() }
 
-let recv conn = 
+let read conn = 
 
     let bb,bin = conn.buffer.bb,conn.buffer.bin
 
@@ -170,7 +170,7 @@ let recv conn =
     bin
 
 
-let recvIncoming engine conn = 
+let rcv engine conn = 
 
     async{
         [|  "Conn [" + conn.id.ToString() + "]"
@@ -181,7 +181,7 @@ let recvIncoming engine conn =
         "Conn [" + conn.id.ToString() + "] Receving ..."
         |> engine.output
     
-        let incoming = recv conn
+        let incoming = read conn
 
         "Incomining " + incoming.Length.ToString() + " bytes"
         |> engine.output
@@ -272,7 +272,7 @@ let cycleRcv engine =
 
     items
     |> Array.iter(fun conn -> 
-        recvIncoming engine conn
+        rcv engine conn
         |> Async.Start)
     engine.queue.clear()
 
@@ -297,7 +297,7 @@ let cycleWs engine =
         "Conn [" + conn.id.ToString() + "] Receving ..."
         |> engine.output
     
-        let incoming = recv conn
+        let incoming = read conn
 
         "Incomining " + incoming.Length.ToString() + " bytes"
         |> engine.output

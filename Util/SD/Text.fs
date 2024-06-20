@@ -1305,6 +1305,8 @@ type TextBlock =
 | NewlineBlankIndent of int
 | NewlineIndent of int * string
 | MultiLineIndent of int * string[]
+| MultiLineConcate of string * string[]
+| MultiLineConcateIndent of string * int * string[]
 
 let writeTextBlock (buffer:List<string>) tb = 
     
@@ -1320,9 +1322,21 @@ let writeTextBlock (buffer:List<string>) tb =
     | NewlineBlankIndent indent -> tabs[indent] |> buffer.Add
     | NewlineIndent (indent,s) -> tabs[indent] + s |> buffer.Add
     | MultiLineIndent (indent,lines) -> 
+        let t = tabs[indent]
         lines
-        |> Array.map(fun s -> tabs[indent] + s)
+        |> Array.map(fun s -> t + s)
         |> buffer.AddRange
+    | MultiLineConcate (delim,lines) ->
+        lines
+        |> String.concat (delim + crlf)
+        |> buffer.Add
+    | MultiLineConcateIndent (delim,indent,lines) ->
+        let t = tabs[indent]
+        lines
+        |> Array.map(fun line -> t + line)
+        |> String.concat (delim + crlf)
+        |> buffer.Add
+
 
 
 type TextBlockWriter (buffer:List<string>) = 
@@ -1335,7 +1349,8 @@ type TextBlockWriter (buffer:List<string>) =
 
     member this.appendEnd = AppendEnd >> writeTextBlock buffer
     member this.multiLine = MultiLine >> writeTextBlock buffer
-    member this.multiLineConcate delim = Array.toSeq >> String.concat delim >> Newline >> writeTextBlock buffer
+    member this.multiLineConcate delim lines = (delim,lines) |> MultiLineConcate |> writeTextBlock buffer
+    member this.multiLineConcateIndent delim indent lines  = (delim,indent,lines) |> MultiLineConcateIndent |> writeTextBlock buffer 
     member this.newline = Newline >> writeTextBlock buffer
     member this.newlineBlank() = NewlineBlank |> writeTextBlock buffer
     member this.newlineBlankIndent = NewlineBlankIndent >> writeTextBlock buffer

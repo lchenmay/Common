@@ -37,7 +37,7 @@ let vueIndex file =
 
 let render 
     (html,head,body)
-    (title,desc,img,url) = 
+    (title,desc,img,url,noscript) = 
 
     let a = 
         """

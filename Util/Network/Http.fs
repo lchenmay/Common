@@ -99,7 +99,7 @@ type HttpRequest =
         domainname:string;
         topline:string;
         method:string;
-        pathline:string;
+        mutable pathline:string;
         path:string[];
         headers:Dictionary<string, string>;
         query:Dictionary<string, string>;

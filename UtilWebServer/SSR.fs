@@ -18,58 +18,75 @@ open Util.Zmq
 
 open UtilWebServer.DbLogger
 
-let vueIndex file = 
+let r1 = string__regex @"(?<=src=\x22/js/index\.)\w+(?=\.js\x22)"
+let r2 = string__regex @"(?<=href=\x22/as/index\.)\w+(?=\.css\x22)"
+
+type SsrPage = {
+title: string
+desc: string
+image: string
+url: string
+noscript: string }
+
+let vueIndexFile__hashes file = 
 
     let html = 
         file
         |> Util.FileSys.try_read_string
         |> snd
 
-    let head = 
-        html
-        |> find ("</title>","</head>")
+    let hash1 = html |> regex_match r1
+    let hash2 = html |> regex_match r2
 
-    let body = 
-        html
-        |> find ("</head>","</html>")
-
-    html,head,body
+    hash1,hash2
 
 let render 
-    (html,head,body)
-    (title,desc,img,url,noscript) = 
+    (hash1,hash2)
+    ssrPage = 
 
-    let a = 
-        """
-<!DOCTYPE html>
+    [|  """<!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-        """
-        |> Encoding.UTF8.GetBytes
-    
-    let b = 
-        [|  "<meta name=\"description\" content=\"" + desc + "\">"
-            "<meta property=\"og:title\" content=\"" + title + "\">"
-            "<meta property=\"og:description\" content=\"" + desc + "\">"
-            "<meta property=\"og:type\" content=\"website\">"
-            "<meta property=\"og:url\" content=\"" + url + "\">"
-            "<meta property=\"og:image\" content=\"" + img + "\">"
-            "<title>" + title + "</title>" |]
-        |> String.Concat
-        |> Encoding.UTF8.GetBytes
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">"""
 
-    let c = 
-        [|  head
-            "</head>"
-            body
-            "</html>" |]
-        |> String.Concat
-        |> Encoding.UTF8.GetBytes
+        "<meta name=\"description\" content=\"" + ssrPage.desc + "\">"
+        "<meta property=\"og:title\" content=\"" + ssrPage.title + "\">"
+        "<meta property=\"og:description\" content=\"" + ssrPage.desc + "\">"
+        "<meta property=\"og:type\" content=\"website\">"
+        "<meta property=\"og:url\" content=\"" + ssrPage.url + "\">"
+        "<meta property=\"og:image\" content=\"" + ssrPage.image + "\">"
+        "<title>" + ssrPage.title + "</title>" 
 
-    [|  a
-        b
-        c   |]
-    |> Array.concat
+        """  <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+
+  <script type="importmap">
+    {
+      "imports": {
+        "@antv/x6": "https://cdn.jsdelivr.net/npm/@antv/x6@2.18.1/+esm"
+      }
+    }
+  </script>"""
+
+        "<script type=\"module\" crossorigin src=\"/js/index." + hash1 + ".js\"></script>"
+        "<link rel=\"stylesheet\" crossorigin href=\"/as/index." + hash2 + ".css\">"
+
+        """</head>
+
+<body class="overflow-x-hidden">
+  <noscript>"""
+
+        ssrPage.noscript
+
+        """</noscript>
+
+  <div id="app"></div>
+
+</body>
+
+</html>"""  |]
+    |> String.Concat
+    |> Encoding.UTF8.GetBytes
+
+

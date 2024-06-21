@@ -36,10 +36,10 @@ bb: BytesBuilder
 bin: byte[] }
 
 type Conn = {
+since: DateTime
 id: int64 
 client: TcpClient
 ns: NetworkStream
-buffer: Buffer
 mutable idleSince: DateTime
 mutable state: ConnState }
 
@@ -52,7 +52,6 @@ runtime: 'Runtime
 wsHandler: byte[] -> byte[] option
 port:int
 listener: TcpListener
-buffers: ConcurrentStack<Buffer>
 connId: ref<int64>
 queue: ModDict<int64,Conn>
 keeps: ModDict<int64,Conn> }
@@ -74,15 +73,10 @@ let bufferAsNull = {
 let checkoutConn engine id client = 
 
     {
+        since = DateTime.UtcNow
         id = id
         client = client 
         ns = client.GetStream()
-        buffer = 
-            let r = ref bufferAsNull
-            while engine.buffers.TryPop r = false do
-                ()
-            r.Value
-
         idleSince = DateTime.UtcNow
         state = ConnState.Idle }
 
@@ -103,10 +97,6 @@ let drop engine (collectiono:ModDict<int64,Conn> option) conn =
         conn.client.Close()
     with
     | ex -> ()
-                
-    conn.buffer
-    |> engine.buffers.Push
-
 
 
 let fileService root defaultHtml req = 
@@ -167,7 +157,6 @@ let prepEngine
         wsHandler = wsHandler
         port = port
         listener = new TcpListener(IPAddress.Any, port)
-        buffers = buffers
         connId = ref 0L
         queue = createMDInt64<Conn> 8
         keeps = createMDInt64<Conn> 8 }
@@ -175,14 +164,13 @@ let prepEngine
 let read conn = 
 
     try
-        let bb,bin = conn.buffer.bb,conn.buffer.bin
+        let bb = new BytesBuilder()
 
         let bs = Array.zeroCreate conn.client.Available
         let count = conn.ns.Read(bs, 0, bs.Length)
         bb.append bs
 
         let bin = bb.bytes()
-        bb.clear()
 
         bin
         |> Some

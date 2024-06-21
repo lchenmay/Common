@@ -25,6 +25,46 @@ let re_http_cookiemain = new Regex(@".+?(?=;)", Util.Text.regex_options)
 
 let rs_http_charset = new Regex(@"(?<=charset=)\S+", Util.Text.regex_options)
 
+let url__domainame (url:string) = 
+
+    let mutable domainame = 
+        let i = url.IndexOf "://"
+        if i > 0 then
+            url.Substring (i + 3)            
+        else
+            url
+
+    domainame <-
+        let i = domainame.IndexOf "/"
+        if i > 0 then
+            domainame.Substring (0,i)            
+        else
+            domainame
+
+    domainame <-
+        let i = domainame.IndexOf ":"
+        if i > 0 then
+            domainame.Substring (0,i)            
+        else
+            domainame
+
+    domainame <-
+        domainame.ToCharArray()
+        |> Array.rev
+        |> String
+
+    domainame <-
+        domainame
+        |> regex_match (string__regex "\w+\.\w+")
+
+    domainame <-
+        domainame.ToCharArray()
+        |> Array.rev
+        |> String
+
+    domainame
+
+
 //Set-Cookie: session-id-time=-; path=/; domain=.www.amazon.cn; expires=Tue, 26-Dec-2006 11:41:37 GMT
 type Cookie =
     { k:string; v:string }

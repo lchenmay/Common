@@ -18,10 +18,12 @@ open Util.Zmq
 open UtilWebServer.DbLogger
 
 let ok = "Er",Json.Str "OK"
-let er er = "Er",er.ToString() |> Json.Str
+let er er = [|  "Er",(er.ToString() |> Json.Str) |]
 let wrapOk name json = 
     [|  ok
         (name,json) |]
+
+let wrapOkAry = Json.Ary >> wrapOk "list"
 
 let rep404 = [| |]
 

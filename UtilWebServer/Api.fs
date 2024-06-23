@@ -15,6 +15,8 @@ open Util.Http
 open Util.HttpServer
 open Util.Zmq
 
+open UtilWebServer.Json
+
 open UtilWebServer.DbLogger
 
 let ok = "Er",Json.Str "OK"
@@ -38,3 +40,18 @@ let echoApiHandler branch req =
     |> Json.Braket
     |> json__strFinal
     |> str__StandardResponse "application/json"
+
+
+let tryLoadFromJsonIdWrapOK 
+    v__json
+    (n,e) 
+    tryLoader 
+    json = 
+    match 
+        tryLoader
+        |> tryLoadFromJsonId json "id" with
+    | Some v -> 
+        v
+        |> v__json
+        |> wrapOk n
+    | None -> er e

@@ -62,7 +62,7 @@ let url__domainame (url:string) =
         |> Array.rev
         |> String
 
-    domainame
+    domainame.Trim().ToLower()
 
 
 //Set-Cookie: session-id-time=-; path=/; domain=.www.amazon.cn; expires=Tue, 26-Dec-2006 11:41:37 GMT

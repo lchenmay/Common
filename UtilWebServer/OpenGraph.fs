@@ -45,5 +45,4 @@ let parse html =
                 image <- line |> find("content=\"","\""))
 
     title,desc,image
-    
-let load = httpGet None >> snd >> parse
+   

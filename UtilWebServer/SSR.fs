@@ -18,8 +18,8 @@ open Util.Zmq
 
 open UtilWebServer.DbLogger
 
-let r1 = string__regex @"(?<=src=\x22/js/index\.)\w+(?=\.js\x22)"
-let r2 = string__regex @"(?<=href=\x22/as/index\.)\w+(?=\.css\x22)"
+let r1 = string__regex @"(?<=src=\x22/js/index\.)[\w-]+(?=\.js\x22)"
+let r2 = string__regex @"(?<=href=\x22/as/index\.)[\w-]+(?=\.css\x22)"
 
 type SsrPage = {
 title: string

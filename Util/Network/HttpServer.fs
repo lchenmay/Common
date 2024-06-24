@@ -203,7 +203,7 @@ let standardResponseHeader =
 
 let bin__StandardResponse mime body = 
     [|  standardResponseHeader 
-        "Content-Type: " + mime + crlfcrlf |> System.Text.Encoding.UTF8.GetBytes        
+        crlf + "Content-Type: " + mime + crlfcrlf |> System.Text.Encoding.UTF8.GetBytes        
         body |]
     |> Array.concat
 

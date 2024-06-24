@@ -27,17 +27,20 @@ open UtilWebServer.Api
 
 let keepSession = 7.0
 
-let createSession 
-    (creator: string -> SessionTemplate<'User,'Data>)
-    (sessions: SessionsTemplate<'User,'Data>) = 
-
-    use cw = new CodeWrapper("UtilWebServer.Auth.createSessionKey")
+let user__session
+    (sessions: SessionsTemplate<'User,'Data>) 
+    user = 
 
     let key = 
         Guid.NewGuid().ToByteArray()
         |> bin__sha256
 
-    let session = creator key
+    let session = { 
+        since = DateTime.UtcNow
+        expiry = DateTime.MaxValue
+        identity = Some user
+        datao = None
+        session = key }
 
     sessions[key] <- session
 
@@ -153,9 +156,14 @@ let socialAuth
             match 
                 uid.ToString()
                 |> checkoutEu "DISCORD" with
-            | Some v -> 
+            | Some user -> 
+
+                let session = 
+                    user 
+                    |> user__session x.runtime.sessions
+
                 [|  ok
-                    ("ec", v |> v__json)   |]
+                    ("ec", user |> v__json)   |]
 
             | None -> er erInternal
 

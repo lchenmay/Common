@@ -50,7 +50,7 @@ type SessionTemplate<'User,'Data> = {
 since: DateTime
 mutable expiry: DateTime
 mutable identity: 'User option
-mutable data: 'Data
+mutable datao: 'Data option
 session: string }
 
 type SessionsTemplate<'User,'Data> = ConcurrentDictionary<string,SessionTemplate<'User,'Data>>

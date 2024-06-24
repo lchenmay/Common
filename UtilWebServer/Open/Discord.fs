@@ -1,4 +1,4 @@
-﻿module Util.WebServer.Open.Discord
+﻿module UtilWebServer.Open.Discord
 
 open System
 
@@ -7,7 +7,10 @@ open Util.Json
 open Util.HttpClient
 
 
-let requestAccessToken(client_id,client_sceret,redirect_url) code = 
+let requestAccessToken
+    (client_id,client_sceret)
+    redirect_url 
+    code = 
 
     let hc = empty__HttpClient()
 

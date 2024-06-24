@@ -34,7 +34,7 @@ let output:string -> unit =
 type Host = {
 mutable zmq: bool
 mutable port: int
-conn: string
+mutable conn: string
 defaultHtml: string
 fsDir: string }
 

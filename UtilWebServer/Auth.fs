@@ -63,11 +63,9 @@ getSocialAuthBiz: 'p -> int64
 setSocialAuthBiz: 'p -> int64 -> unit
 getSocialAuthId: 'p -> string
 setSocialAuthId: 'p -> string -> unit
-empty__p: unit -> 'p 
 metadata: MetadataTypes<'p>
 p__complex: Rcd<'p> -> 'complex
 complex__ids: 'complex -> int64 * string
-loc: string
 conn: string }
 
 let tryFindExisting 
@@ -88,7 +86,7 @@ let tryCreateUser
     
     let rcd = 
 
-        let p = ap.empty__p()
+        let p = ap.metadata.empty__p()
 
         ap.setSocialAuthBiz p bizId
         ap.setSocialAuthId p id
@@ -96,7 +94,9 @@ let tryCreateUser
         p
         |> populateCreateTx pretx ap.metadata
 
-    if pretx |> loggedPipeline ap.loc ap.conn then
+    if  pretx 
+        |> loggedPipeline 
+            "UtilWebServer.Auth.tryCreateUser" ap.conn then
         Some rcd
     else
         None

@@ -9,24 +9,17 @@ open Util.HttpClient
 
 let requestAccessToken
     (client_id,client_sceret)
-    (redirect_url:string) 
+    redirect_url
     code = 
 
     let hc = empty__HttpClient()
 
     let postdata = 
-
-        let url = 
-            if redirect_url.Contains "://" then
-                redirect_url
-            else
-                "https://" + redirect_url
-
         [|  "client_id=" + client_id
             "&client_secret=" + client_sceret
             "&grant_type=authorization_code"
             "&code=" + code;
-            "&redirect_uri=" + url |]
+            "&redirect_uri=" + redirect_url |]
         |> String.Concat
 
     let resobj = hc.post("https://discordapp.com/api/oauth2/token",postdata)
@@ -49,17 +42,19 @@ let requestUserInfo access_token =
         |> jsonstr__items
         |> checkfield
 
-    let uid = fields "id" |> try_parse_int64
+    let uido = fields "id" |> try_parse_int64
     let username = fields "username"
     let discriminator = "discriminator"
     let mutable avatar = "avatar"
 
     // https://cdn.discordapp.com/avatars/614834018114076726/ffe7559e3fcfc1a729e9ddbcc779c6fd.png
-    match uid with 
-    | Some v ->
+    match uido with 
+    | Some uid ->
         if avatar.StartsWith "https://cdn.discordapp.com/avatars/" = false then
-            avatar <- "https://cdn.discordapp.com/avatars/" + v.ToString() + "/" + avatar + ".png"
-    | None -> ()
+            avatar <- "https://cdn.discordapp.com/avatars/" + uid.ToString() + "/" + avatar + ".png"
+        
+        (uid, username + "#" + discriminator, avatar, json)
+        |> Some
+    | None -> None
 
-    uid, username + "#" + discriminator, avatar, json
 

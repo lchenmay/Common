@@ -58,18 +58,31 @@ let checkExpire
             |> ignore
 
 
-let tryCreateUser loc conn metadata empty = 
+type AuthParams<'p> = {
+getSocialAuthBiz: 'p -> int64
+setSocialAuthBiz: 'p -> int64 -> unit
+getSocialAuthId: 'p -> string
+setSocialAuthId: 'p -> string -> unit
+empty__p: unit -> 'p 
+metadata: MetadataTypes<'p>
+loc: string
+conn: string }
+
+let tryCreateUser ap bizId id = 
 
     let pretx = None |> opctx__pretx
     
     let rcd = 
 
-        let p = empty()
+        let p = ap.empty__p()
+
+        ap.setSocialAuthBiz p bizId
+        ap.setSocialAuthId p id
 
         p
-        |> populateCreateTx pretx metadata
+        |> populateCreateTx pretx ap.metadata
 
-    if pretx |> loggedPipeline loc conn then
+    if pretx |> loggedPipeline ap.loc ap.conn then
         Some rcd
     else
         None

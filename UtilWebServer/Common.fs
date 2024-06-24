@@ -36,6 +36,6 @@ mutable zmq: bool
 mutable port: int
 mutable conn: string
 defaultHtml: string
-fsDir: string }
+mutable fsDir: string }
 
 let port__zweb port = create__ZWeb 2 port LogLevel.All false [||]

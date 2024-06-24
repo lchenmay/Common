@@ -10,3 +10,7 @@ let optionProcessSome h o =
     | Some v -> v |> h |> Some
     | None -> None
 
+let optionProcessNone h o = 
+    match o with
+    | Some v -> v |> Some
+    | None -> h()

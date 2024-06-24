@@ -58,17 +58,31 @@ let checkExpire
             |> ignore
 
 
-type AuthParams<'p> = {
+type AuthParams<'p,'complex> = {
 getSocialAuthBiz: 'p -> int64
 setSocialAuthBiz: 'p -> int64 -> unit
 getSocialAuthId: 'p -> string
 setSocialAuthId: 'p -> string -> unit
 empty__p: unit -> 'p 
 metadata: MetadataTypes<'p>
+p__complex: Rcd<'p> -> 'complex
+complex__ids: 'complex -> int64 * string
 loc: string
 conn: string }
 
-let tryCreateUser ap bizId id = 
+let tryFindExisting 
+    ap
+    (ecs: ConcurrentDictionary<int64,'complex>)
+    bizId id = 
+    ecs.Values
+    |> Seq.tryFind(fun ec -> 
+        let a,b = ec |> ap.complex__ids
+        a = bizId && b = id)
+
+let tryCreateUser 
+    ap 
+    (ecs: ConcurrentDictionary<int64,'complex>)
+    bizId id = 
 
     let pretx = None |> opctx__pretx
     
@@ -86,6 +100,11 @@ let tryCreateUser ap bizId id =
         Some rcd
     else
         None
+    |> optionProcessSome
+        (fun rcd -> 
+            let ec = rcd |> ap.p__complex
+            ecs[rcd.ID] <- ec
+            ec)
 
 let socialAuth 
     (erInternal,erInvalideParameter) 

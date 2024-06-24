@@ -69,6 +69,19 @@ let checkSession
         x.ero <- Some erUnauthorized
         Fail(erUnauthorized,x)
 
+let checkSessionUsero 
+    erUnauthorized 
+    (sessions: SessionsTemplate<'User,'Data>)
+    x = 
+
+    match
+        checkSession
+            erUnauthorized
+            sessions
+            x with
+    | Suc x -> x.sessiono.Value.identity
+    | _ -> None
+
 type AuthParams<'p,'complex> = {
 getSocialAuthBiz: 'p -> int64
 setSocialAuthBiz: 'p -> int64 -> unit

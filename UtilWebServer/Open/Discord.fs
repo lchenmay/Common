@@ -7,8 +7,6 @@ open Util.Json
 open Util.HttpClient
 
 
-let log(s:string) = System.Console.WriteLine(s)
-
 let requestAccessToken(client_id,client_sceret,redirect_url) code = 
 
     let hc = empty__HttpClient()

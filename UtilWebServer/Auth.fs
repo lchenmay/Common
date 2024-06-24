@@ -21,21 +21,15 @@ open Util.Db
 open Util.Zmq
 
 open UtilWebServer.Db
+open UtilWebServer.Common
 open UtilWebServer.Open
 open UtilWebServer.Api
-
-type Session<'SessionRole,'Data> = { 
-since: DateTime
-mutable expiry: DateTime
-mutable identity: 'SessionRole
-mutable data: 'Data
-session: string }
 
 let keepSession = 7.0
 
 let createSession 
-    (creator: string -> Session<'SessionRole,'Data>)
-    (sessions: ConcurrentDictionary<string,Session<'SessionRole,'Data>>) = 
+    (creator: string -> SessionTemplate<'User,'Data>)
+    (sessions: SessionsTemplate<'User,'Data>) = 
 
     use cw = new CodeWrapper("UtilWebServer.Auth.createSessionKey")
 
@@ -49,7 +43,7 @@ let createSession
 
 let checkSession 
     erUnauthorized 
-    (sessions: ConcurrentDictionary<string,Session<'SessionRole,'Data>>)
+    (sessions: SessionsTemplate<'User,'Data>)
     x = 
 
     x.sessiono <- 
@@ -122,6 +116,7 @@ let tryCreateUser
             let ec = rcd |> ap.p__complex
             ecs[rcd.ID] <- ec
             ec)
+
 
 let socialAuth 
     (erInternal,erInvalideParameter) 

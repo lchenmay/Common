@@ -1,6 +1,7 @@
 ﻿module UtilWebServer.Common
 
 open System
+open System.Collections.Concurrent
 open System.Text
 open System.IO
 open System.Diagnostics
@@ -44,3 +45,20 @@ mutable openDiscordSecret: string
 mutable fsDir: string }
 
 let port__zweb port = create__ZWeb 2 port LogLevel.All false [||]
+
+type SessionTemplate<'User,'Data> = { 
+since: DateTime
+mutable expiry: DateTime
+mutable identity: 'User option
+mutable data: 'Data
+session: string }
+
+type SessionsTemplate<'User,'Data> = ConcurrentDictionary<string,SessionTemplate<'User,'Data>>
+
+type RuntimeTemplate<'User,'SessionData,'Data> = {
+host: Host
+data: 'Data
+users: ConcurrentDictionary<int64,'User>
+sessions: ConcurrentDictionary<string,SessionTemplate<'User,'SessionData>>
+output: string -> unit }
+

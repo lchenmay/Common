@@ -47,16 +47,33 @@ let createSession
 
     sessions[key] <- session
 
-let checkExpire
+let checkSession 
+    erUnauthorized 
     (sessions: ConcurrentDictionary<string,Session<'SessionRole,'Data>>)
-    key = 
+    x = 
 
-    if sessions.ContainsKey key then
-        let s = sessions[key]
-        if DateTime.UtcNow.Ticks >= s.expiry.Ticks then
-            sessions.Remove key
-            |> ignore
+    x.sessiono <- 
+        let s = tryFindStrByAtt "session" x.json
+        if s.Length = 0 then
+            None
+        else
+            if sessions.ContainsKey s then
+                let session = sessions[s]
+                if DateTime.UtcNow.Ticks >= session.expiry.Ticks then
+                    sessions.Remove s
+                    |> ignore
 
+                    None
+                else
+                    Some session
+            else
+                None
+
+    match x.sessiono with
+    | Some session -> Suc x
+    | None -> 
+        x.ero <- Some erUnauthorized
+        Fail(erUnauthorized,x)
 
 type AuthParams<'p,'complex> = {
 getSocialAuthBiz: 'p -> int64
@@ -111,7 +128,9 @@ let socialAuth
     discord
     checkoutEu
     v__json
-    json =
+    x =
+
+    let json = x.json
 
     match tryFindStrByAtt "biz" json with
     | "DISCORD" ->

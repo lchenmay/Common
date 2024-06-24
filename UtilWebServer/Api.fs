@@ -5,6 +5,7 @@ open System.Collections.Generic
 open System.Collections.Concurrent
 open System.Threading
 
+open Util.Cat
 open Util.Runtime
 open Util.Text
 open Util.Json
@@ -18,6 +19,33 @@ open Util.Zmq
 open UtilWebServer.Json
 
 open UtilWebServer.DbLogger
+
+type ApiReturn = (string * Json)[]
+
+type ApiCtx<'Runtime,'Session, 'Error> = { 
+since: DateTime
+service: string
+api: string
+ip: string
+json: Json
+mutable proco: (ApiCtx<'Runtime,'Session, 'Error> -> ApiReturn) option
+mutable sessiono: 'Session option  
+mutable ero: 'Error option
+runtime: 'Runtime    }
+
+let incoming__x runtime service api ip json = 
+    {
+        since = DateTime.UtcNow
+        service = service
+        api = api
+        ip = ip
+        json = json
+        proco = None
+        sessiono = None
+        ero = None
+        runtime = runtime }
+    |> Suc
+
 
 let ok = "Er",Json.Str "OK"
 let er er = [|  "Er",(er.ToString() |> Json.Str) |]
@@ -46,10 +74,10 @@ let tryLoadFromJsonIdWrapOK
     v__json
     (n,e) 
     tryLoader 
-    json = 
+    x = 
     match 
         tryLoader
-        |> tryLoadFromJsonId json "id" with
+        |> tryLoadFromJsonId x.json "id" with
     | Some v -> 
         v
         |> v__json

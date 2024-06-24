@@ -8,6 +8,7 @@ open System.Collections.Generic
 open System.Collections.Concurrent
 
 open Util.Cat
+open Util.ADT
 open Util.Perf
 open Util.Crypto
 open Util.DbQuery
@@ -18,6 +19,10 @@ open Util.Http
 open Util.Orm
 open Util.Db
 open Util.Zmq
+
+open UtilWebServer.Db
+open UtilWebServer.Open
+open UtilWebServer.Api
 
 type Session<'SessionRole,'Data> = { 
 since: DateTime
@@ -52,3 +57,49 @@ let checkExpire
             sessions.Remove key
             |> ignore
 
+
+let tryCreateUser loc conn metadata empty = 
+
+    let pretx = None |> opctx__pretx
+    
+    let rcd = 
+
+        let p = empty()
+
+        p
+        |> populateCreateTx pretx metadata
+
+    if pretx |> loggedPipeline loc conn then
+        Some rcd
+    else
+        None
+
+let socialAuth 
+    (erInternal,erInvalideParameter) 
+    discord
+    checkoutEu
+    v__json
+    json =
+
+    match tryFindStrByAtt "biz" json with
+    | "DISCORD" ->
+        match
+            Discord.requestAccessToken
+                discord
+                (tryFindStrByAtt "redirectUrl" json)
+                (tryFindStrByAtt "code" json)
+            |> Discord.requestUserInfo with
+        | Some (uid,usernameWithdiscriminator, avatar, json) -> 
+
+            match 
+                uid.ToString()
+                |> checkoutEu "DISCORD" with
+            | Some v -> 
+                [|  ok
+                    ("ec", v |> v__json)   |]
+
+            | None -> er erInternal
+
+        | None -> er erInvalideParameter
+
+    | _ -> er erInvalideParameter

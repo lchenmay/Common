@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+	  <Compile Include="ADT.fs" />
 	  <Compile Include="OS\Perf.fs" />
 	  <Compile Include="OS\ObjectConvert.fs" />
 	  <Compile Include="OS\TextConsole.fs" />

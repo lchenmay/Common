@@ -9,17 +9,24 @@ open Util.HttpClient
 
 let requestAccessToken
     (client_id,client_sceret)
-    redirect_url 
+    (redirect_url:string) 
     code = 
 
     let hc = empty__HttpClient()
 
     let postdata = 
+
+        let url = 
+            if redirect_url.Contains "://" then
+                redirect_url
+            else
+                "https://" + redirect_url
+
         [|  "client_id=" + client_id
             "&client_secret=" + client_sceret
             "&grant_type=authorization_code"
             "&code=" + code;
-            "&redirect_uri=" + redirect_url |]
+            "&redirect_uri=" + url |]
         |> String.Concat
 
     let resobj = hc.post("https://discordapp.com/api/oauth2/token",postdata)

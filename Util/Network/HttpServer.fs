@@ -193,16 +193,17 @@ let run handler extloggero (bs,ip,port,acceptedat,receivedat,sendstartedat,sende
         [||]
 
 let standardResponseHeader = 
-    "HTTP/1.1 200 OK\r\n" + 
-    "Access-Control-Allow-Origin: *\r\n" + 
-    "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
-    "Access-Control-Allow-Headers: *\r\n" +
-    "Access-Control-Allow-Credentials: true\r\n"
+    [|  "HTTP/1.1 200 OK"
+        "Access-Control-Allow-Origin: *" 
+        "Access-Control-Allow-Methods: GET, POST, OPTIONS"
+        "Access-Control-Allow-Headers: *"
+        "Access-Control-Allow-Credentials: true" |]
+    |> String.concat crlf
     |> System.Text.Encoding.UTF8.GetBytes
 
 let bin__StandardResponse mime body = 
     [|  standardResponseHeader 
-        "Content-Type: " + mime + "\r\n\r\n" |> System.Text.Encoding.UTF8.GetBytes        
+        "Content-Type: " + mime + crlfcrlf |> System.Text.Encoding.UTF8.GetBytes        
         body |]
     |> Array.concat
 

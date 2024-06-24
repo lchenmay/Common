@@ -17,6 +17,7 @@
     <Compile Include="Api.fs" />
     <Compile Include="OpenGraph.fs" />
     <Compile Include="SSR.fs" />
+    <Compile Include="Open\Discord.fs" />
   </ItemGroup>
 
   <ItemGroup>

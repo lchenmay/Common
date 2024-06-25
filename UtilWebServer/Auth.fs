@@ -77,42 +77,55 @@ let tryCreateUser
 
 
 let socialAuth 
-    (erInternal,erInvalideParameter) 
+    (erInternal,erInvalideParameter,erUnauthorized) 
     discord
     runtime
     checkoutEu
     v__json
     x =
 
-    let json = x.json
-    let biz = tryFindStrByAtt "biz" json
-    let code = tryFindStrByAtt "code" json
-    let redirectUrl = tryFindStrByAtt "redirectUrl" json
+    match 
+        checkSessionUsero 
+            erUnauthorized 
+            runtime.sessions
+            x with
+    | None,_ -> 
 
-    match biz with
-    | "DISCORD" ->
-        match
-            Discord.requestAccessToken
-                discord
-                redirectUrl
-                code
-            |> Discord.requestUserInfo with
-        | Some (uid,usernameWithdiscriminator, avatar, json) -> 
+        let json = x.json
+        let biz = tryFindStrByAtt "biz" json
+        let code = tryFindStrByAtt "code" json
+        let redirectUrl = tryFindStrByAtt "redirectUrl" json
 
-            match 
-                uid.ToString()
-                |> checkoutEu "DISCORD" with
-            | Some user -> 
+        match biz with
+        | "DISCORD" ->
+            match
+                Discord.requestAccessToken
+                    discord
+                    redirectUrl
+                    code
+                |> Discord.requestUserInfo with
+            | Some (uid,usernameWithdiscriminator, avatar, json) -> 
 
-                let session = 
-                    user 
-                    |> user__session runtime.sessions
+                match 
+                    uid.ToString()
+                    |> checkoutEu "DISCORD" with
+                | Some user -> 
 
-                [|  ok
-                    ("ec", user |> v__json)   |]
+                    let session = 
+                        user 
+                        |> user__session runtime.sessions
 
-            | None -> er erInternal
+                    [|  ok
+                        ("session", session.session |> Json.Str)
+                        ("ec", user |> v__json)   |]
 
-        | None -> er erInvalideParameter
+                | None -> er erInternal
 
-    | _ -> er erInvalideParameter
+            | None -> er erInvalideParameter
+
+        | _ -> er erInvalideParameter
+
+    | Some session,ido -> 
+        [|  ok
+            ("session", session.session |> Json.Str)  |]
+

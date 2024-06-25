@@ -44,6 +44,8 @@ let user__session
 
     sessions[key] <- session
 
+    session
+
 let checkRuntimeSession 
     erUnauthorized 
     (sessions: SessionsTemplate<'User,'Data>)
@@ -82,5 +84,7 @@ let checkSessionUsero
             erUnauthorized
             sessions
             x with
-    | Suc x -> x.sessiono.Value.identity
-    | _ -> None
+    | Suc x -> 
+        let session = x.sessiono.Value
+        Some session,session.identity
+    | _ -> None,None

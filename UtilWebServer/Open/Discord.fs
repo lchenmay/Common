@@ -44,8 +44,7 @@ let requestUserInfo access_token =
 
     let uido = fields "id" |> try_parse_int64
     let username = fields "username"
-    let discriminator = "discriminator"
-    let mutable avatar = "avatar"
+    let mutable avatar = fields "avatar"
 
     // https://cdn.discordapp.com/avatars/614834018114076726/ffe7559e3fcfc1a729e9ddbcc779c6fd.png
     match uido with 
@@ -53,7 +52,7 @@ let requestUserInfo access_token =
         if avatar.StartsWith "https://cdn.discordapp.com/avatars/" = false then
             avatar <- "https://cdn.discordapp.com/avatars/" + uid.ToString() + "/" + avatar + ".png"
         
-        (uid, username + "#" + discriminator, avatar, json)
+        (uid, username, avatar, json)
         |> Some
     | None -> None
 

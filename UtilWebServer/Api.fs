@@ -6,6 +6,7 @@ open System.Collections.Concurrent
 open System.Threading
 
 open Util.Cat
+open Util.Perf
 open Util.Runtime
 open Util.Text
 open Util.Json
@@ -83,3 +84,18 @@ let tryLoadFromJsonIdWrapOK
         |> v__json
         |> wrapOk n
     | None -> er e
+
+let runApi branching x =
+    match
+        x
+        |> bind branching with
+    | Suc x -> 
+        use cw = new CodeWrapper("branch.exe")
+
+        match x.proco with
+        | Some p ->
+            use cw = new CodeWrapper("Api." + x.api)
+            p x
+        | None -> [| ok |]
+    | Fail(e,x) -> er e
+

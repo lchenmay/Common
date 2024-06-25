@@ -48,3 +48,17 @@ let populateCreateTx
     |> pretx.sqls.Add
 
     rcd
+
+let create metadata loc conn param__p param = 
+
+    let pretx = None |> opctx__pretx
+
+    let rcd = 
+        param
+        |> param__p
+        |> populateCreateTx pretx metadata
+
+    if pretx |> loggedPipeline loc conn then
+        Some rcd
+    else
+        None

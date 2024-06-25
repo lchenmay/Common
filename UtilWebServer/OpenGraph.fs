@@ -32,7 +32,7 @@ let parse html =
     |> Array.iter(fun line -> 
         if title.Length = 0 then
             if line.Contains """ property="og:title" """ then
-                desc <- line |> find("content=\"","\"")
+                title <- line |> find("content=\"","\"")
 
         if desc.Length = 0 then
             if line.Contains """ name="description" """ then

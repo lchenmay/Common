@@ -32,6 +32,10 @@ getSocialAuthBiz: 'p -> int64
 setSocialAuthBiz: 'p -> int64 -> unit
 getSocialAuthId: 'p -> string
 setSocialAuthId: 'p -> string -> unit
+getSocialAuthCaption: 'p -> string
+setSocialAuthCaption: 'p -> string -> unit
+getSocialAuthAvatar: 'p -> string
+setSocialAuthAvatar: 'p -> string -> unit
 metadata: MetadataTypes<'p>
 p__complex: Rcd<'p> -> 'complex
 complex__ids: 'complex -> int64 * string
@@ -49,7 +53,8 @@ let tryFindExisting
 let tryCreateUser 
     ap 
     (ecs: ConcurrentDictionary<int64,'complex>)
-    bizId id = 
+    bizId
+    (id,caption,avatar) = 
 
     let pretx = None |> opctx__pretx
     
@@ -59,6 +64,8 @@ let tryCreateUser
 
         ap.setSocialAuthBiz p bizId
         ap.setSocialAuthId p id
+        ap.setSocialAuthCaption p caption
+        ap.setSocialAuthAvatar p avatar
 
         p
         |> populateCreateTx pretx ap.metadata
@@ -107,7 +114,7 @@ let socialAuth
             | Some (uid,usernameWithdiscriminator, avatar, json) -> 
 
                 match 
-                    uid.ToString()
+                    (uid.ToString(),usernameWithdiscriminator,avatar)
                     |> checkoutEu "DISCORD" with
                 | Some user -> 
 

@@ -44,7 +44,7 @@ let user__session
 
     sessions[key] <- session
 
-let checkSession 
+let checkRuntimeSession 
     erUnauthorized 
     (sessions: SessionsTemplate<'User,'Data>)
     x = 
@@ -78,7 +78,7 @@ let checkSessionUsero
     x = 
 
     match
-        checkSession
+        checkRuntimeSession
             erUnauthorized
             sessions
             x with

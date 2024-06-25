@@ -69,7 +69,7 @@ let tryCreateUser
         Some rcd
     else
         None
-    |> optionProcessSome
+    |> oPipelineSome
         (fun rcd -> 
             let ec = rcd |> ap.p__complex
             ecs[rcd.ID] <- ec

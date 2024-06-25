@@ -36,6 +36,11 @@ let (<||>) f g a =
 
 let bind f = fun c -> c >>= f
 
+let bindFail f m =
+    match m with
+    | Suc x -> m
+    | Fail (ex,x) -> f x
+
 type MaybeBuilder() =
 
     member this.Bind(x, f) =

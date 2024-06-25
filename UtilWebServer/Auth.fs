@@ -82,7 +82,12 @@ let socialAuth
     runtime
     checkoutEu
     v__json
-    (biz,code,redirectUrl) =
+    x =
+
+    let json = x.json
+    let biz = tryFindStrByAtt "biz" json
+    let code = tryFindStrByAtt "code" json
+    let redirectUrl = tryFindStrByAtt "redirectUrl" json
 
     match biz with
     | "DISCORD" ->

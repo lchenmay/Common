@@ -6,6 +6,8 @@ open System.Text
 open System.IO
 open System.Diagnostics
 
+open Util.Cat
+open Util.Http
 open Util.Zmq
 
 let since = DateTime.UtcNow
@@ -61,4 +63,7 @@ data: 'Data
 users: ConcurrentDictionary<int64,'User>
 sessions: ConcurrentDictionary<string,SessionTemplate<'User,'SessionData>>
 output: string -> unit }
+
+type ReqRep = { req: HttpRequest; mutable rep: byte[] option }
+type CWQP = CtxWrapper<ReqRep,unit>
 

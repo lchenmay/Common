@@ -13,6 +13,7 @@ open System.Collections.Generic
 open System.Collections.Concurrent
 
 open Util.Cat
+open Util.ADT
 open Util.CollectionModDict
 open Util.Concurrent
 open Util.Bin
@@ -48,6 +49,7 @@ output: string -> unit
 echo: HttpRequest -> byte[] option
 folder: string
 defaultHtml: string
+h404o: (unit -> byte[]) option
 runtime: 'Runtime
 wsHandler: byte[] -> byte[] option
 port:int
@@ -105,6 +107,7 @@ let fileService root defaultHtml req =
         Path.Combine(root, defaultHtml)
         |> IO.File.ReadAllText
         |> str__StandardResponse "text/html"
+        |> Some
     elif req.path.Length > 0 then
         let file = Array.append [|root|] req.path |> Path.Combine
         if File.Exists file then
@@ -133,9 +136,10 @@ let fileService root defaultHtml req =
             file
             |> IO.File.ReadAllBytes
             |> bin__StandardResponse mime
+            |> Some
 
-        else [||]
-    else [||]
+        else None
+    else None
 
 
 let prepEngine 
@@ -143,6 +147,7 @@ let prepEngine
     echo
     folder
     defaultHtml
+    h404o
     runtime
     wsHandler
     port = 
@@ -160,6 +165,7 @@ let prepEngine
         echo = echo
         folder = folder
         defaultHtml = defaultHtml
+        h404o = h404o
         runtime = runtime
         wsHandler = wsHandler
         port = port
@@ -215,16 +221,14 @@ let rcv engine conn =
                 | Some req ->
 
                     let outgoing =
-                        
-                        let repo = engine.echo req
-
-                        match repo with
-                        | Some v -> v
-                        | None -> 
+                        engine.echo req
+                        |> optionProcessNone (fun _ ->
                             fileService 
                                 engine.folder 
                                 engine.defaultHtml 
                                 req
+                            |> optionProcessNone (fun _ -> 
+                                optionProcessSomeHandler [||] engine.h404o))
 
                     try
                         conn.ns.Write(outgoing,0,outgoing.Length)

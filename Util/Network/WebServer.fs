@@ -276,11 +276,11 @@ let cycleRcv engine =
         all
         |> Array.filter(fun conn -> conn.ns.DataAvailable)
 
-    [|  "Rcv " + items.Length.ToString() 
-        " / "
-        + all.Length.ToString() |]
-    |> String.Concat
-    |> engine.output
+    //[|  "Rcv " + items.Length.ToString() 
+    //    " / "
+    //    + all.Length.ToString() |]
+    //|> String.Concat
+    //|> engine.output
 
     items
     |> Array.iter(fun conn -> 
@@ -297,11 +297,11 @@ let cycleWs engine =
         all
         |> Array.filter(fun conn -> conn.ns.DataAvailable)
     
-    [|  "Ws " + items.Length.ToString() 
-        " / "
-        + all.Length.ToString() |]
-    |> String.Concat
-    |> engine.output
+    //[|  "Ws " + items.Length.ToString() 
+    //    " / "
+    //    + all.Length.ToString() |]
+    //|> String.Concat
+    //|> engine.output
 
     items
     |> Array.Parallel.iter(fun conn -> 
@@ -351,17 +351,17 @@ let startEngine engine =
         ()
 
     (fun _ -> cycleAccept engine)
-    |> threadCyclerIntervalTry ThreadPriority.Highest 1000 (exHandler "Accept")
+    |> threadCyclerIntervalTry ThreadPriority.Highest 30 (exHandler "Accept")
     
     (fun _ -> cycleRcv engine)
-    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 1000 (fun ex ->
+    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (fun ex ->
         ex.ToString() |> engine.output
         "Rcv" |> engine.output
         ())
 
 
     (fun _ -> cycleWs engine)
-    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 1000 (fun ex ->
+    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (fun ex ->
         ex.ToString() |> engine.output
         "WS" |> engine.output
         ())

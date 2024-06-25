@@ -6,6 +6,7 @@ open System.Collections.Generic
 open System.Collections.Concurrent
 open System.Threading
 
+open Util.Cat
 open Util.Runtime
 open Util.Text
 open Util.Json
@@ -17,6 +18,7 @@ open Util.HttpServer
 open Util.Zmq
 
 open UtilWebServer.DbLogger
+open UtilWebServer.Common
 
 let r1 = string__regex @"(?<=src=\x22/js/index\.)[\w-]+(?=\.js\x22)"
 let r2 = string__regex @"(?<=href=\x22/as/index\.)[\w-]+(?=\.css\x22)"
@@ -89,4 +91,25 @@ let render
     |> String.Concat
     |> Encoding.UTF8.GetBytes
 
+let hpattern (pattern:string) h x = 
+    let req = x.req
+    if req.pathline.StartsWith pattern then
+        x.rep <-
+            h req
+            |> Some
+        Suc x
+    else
+        Fail((),x)
 
+let hapi echoApiHandler branch x = 
+    let req = x.req
+    if req.path.Length = 3 then
+        if req.path[0] = "api" then
+            x.rep <-
+                echoApiHandler branch req
+                |> Some
+            Suc x
+        else
+            Fail((),x)
+    else
+        Fail((),x)

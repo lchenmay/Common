@@ -24,66 +24,8 @@ open UtilWebServer.Db
 open UtilWebServer.Common
 open UtilWebServer.Open
 open UtilWebServer.Api
+open UtilWebServer.Session
 
-let keepSession = 7.0
-
-let user__session
-    (sessions: SessionsTemplate<'User,'Data>) 
-    user = 
-
-    let key = 
-        Guid.NewGuid().ToByteArray()
-        |> bin__sha256
-
-    let session = { 
-        since = DateTime.UtcNow
-        expiry = DateTime.MaxValue
-        identity = Some user
-        datao = None
-        session = key }
-
-    sessions[key] <- session
-
-let checkRuntimeSession 
-    erUnauthorized 
-    (sessions: SessionsTemplate<'User,'Data>)
-    x = 
-
-    x.sessiono <- 
-        let s = tryFindStrByAtt "session" x.json
-        if s.Length = 0 then
-            None
-        else
-            if sessions.ContainsKey s then
-                let session = sessions[s]
-                if DateTime.UtcNow.Ticks >= session.expiry.Ticks then
-                    sessions.Remove s
-                    |> ignore
-
-                    None
-                else
-                    Some session
-            else
-                None
-
-    match x.sessiono with
-    | Some session -> Suc x
-    | None -> 
-        x.ero <- Some erUnauthorized
-        Fail(erUnauthorized,x)
-
-let checkSessionUsero 
-    erUnauthorized 
-    (sessions: SessionsTemplate<'User,'Data>)
-    x = 
-
-    match
-        checkRuntimeSession
-            erUnauthorized
-            sessions
-            x with
-    | Suc x -> x.sessiono.Value.identity
-    | _ -> None
 
 type AuthParams<'p,'complex> = {
 getSocialAuthBiz: 'p -> int64
@@ -137,19 +79,18 @@ let tryCreateUser
 let socialAuth 
     (erInternal,erInvalideParameter) 
     discord
+    runtime
     checkoutEu
     v__json
-    x =
+    (biz,code,redirectUrl) =
 
-    let json = x.json
-
-    match tryFindStrByAtt "biz" json with
+    match biz with
     | "DISCORD" ->
         match
             Discord.requestAccessToken
                 discord
-                (tryFindStrByAtt "redirectUrl" json)
-                (tryFindStrByAtt "code" json)
+                redirectUrl
+                code
             |> Discord.requestUserInfo with
         | Some (uid,usernameWithdiscriminator, avatar, json) -> 
 
@@ -160,7 +101,7 @@ let socialAuth
 
                 let session = 
                     user 
-                    |> user__session x.runtime.sessions
+                    |> user__session runtime.sessions
 
                 [|  ok
                     ("ec", user |> v__json)   |]

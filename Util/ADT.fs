@@ -26,3 +26,15 @@ let optionProcessSomeHandler defaultRes o =
     | Some h -> h()
     | None -> defaultRes
 
+let oPipelineNone h o = 
+    match o with
+    | Some v -> v |> Some
+    | None -> h()
+
+let oPipelineNoneHandlero defaultRes ho o = 
+    o
+    |> oPipelineNone (fun _ ->
+        match ho with
+        | Some h -> h()
+        | None -> defaultRes
+        |> Some)

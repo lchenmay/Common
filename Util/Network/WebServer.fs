@@ -221,14 +221,15 @@ let rcv engine conn =
                 | Some req ->
 
                     let outgoing =
-                        engine.echo req
-                        |> optionProcessNone (fun _ ->
+                        req
+                        |> engine.echo
+                        |> oPipelineNone (fun _ -> 
                             fileService 
                                 engine.folder 
                                 engine.defaultHtml 
-                                req
-                            |> optionProcessNone (fun _ -> 
-                                optionProcessSomeHandler [||] engine.h404o))
+                                req)
+                        |> oPipelineNoneHandlero [||] engine.h404o
+                        |> Option.get
 
                     try
                         conn.ns.Write(outgoing,0,outgoing.Length)

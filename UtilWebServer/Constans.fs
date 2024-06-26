@@ -31,6 +31,7 @@ let freqBizCodes =
         "PINTEREST"
         "COINDESK"
         "CRYPTOSLATE"
+        "COINTELEGRAPH"
         "GAB"
         "GETTR"
         "GNEWS" |]

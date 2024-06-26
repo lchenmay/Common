@@ -31,6 +31,8 @@ mutable port: int
 mutable conn: string
 defaultHtml: string
 
+mutable updateDatabase: bool
+
 mutable openDiscordAppId: string
 mutable openDiscordPubKey: string
 mutable openDiscordSecret: string

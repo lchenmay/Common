@@ -7,6 +7,7 @@ open System.IO
 open System.Diagnostics
 
 open Util.Cat
+open Util.Console
 open Util.Http
 open Util.Zmq
 
@@ -17,22 +18,12 @@ let output:string -> unit =
     let assbly = System.Reflection.Assembly.GetCallingAssembly()
     let dir = Directory.GetCurrentDirectory()
     if dir.EndsWith "WebService" then
-        Debug.WriteLine
+        prompt since >> Debug.WriteLine
     else if dir.EndsWith "WebApp" then
-        fun s ->
-            let elapse = DateTime.UtcNow.Subtract since
-            [|
-                elapse.Days.ToString("000") + "."
-                elapse.Hours.ToString("00") + ":"
-                elapse.Minutes.ToString("00") + ":"
-                elapse.Seconds.ToString("00") + "."
-                elapse.Milliseconds.ToString("000") + "> "
-                s |]
-            |> String.Concat
-            |> Debug.WriteLine
+        prompt since >> Debug.WriteLine
     else
         Console.OutputEncoding <- Encoding.Unicode
-        Console.WriteLine
+        prompt since >> Console.WriteLine
 
 type Host = {
 mutable zmq: bool

@@ -17,6 +17,10 @@ open UtilWebServer.DbLogger
 open UtilWebServer.Common
 
 let loadAll output conn metadata h = 
+
+    "Loading all records from [" + metadata.table + "]" 
+    |> output
+
     match 
         ""
         |> Util.Orm.loadall conn

@@ -27,7 +27,7 @@ let parse html =
     let mutable image = ""
 
     html
-    |> find ("<head>","</head>")
+    |> find ("<head","</head>")
     |> regex_matches r1
     |> Array.iter(fun line -> 
         if title.Length = 0 then

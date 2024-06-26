@@ -20,6 +20,11 @@ let handleroDefault defaultRes ho =
     | Some h -> h()
     | None -> defaultRes
 
+let handlero ho param = 
+    match ho with
+    | Some h -> h param
+    | None -> ()
+
 let oPipelineNoneHandlero defaultRes ho o = 
     o
     |> oPipelineNone (fun _ ->

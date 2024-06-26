@@ -100,16 +100,41 @@ let drop engine (collectiono:ModDict<int64,Conn> option) conn =
     with
     | ex -> ()
 
+let mutable fileErLoggero: (string * exn -> unit) option = None
+
+let cacheFile = create_mdIntString<DateTime * (byte[])> 8
+
+let checkoutFile f mime = 
+    try
+        if cacheFile.ContainsKey f then
+            if DateTime.UtcNow.Subtract(fst cacheFile[f]).TotalMinutes > 1.0 then
+                cacheFile.remove f
+
+        if cacheFile.ContainsKey f = false then
+            cacheFile[f] <- DateTime.UtcNow,File.ReadAllBytes f
+
+        cacheFile[f]
+        |> snd
+        |> bin__StandardResponse mime
+        |> Some
+    with
+    | ex -> 
+        handlero fileErLoggero (f,ex)
+        None
 
 let fileService root defaultHtml req = 
 
     if req.pathline = "/" then
         Path.Combine(root, defaultHtml)
-        |> IO.File.ReadAllText
-        |> str__StandardResponse "text/html"
-        |> Some
+        |> checkoutFile "text/html"
     elif req.path.Length > 0 then
-        let file = Array.append [|root|] req.path |> Path.Combine
+
+        let file = 
+            [|  [| root |]
+                req.path |]
+            |> Array.concat
+            |> Path.Combine
+
         if File.Exists file then
             let filename = req.path[req.path.Length - 1]
 
@@ -134,9 +159,7 @@ let fileService root defaultHtml req =
                 | _ -> ""
 
             file
-            |> IO.File.ReadAllBytes
-            |> bin__StandardResponse mime
-            |> Some
+            |> checkoutFile mime
 
         else None
     else None

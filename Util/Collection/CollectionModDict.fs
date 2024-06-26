@@ -286,11 +286,11 @@ let createMDInt64<'v> exp2 =
         current_concurrency = 0;
         timeout = 1000 }
 
-type private ComparerString() =
+type ComparerString() =
     interface IEqualityComparer<String> with
         member this.Equals(a:string,b:string):bool = (a=b)
         member this.GetHashCode(x):int = 0
-let private comparerString = new ComparerString()
+let comparerString = new ComparerString()
 //let private md5 = new System.Security.Cryptography.MD5CryptoServiceProvider()
 //let private md5 = System.Security.Cryptography.MD5.Create()
 

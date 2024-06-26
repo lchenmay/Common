@@ -104,7 +104,7 @@ let mutable fileErLoggero: (string * exn -> unit) option = None
 
 let cacheFile = create_mdIntString<DateTime * (byte[])> 8
 
-let checkoutFile f mime = 
+let checkoutFile mime f = 
     try
         if cacheFile.ContainsKey f then
             if DateTime.UtcNow.Subtract(fst cacheFile[f]).TotalMinutes > 1.0 then

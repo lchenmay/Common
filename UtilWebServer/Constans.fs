@@ -29,6 +29,7 @@ let freqBizCodes =
         "FACEBOOK"
         "INSTAGRAM"
         "PINTEREST"
+        "COINGECKO"
         "COINDESK"
         "CRYPTOSLATE"
         "COINTELEGRAPH"

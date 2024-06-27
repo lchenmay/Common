@@ -20,7 +20,7 @@ open UtilWebServer.DbLogger
 
 let r1 = string__regex "<meta .*?>"
 
-let parse html = 
+let parse host html = 
 
     let mutable title = ""
     let mutable desc = ""
@@ -43,6 +43,9 @@ let parse html =
         if image.Length = 0 then
             if line.Contains """ property="og:image" """ then
                 image <- line |> find("content=\"","\""))
+
+    if image.StartsWith "http" = false then
+        image <- "https://" + host + "/" + image
 
     title,desc,image
    

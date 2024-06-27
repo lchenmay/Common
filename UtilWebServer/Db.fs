@@ -49,7 +49,7 @@ let populateCreateTx
 
     rcd
 
-let create metadata loc conn param__p param = 
+let create param__p param metadata loc conn = 
 
     let pretx = None |> opctx__pretx
 
@@ -63,5 +63,4 @@ let create metadata loc conn param__p param =
     else
         None
 
-let p__rcd metadata loc conn p = 
-    create metadata loc conn (fun _ -> p) ()
+let p__createRcd p = create (fun _ -> p) ()

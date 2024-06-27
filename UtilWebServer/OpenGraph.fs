@@ -25,6 +25,7 @@ let parse host html =
     let mutable title = ""
     let mutable desc = ""
     let mutable image = ""
+    let mutable url = ""
 
     html
     |> find ("<head","</head>")
@@ -42,6 +43,10 @@ let parse host html =
 
         if image.Length = 0 then
             if line.Contains """ property="og:image" """ then
+                image <- line |> find("content=\"","\"")
+
+        if image.Length = 0 then
+            if line.Contains """ property="og:url" """ then
                 image <- line |> find("content=\"","\""))
 
     if image.StartsWith "http" = false then

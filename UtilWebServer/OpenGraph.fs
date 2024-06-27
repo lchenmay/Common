@@ -30,24 +30,26 @@ let parse html =
     html
     |> find ("<head","</head>")
     |> regex_matches r1
-    |> Array.iter(fun line -> 
+    |> Array.map(fun line -> 
+        let content = find("content=\"","\"") line
+        let property = find("property=\"","\"") line
+        property,content)
+    |> Array.iter(fun (property,content) -> 
         if title.Length = 0 then
-            if line.Contains """ property="og:title" """ then
-                title <- line |> find("content=\"","\"")
+            if property = "og:title" then
+                title <- content
 
         if desc.Length = 0 then
-            if line.Contains """ name="description" """ then
-                desc <- line |> find("content=\"","\"")
-            elif line.Contains """ property="og:description" """ then
-                desc <- line |> find("content=\"","\"")
+            if property = "og:description" then
+                desc <- content
 
         if image.Length = 0 then
-            if line.Contains """ property="og:image" """ then
-                image <- line |> find("content=\"","\"")
+            if property = "og:image" then
+                image <- content
 
         if url.Length = 0 then
-            if line.Contains """ property="og:url" """ then
-                url <- line |> find("content=\"","\""))
+            if property = "og:url" then
+                url <- content)
 
     if image.StartsWith "http" = false then
 

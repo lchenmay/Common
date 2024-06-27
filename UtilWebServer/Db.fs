@@ -62,3 +62,6 @@ let create metadata loc conn param__p param =
         Some rcd
     else
         None
+
+let p__rcd metadata loc conn p = 
+    create metadata loc conn (fun _ -> p) ()

@@ -20,6 +20,7 @@
     <Compile Include="Auth.fs" />
     <Compile Include="OpenGraph.fs" />
     <Compile Include="SSR.fs" />
+    <Compile Include="Cache.fs" />
   </ItemGroup>
 
   <ItemGroup>

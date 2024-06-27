@@ -67,6 +67,50 @@ type HttpParameters =
         mutable user_agent: string;
         mutable connection: string }
 
+        member this.forward remain url =
+
+            let mutable residual =
+                HttpUtility.UrlDecode url
+            if residual.Contains "://" then
+                this.scheme <- residual |> regex_match re_url_scheme
+                residual <- residual.Substring(this.scheme.Length + 3)
+
+            match this.scheme with
+            | "https"
+            | "wss" ->
+                this.port <- 443
+                this.secure <- true
+            | _ ->
+                this.secure <- false
+
+            if url.StartsWith "/" then
+                residual <- url
+            else
+                if remain = false then
+                    this.host <- residual |> regex_match re_url_host
+                    residual <- residual.Substring this.host.Length
+
+                let s_port = residual |> regex_match re_url_port
+                if s_port.Length > 0 then
+                    this.port <- s_port |> Util.Text.parse_int32
+                    residual <- residual.Substring (s_port.Length + 1)
+
+            this.netloc <- residual.Trim()
+            if this.netloc.Length = 0 then
+                this.netloc <- "/"
+
+            if this.netloc.StartsWith "/" = false then
+                this.netloc <- "/" + this.netloc
+
+        member this.url() = 
+            [|  this.scheme
+                "://"
+                this.host
+                ":"
+                this.port.ToString()
+                this.netloc |]
+            |> String.Concat
+
 let default_httpparams() = 
     {
         scheme = "http";
@@ -81,6 +125,7 @@ let default_httpparams() =
         accept_encoding = "gzip, deflate";
         user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36";
         connection = "Keep-Alive" }
+
 
 type HttpClientRes = 
     {
@@ -676,6 +721,8 @@ let empty__HttpClient() =
         loggero = None
 
         cookies = new Dictionary<string, Cookie>() }
+
+
 
 let post(hc:HttpClient,url:string)(postdata:string) = hc.post(url,postdata)
 

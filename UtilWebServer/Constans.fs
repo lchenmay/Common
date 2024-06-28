@@ -34,6 +34,7 @@ let freqBizCodes =
         "CRYPTOSLATE"
         "COINTELEGRAPH"
         "BLOCKCHAIN.NEWS"
+        "DECRYPT.CO"
         "GAB"
         "GETTR"
         "GNEWS" |]

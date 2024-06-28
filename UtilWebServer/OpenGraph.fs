@@ -27,13 +27,16 @@ let parse html =
     let mutable image = ""
     let mutable url = ""
 
-    html
-    |> find ("<head","</head>")
-    |> regex_matches r1
-    |> Array.map(fun line -> 
-        let content = find("content=\"","\"") line
-        let property = find("property=\"","\"") line
-        property,content)
+    let items = 
+        html
+        |> find ("<head","</head>")
+        |> regex_matches r1
+        |> Array.map(fun line -> 
+            let content = find("content=\"","\"") line
+            let property = find("property=\"","\"") line
+            property,content)
+
+    items
     |> Array.iter(fun (property,content) -> 
         if title.Length = 0 then
             if property = "og:title" then

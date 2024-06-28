@@ -113,3 +113,16 @@ let hapi echoApiHandler branch x =
             Fail((),x)
     else
         Fail((),x)
+
+let hHomepage render x = 
+    let req = x.req
+    match req.pathline with
+    | ""
+    | "/" ->
+        x.rep <-
+            render()
+            |> bin__StandardResponse "text/html"
+            |> Some
+        Suc x
+    | _ -> Fail((),x)
+

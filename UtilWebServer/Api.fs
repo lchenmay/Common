@@ -99,3 +99,15 @@ let runApi branching x =
         | None -> [| ok |]
     | Fail(e,x) -> er e
 
+let apiCreate bin__p x = 
+    let fields = x.json |> json__items
+    let o = tryDeserialize bin__p "p" fields
+    fields,o
+
+let apiUpdate bin__rcd x = 
+    x.json 
+    |> json__items
+    |> tryDeserialize bin__rcd "rcd"
+
+let apiList item__json = 
+    Seq.toArray >> Array.map item__json >> wrapOkAry

@@ -30,6 +30,7 @@ mutable zmq: bool
 mutable port: int
 mutable conn: string
 defaultHtml: string
+mutable url: string
 
 mutable updateDatabase: bool
 

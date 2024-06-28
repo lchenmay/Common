@@ -25,11 +25,10 @@ let tryLoadFromJsonId json name tryLoader =
     else
         None
 
-let tryDeserialize bin__p fields fn = 
+let tryDeserialize bin__p fn fields = 
     try
         let bin = checkfield fields fn |> Convert.FromBase64String
         let p = (bin, ref 0) |> bin__p
         Some p
     with
     | _ -> None
-

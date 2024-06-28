@@ -22,16 +22,16 @@ open UtilWebServer.Common
 
 type CachedWithExpiry = {
 mutable timestamp: DateTime
-mutable json: Json }
+mutable cachedJson: Json }
 
 let empty__CachedWithExpiry() = {
     timestamp = DateTime.MinValue
-    json = Json.Null }
+    cachedJson = Json.Null }
 
 let checkCache (loader: unit -> 'a[]) item__json n cwe =
 
     if (DateTime.UtcNow.Subtract cwe.timestamp).TotalMinutes > 1.0 then
-        cwe.json <-
+        cwe.cachedJson <-
             let data = loader()
             if data.Length > n then
                 Array.sub data 0 n

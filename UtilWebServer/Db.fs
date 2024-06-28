@@ -49,6 +49,14 @@ let populateCreateTx
 
     rcd
 
+let populateUpdateTx
+    pretx 
+    metadata 
+    rcd = 
+    (rcd.ID,pretx.dt,rcd.p)
+    |> build_update_sql metadata
+    |> pretx.sqls.Add
+
 let create param__p param metadata loc conn = 
 
     let pretx = None |> opctx__pretx
@@ -64,3 +72,25 @@ let create param__p param metadata loc conn =
         None
 
 let p__createRcd p = create (fun _ -> p) ()
+
+let update loc conn metadata (id,p) = 
+
+    let pretx = None |> opctx__pretx
+
+    (id,DateTime.UtcNow,p)
+    |> build_update_sql metadata
+    |> pretx.sqls.Add
+        
+    pretx |> loggedPipeline loc conn
+
+let updateRcd loc conn metadata changer rcd = 
+    
+    let current = metadata.clone rcd.p
+    changer rcd.p
+
+    if update loc conn metadata (rcd.ID,rcd.p) then
+        true
+    else
+        rcd.p <- current
+        false
+

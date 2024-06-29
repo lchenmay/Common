@@ -45,51 +45,29 @@ let vueIndexFile__hashes file =
 let render 
     (hash1,hash2)
     ssrPage = 
-
-    [|  """<!DOCTYPE html>
+        let html = $"""<!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">"""
-
-        "<meta name=\"description\" content=\"" + ssrPage.desc + "\">"
-        "<meta property=\"og:title\" content=\"" + ssrPage.title + "\">"
-        "<meta property=\"og:description\" content=\"" + ssrPage.desc + "\">"
-        "<meta property=\"og:type\" content=\"website\">"
-        "<meta property=\"og:url\" content=\"" + ssrPage.url + "\">"
-        "<meta property=\"og:image\" content=\"" + ssrPage.image + "\">"
-        "<title>" + ssrPage.title + "</title>" 
-
-        """  <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
-
-  <script type="importmap">
-    {
-      "imports": {
-        "@antv/x6": "https://cdn.jsdelivr.net/npm/@antv/x6@2.18.1/+esm"
-      }
-    }
-  </script>"""
-
-        "<script type=\"module\" crossorigin src=\"/js/index." + hash1 + ".js\"></script>"
-        "<link rel=\"stylesheet\" crossorigin href=\"/as/index." + hash2 + ".css\">"
-
-        """</head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="description" content="{ssrPage.desc}">
+    <meta property="og:title" content="{ssrPage.title}">
+    <meta property="og:description" content="{ssrPage.desc}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{ssrPage.url}">
+    <meta property="og:image" content="{ssrPage.image}">
+    <title>{ssrPage.title}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <script type="module" crossorigin src="/js/index.{hash1}.js"></script>
+    <link rel="stylesheet" crossorigin href="/as/index.{hash2}.css">
+</head>
 
 <body class="overflow-x-hidden">
-  <noscript>"""
-
-        ssrPage.noscript
-
-        """</noscript>
-
-  <div id="app"></div>
-
+    <noscript>{ssrPage.noscript}</noscript>
+    <div id="app"></div>
 </body>
-
-</html>"""  |]
-    |> String.Concat
-    |> Encoding.UTF8.GetBytes
+</html>""" 
+        html |> Encoding.UTF8.GetBytes
 
 let hpattern (pattern:string) h x = 
     let req = x.req

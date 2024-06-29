@@ -50,21 +50,21 @@ let render
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <meta name="description" content="{ssrPage.desc}" />
     <meta property="og:title" content="{ssrPage.title}" />
     <meta property="og:description" content="{ssrPage.desc}" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="{ssrPage.url}" />
     <meta property="og:image" content="{ssrPage.image}" />
     <title>{ssrPage.title}</title>
+    <meta name="description" content="{ssrPage.desc}" />
     <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
     <script type="module" crossorigin src="/js/index.{hash1}.js"></script>
     <link rel="stylesheet" crossorigin href="/as/index.{hash2}.css" />
 </head>
 
-<body class="overflow-x-hidden">
-    <noscript>{ssrPage.noscript}</noscript>
+<body>
     <div id="app"></div>
+    <noscript>{ssrPage.noscript}</noscript>
 </body>
 </html>""" 
         html |> Encoding.UTF8.GetBytes

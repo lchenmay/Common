@@ -160,9 +160,9 @@ let refin(conn,fieldorders,table,db__rcd,key)(id:int64) =
     match 
         {
             text = "SELECT " + fieldorders + " FROM [" + table + "] WHERE [" + key + "]=@" + key;
-            ps = [|new SqlParameter(key,id)|] }
+            ps = [| kvp__sqlparam(key,id) |] }
         |> multiline_query conn with
-    | Suc(x) ->
+    | Suc x ->
         x.lines.ToArray() 
         |> Array.map(fun line ->
             let id = line.[0] :?> int64
@@ -174,37 +174,68 @@ let refin(conn,fieldorders,table,db__rcd,key)(id:int64) =
     | Fail(error,ex) -> None
 
 let id__rcd(conn, fieldorders, table, db__rcd)(id:int64):'T option =
-    match { text = "SELECT " + fieldorders + " FROM [" + table + "] WHERE [ID]=@ID"; ps = [|new SqlParameter("ID", id)|]}
+    match { 
+        text = "SELECT " + fieldorders + " FROM [" + table + "] WHERE [ID]=@ID"; 
+        ps = [| kvp__sqlparam("ID",id) |]}
         |> singleline_query conn with
         | Suc x -> x.line.Value |> db__rcd |> Some
         | _ -> None
 
-let create_sql(table,sps_loader)(id:int64,createdat:DateTime,updatedat:DateTime,sort:int64,p) =
-    let sps:SqlParameter[] = p |> sps_loader
-    let text =
-        let sb = new List<string>()
-        sb.Add("INSERT INTO [" + table + "] (")
-        sb.Add("[ID],[Createdat],[Updatedat],[Sort]")
-        [0..sps.Length - 1] |> Seq.iter(fun i ->
-            sb.Add(",[" + sps.[i].ParameterName + "]"))
-        sb.Add(") VALUES (") |> ignore
-        sb.Add("@ID,@Createdat,@Updatedat,@Sort")
-        [0..sps.Length - 1] |> Seq.iter(fun i ->
-            sb.Add(",@" + sps.[i].ParameterName))
-        sb.Add(")")
-        sb |> String.Concat
-    let ps =
-        let array = new ResizeArray<SqlParameter>()
-        array.Add(SqlParameter("ID", id))
-        array.Add(SqlParameter("Createdat", createdat.Ticks))
-        array.Add(SqlParameter("Updatedat", updatedat.Ticks))
-        array.Add(SqlParameter("Sort", sort))
-        array.AddRange sps
-        array.ToArray()
-    {text=text;ps=ps}
+let create_sql
+    (table,sps_loader)
+    (id:int64,createdat:DateTime,updatedat:DateTime,sort:int64,p) =
 
-let create(conn,output,table, sps_loader)(id:int64, timestamp:DateTime, p) =
-    tx conn output ([|create_sql(table,sps_loader)(id,timestamp,timestamp,id,p)|])
+    let sps:SqlParam[] = p |> sps_loader
+
+    let text = 
+        match rdbms with
+        | Rdbms.SqlServer -> 
+            let sb = new List<string>()
+            sb.Add("INSERT INTO [" + table + "] (")
+            sb.Add("[ID],[Createdat],[Updatedat],[Sort],")
+
+            let names = 
+                sps
+                |> Array.map(fun sp ->
+                    let name,t,v = sp |> sp__data
+                    name)
+
+            names
+            |> Array.map(fun i -> "[" + i + "]")
+            |> String.concat ","
+            |> sb.Add
+            |> ignore
+
+            sb.Add(") VALUES (") |> ignore
+            sb.Add("@ID,@Createdat,@Updatedat,@Sort")
+
+            names
+            |> Array.map(fun i -> "@" + i)
+            |> String.concat ","
+            |> sb.Add
+            |> ignore
+
+            sb.Add(")")
+            sb.ToString()
+
+        | Rdbms.PostgreSql -> ""
+
+    {   text = text
+        ps =     
+            [|  
+                [|  "ID", id
+                    "Createdat", createdat.Ticks
+                    "Updatedat", updatedat.Ticks
+                    "Sort", sort |] |> Array.map kvp__sqlparam
+                sps |]
+            |> Array.concat }
+
+let create
+    (conn,output,table, sps_loader)
+    (id:int64, timestamp:DateTime, p) =
+
+    create_sql(table,sps_loader)(id,timestamp,timestamp,id,p)
+    |> txOneSql conn output
 
 let create_incremental(conn,output,table,sp_loader)(id:Ref<int64>,p) =
     let currentid = System.Threading.Interlocked.Increment id
@@ -212,8 +243,12 @@ let create_incremental(conn,output,table,sp_loader)(id:Ref<int64>,p) =
     currentid,currenttime,create(conn,output,table,sp_loader)(currentid,currenttime,p)
 
 let update_sql(table,fieldassigns,m__ps)(id:int64,ctime:DateTime,p)=
-    let sps = m__ps(p)
-    let ps = [|new SqlParameter("ID",id);new SqlParameter("Updatedat",ctime.Ticks)|]
+    let sps = m__ps p
+    let ps = 
+        [|  "ID",id
+            "Updatedat",ctime.Ticks |]
+        |> Array.map kvp__sqlparam
+
     {
         text = "UPDATE ["+table+"] SET "+fieldassigns+" WHERE ID=@ID";
         ps = [|sps;ps|] |> Array.concat }
@@ -280,14 +315,12 @@ let swap_sort(conn,output,table,error)(a:Rcd<'p>,b:Rcd<'p>) =
 
     let sql1 = 
         sql
-        |> build([|
-                    new SqlParameter("Sort",b.Sort);
-                    new SqlParameter("ID",a.ID)|])
+        |> build([| "Sort",b.Sort
+                    "ID",a.ID |] |> Array.map kvp__sqlparam)
     let sql2 = 
         sql
-        |> build([|
-                    new SqlParameter("Sort",a.Sort);
-                    new SqlParameter("ID",b.ID)|])
+        |> build([| "Sort",a.Sort
+                    "ID",b.ID |] |> Array.map kvp__sqlparam)
 
     match tx conn output [| sql1; sql2 |] with
     | Suc v ->
@@ -296,29 +329,28 @@ let swap_sort(conn,output,table,error)(a:Rcd<'p>,b:Rcd<'p>) =
         b.Sort <- asort
     | Fail(eso,v) -> error(eso,v)
 
-let data__ps(creator, assignor) data =
-    data
-    |> Array.map(fun item ->
+let data__ps(creator, assignor) =
+    Array.map(fun item ->
         let p = creator()
         assignor(item,p)
         p)
 
 type MetadataTypes<'p> = 
     {
-        fieldorders:string;
-        db__rcd:Object[]->Rcd<'p>;
-        wrapper:((int64*DateTime*DateTime*int64)*'p)->Rcd<'p>;
-        sps:'p->SqlParameter[];
-        id:int64 ref;
-        id__rcdo:(int64 -> Rcd<'p> option);
-        clone:('p -> 'p);
-        empty__p:(unit -> 'p);
-        rcd__bin:BytesBuilder -> Rcd<'p> -> unit;
-        bin__rcd:(byte[] * Ref<int>) -> Rcd<'p>;
-        sql_update:string;
-        rcd_update: (string -> unit) -> Rcd<'p> -> unit;
-        table:string;
-        shorthand:string }
+        fieldorders: string
+        db__rcd: Object[] -> Rcd<'p>
+        wrapper: ( (int64*DateTime*DateTime*int64) * 'p) -> Rcd<'p>
+        sps: 'p -> SqlParam[]
+        id: int64 ref
+        id__rcdo: int64 -> Rcd<'p> option
+        clone: 'p -> 'p
+        empty__p: unit -> 'p
+        rcd__bin: BytesBuilder -> Rcd<'p> -> unit
+        bin__rcd: (byte[] * Ref<int>) -> Rcd<'p>
+        sql_update: string
+        rcd_update: (string -> unit) -> Rcd<'p> -> unit
+        table: string
+        shorthand: string }
 
 let str__metadata = Dictionary<string, string*string>()
 

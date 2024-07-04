@@ -10,6 +10,8 @@ open System.Data
 open System.Data.SqlClient
 open System.Text
 
+open Npgsql
+
 open Util.Perf
 open Util.Cat
 open Util.Collection
@@ -18,110 +20,125 @@ open Util.Bin
 
 open Util.Db
 
-let mutable tableRLOG = ""
-
 type Ctx = {
-    mutable conn:string;
-    mutable sqlconno:SqlConnection option;
-    sqls:ResizeArray<Sql>;
+    mutable connStr:string
+    mutable conno:Conn option
+    sqls:List<Sql>;
     mutable count: int[] }
 
 type DbTxError = { 
     exno:exn option; 
     sqlo:Sql option }
 
+let exnSqlo__fail x exn sqlo = 
+    let dte = {
+        exno = Some exn
+        sqlo = sqlo}
+
+    (dte,x)
+    |> Fail
+
 let connect x =
     try
-        x.sqlconno <- Some(new SqlConnection(x.conn))
+        x.conno <- 
+            match rdbms with
+            | Rdbms.SqlServer -> 
+                new SqlConnection(x.connStr)
+                |> Conn.SqlServer
+                |> Some
+            | Rdbms.PostgreSql -> 
+                new NpgsqlConnection(x.connStr)
+                |> Conn.PostgreSql
+                |> Some
+            | _ -> None
         Suc x
-    with ex ->
-        Fail({exno=Some(ex);sqlo=None},x)
+    with ex -> 
+        exnSqlo__fail x ex None
 
-let commitc (suc,fail)(x:Ctx) =
+
+let commitc (suc,fail) x =
     let mutable current = None
-    let mutable sqltrans = None
 
     use cw = new CodeWrapper("Database.commitc")
-    let sqlTexts = List<string>()
+    let conn = x.conno.Value
 
     try
         try
-            x.sqlconno.Value.Open()
+            connOpen conn
 
-            if tableRLOG.Length > 0 then
-                let text = "INSERT INTO [" + tableRLOG + "] ([SQLS]) VALUES (@SQLS)"
-                let bin = 
-                    let bb = new BytesBuilder()
-                    x.sqls.ToArray() |> sqls__bin bb
-                    bb.bytes()
-                let sp = new SqlParameter("SQLS",bin)
-                let sql = { text = text; ps = [| sp |]}
-                x.sqls.Add(sql) |> ignore
+            let tx =
+                match conn with
+                | Conn.SqlServer conn -> 
+                    conn.BeginTransaction() 
+                    |> SqlTx.SqlServer
+                | Conn.PostgreSql conn -> 
+                    conn.BeginTransaction() 
+                    |> SqlTx.PostgreSql
 
-            sqltrans <- Some(x.sqlconno.Value.BeginTransaction())
+            let lines = 
+                x.sqls.ToArray()
+                |> Array.map(sql__sqlcmd conn)
 
             let affected = 
-                x.sqls.ToArray()
+                lines
                 |> Array.map(fun line ->
-
-                use cw = new CodeWrapper("Database.commitc/line")
-
-                sqlTexts.Add line.text
-                let sqlcmd = new SqlCommand(line.text, x.sqlconno.Value)
-                line.ps |> Seq.iter(fun p -> sqlcmd.Parameters.Add(p) |> ignore)
-
-                current <- Some(line)
-
-                sqlcmd.Connection <- x.sqlconno.Value
-                sqlcmd.Transaction <- sqltrans.Value
-                sqlcmd.ExecuteNonQuery())
+                    current <- Some line
+                    match line,tx with
+                    | SqlCmd.SqlServer sc,SqlTx.SqlServer tx ->
+                        sc.Transaction <- tx
+                        sc.ExecuteNonQuery()
+                    | SqlCmd.PostgreSql sc,SqlTx.PostgreSql tx ->
+                        sc.Transaction <- tx
+                        sc.ExecuteNonQuery())
 
             use cw = new CodeWrapper("Database.commitc/Commit")
 
-            sqltrans.Value.Commit()
+            match tx with
+            | SqlTx.SqlServer tx ->
+                tx.Commit()
+            | SqlTx.PostgreSql tx ->
+                tx.Commit()
 
-            if(x.sqlconno.Value.State = ConnectionState.Open) then
-                x.sqlconno.Value.Close()
+            connClose conn
 
             x.count <- affected
-            suc(x)
 
         finally
-            if(x.sqlconno.Value.State = ConnectionState.Open) then
-                x.sqlconno.Value.Close()
+            connClose conn
+
+        suc x
 
     with ex ->
-        let sqls = sqlTexts |> Seq.toArray |> String.concat ";\n"
-        ({
-            exno = Some ex
-            sqlo = current },x)
-        |> fail
+        let sqls = 
+            x.sqls.ToArray()
+            |> Array.map(fun i -> i.text)
+            |> String.concat ";\n"
 
-let private _suc(x) = Suc(x)
-let private _fail(dte,x) = Fail(dte,x)
+        exnSqlo__fail x ex None
 
-let tx conn output (lines:Sql[]) =
+
+let tx connStr output (lines:Sql[]) =
     use cw = new CodeWrapper("Db.tx")
 
-    {   conn=conn;
-        sqlconno=None;
-        sqls=new ResizeArray<Sql>(lines);
-        count=[||] }
+    {   connStr = connStr
+        conno = None
+        sqls = new List<Sql>(lines)
+        count= [||] }
     |> Suc
     |> bind connect
-    |> bind (commitc (_suc,_fail))
+    |> bind (commitc (Suc,Fail))
 
-let txOne conn output line = tx conn output [|str__sql(line)|]
+let txOne conn output line = tx conn output [| str__sql line |]
 
-let txOneSql conn output sql = tx conn output [|sql|]
+let txOneSql conn output sql = tx conn output [| sql |]
 
 // transactions with continuation
-let txc(conn,suc,fail) lines =
+let txc(connStr,suc,fail) lines =
     use cw = new CodeWrapper("Db.txc")
 
-    {   conn = conn;
-        sqlconno = None;
-        sqls = lines;
+    {   connStr = connStr
+        conno = None
+        sqls = lines
         count = [||] }
     |> Suc
     |> bind connect
@@ -131,9 +148,9 @@ type PreTx<'context> =
     {
         ctx:'context;
         mutable dt: DateTime;
-        sucs:ResizeArray<Ctx->unit>;
-        fails:ResizeArray<DbTxError*Ctx->unit>;
-        sqls:ResizeArray<Sql> }
+        sucs:List<Ctx->unit>;
+        fails:List<DbTxError*Ctx->unit>;
+        sqls:List<Sql> }
 
     member this.clear() = 
         this.sucs.Clear()
@@ -149,20 +166,20 @@ let opctx__pretx(ctx:'context) =
     {
         ctx = ctx;
         dt = DateTime.UtcNow;
-        sucs = new ResizeArray<Ctx->unit>();
-        fails = new ResizeArray<DbTxError*Ctx->unit>();
-        sqls = new ResizeArray<Sql>() }
+        sucs = new List<Ctx -> unit>();
+        fails = new List<DbTxError * Ctx -> unit>();
+        sqls = new List<Sql>() }
 
 let pipeline conn pretx = 
     pretx.sqls
     |> txc(
         conn,
         (fun ctx -> 
-            pretx.sucs 
-            |> Seq.iter(fun handler -> handler(ctx))
-            Suc(ctx)),
+            pretx.sucs.ToArray()
+            |> Array.iter(fun handler -> handler ctx)
+            Suc ctx),
         (fun (dte,ctx) -> 
-            pretx.fails 
-            |> Seq.rev
-            |> Seq.iter(fun handler -> handler(dte,ctx))
+            pretx.fails.ToArray()
+            |> Array.rev
+            |> Array.iter(fun handler -> handler (dte,ctx))
             Fail(dte,ctx)))

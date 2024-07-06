@@ -94,3 +94,14 @@ let updateRcd loc conn metadata changer rcd =
         rcd.p <- current
         false
 
+let delete loc conn metadata where = 
+
+    let pretx = None |> opctx__pretx
+
+    {
+        text = "DELETE FROM " + metadata.table + "] " + where
+        ps = [||] }
+    |> pretx.sqls.Add
+        
+    pretx |> loggedPipeline loc conn
+

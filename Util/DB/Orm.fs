@@ -190,9 +190,12 @@ let create_sql
     let text = 
         match rdbms with
         | Rdbms.SqlServer -> 
-            let sb = new List<string>()
-            sb.Add("INSERT INTO [" + table + "] (")
-            sb.Add("[ID],[Createdat],[Updatedat],[Sort],")
+            
+            let w = empty__TextBlockWriter()
+
+            [|  "INSERT INTO [" + table + "] ("
+                "[ID],[Createdat],[Updatedat],[Sort]," |]
+            |> w.multiLine
 
             let names = 
                 sps
@@ -203,20 +206,20 @@ let create_sql
             names
             |> Array.map(fun i -> "[" + i + "]")
             |> String.concat ","
-            |> sb.Add
-            |> ignore
+            |> w.newline
 
-            sb.Add(") VALUES (") |> ignore
-            sb.Add("@ID,@Createdat,@Updatedat,@Sort")
+            [|  ") VALUES ("
+                "@ID,@Createdat,@Updatedat,@Sort," |]
+            |> w.multiLine
 
             names
             |> Array.map(fun i -> "@" + i)
             |> String.concat ","
-            |> sb.Add
-            |> ignore
+            |> w.newline
 
-            sb.Add(")")
-            sb.ToString()
+            ")" |> w.newline
+
+            w.text()
 
         | Rdbms.PostgreSql -> ""
 

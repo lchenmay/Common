@@ -61,7 +61,7 @@ type StrIndexed = string * Ref<int>
 let regex_options = RegexOptions.Singleline ||| RegexOptions.ExplicitCapture ||| RegexOptions.Compiled
 let regexOptionsIgnoreCase = RegexOptions.Singleline ||| RegexOptions.ExplicitCapture ||| RegexOptions.Compiled ||| RegexOptions.IgnoreCase
 
-let string__regex s = new Regex(s, regex_options)
+let str__regex s = new Regex(s, regex_options)
 let string__regexIgnoreCase s = new Regex(s, regexOptionsIgnoreCase)
 
 let regex_localize(regex: Regex)(text: string) =
@@ -88,7 +88,7 @@ let regex_match (regex: Regex) (text: string) =
 let regexMatchCascade regexes (text: string) = 
     let mutable s = text
     regexes
-    |> Array.iter(fun regex -> s <- regex_match(string__regex(regex))(s))
+    |> Array.iter(fun regex -> s <- regex_match(str__regex(regex))(s))
     s
 
 let regex_matches (regex: Regex)(text: string) =
@@ -224,7 +224,7 @@ let splitWithCase caseSensitive (pattern:string) (s:string) =
 
     list
 
-let regexUnsignedInt = string__regex @"\d+"
+let regexUnsignedInt = str__regex @"\d+"
 
 //██████████████████████████████████████████████████████████████████████████████
 //=== Non-Regex
@@ -902,7 +902,7 @@ let chs__cht s =
 
 
 //let rUnicode = string__regex(@"[\x5c][uU][0-9A-Fa-f]{4}")
-let rUnicode = string__regex(@"[%\\][uU][0-9A-Fa-f]{4}")
+let rUnicode = str__regex(@"[%\\][uU][0-9A-Fa-f]{4}")
 
 let checkEscape(src:string) =
         
@@ -1020,7 +1020,7 @@ let concatStringWithConditionAtLineEnd (lines:string[]) =
             
         sb.ToString()
 
-let reg1 = string__regex("(.*?)([\r\n]+)")
+let reg1 = str__regex("(.*?)([\r\n]+)")
 let getLineAndSplitterArr(src:string) =
     let indexOfFstNone (arr: (int*string*string*string)[]) : int=
         arr |> Array.findIndex (fun t4 ->
@@ -1121,7 +1121,7 @@ let convertHtmlEncodedChar (s:string) =
         ns <- ns.Replace(kv.Key, kv.Value)
     ns
 
-let reg_gt2Blank = string__regex "[\r\n]+(\s{2,})?"
+let reg_gt2Blank = str__regex "[\r\n]+(\s{2,})?"
 let tidyLineCharAndNeedlessBlanks line =
     reg_gt2Blank.Replace(line ," ")
  

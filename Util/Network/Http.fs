@@ -55,7 +55,7 @@ let url__domainame (url:string) =
 
     domainame <-
         domainame
-        |> regex_match (string__regex "\w+\.\w+")
+        |> regex_match (str__regex "\w+\.\w+")
 
     domainame <-
         domainame.ToCharArray()

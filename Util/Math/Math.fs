@@ -51,14 +51,12 @@ let equalBigIntPoint p q = p.x = q.x && p.y = q.y
 let ma win (src:float[]) = 
     [| 0 .. src.Length - 1 |]
     |> Array.map(fun i -> 
-        if(i > win) then
-            (src 
-            |> Array.take win
-            |> Array.sum)/float(win)
+        if i + 1 >= win then
+            (Array.sub src (i + 1 - win) win
+            |> Array.sum) / (float win)
         else
-            (src 
-            |> Array.take(i+1)
-            |> Array.sum)/float(i+1))
+            (Array.sub src 0 (i + 1)
+            |> Array.sum) / float (i+1))
 
 let maWithBias win src = 
     let ma = ma win src
@@ -67,7 +65,79 @@ let maWithBias win src =
         |> Array.map(fun i -> src.[i] - ma.[i])
     ma,bias
 
+let subtract (a:float[],b:float[]) = 
+    [| 0 .. a.Length - 1 |]
+    |> Array.map(fun i -> a[i] - b[i])
+
 let simpleRegression win src = src
+
+let maxWithIndex (data:float[]) = 
+    let mutable index = 0
+    let mutable max = data[index]
+    [| 1 .. data.Length - 1 |]
+    |> Array.iter(fun i -> 
+        if max < data[i] then
+            max <- data[i]
+            index <- i)
+    float index,max
+
+let minWithIndex (data:float[]) = 
+    let mutable index = 0
+    let mutable min = data[index]
+    [| 1 .. data.Length - 1 |]
+    |> Array.iter(fun i -> 
+        if min > data[i] then
+            min <- data[i]
+            index <- i)
+    float index,min
+
+let meanVar (data:float[]) = 
+    let sum = data |> Array.sum
+    let mean = 
+        if data.Length > 0 then
+            sum / (float data.Length)
+        else
+            0.0
+    let var = 
+        if data.Length > 0 then
+            [| 0 .. data.Length - 1 |]
+            |> Array.map(fun i -> 
+                let diff = data[i] - mean
+                diff * diff / (float data.Length))
+            |> Array.sum
+        else
+            0.0
+
+    mean,var
+
+let median (data:float[]) = 
+    if data.Length > 0 then
+        let sorted = data |> Array.sort
+        sorted[data.Length / 2]
+    else
+        0.0
+
+let median2 (data:float[]) = 
+    if data.Length > 0 then
+        let sorted = data |> Array.sort
+        let a = sorted[data.Length / 4]
+        let b = sorted[data.Length * 3 / 4]
+        let median = sorted[data.Length / 2]
+        median, a, b
+    else
+        0.0,0.0,0.0
+
+let median3 (data:float[]) = 
+    if data.Length > 0 then
+        let sorted = data |> Array.sort
+        let a = sorted[data.Length / 4]
+        let c = sorted[data.Length / 8]
+        let b = sorted[data.Length * 3 / 4]
+        let d = sorted[data.Length * 7 / 8]
+        let median = sorted[data.Length / 2]
+        median, a, b, c, d
+    else
+        0.0,0.0,0.0,0.0,0.0
 
 // Number theory =============================================================
 

@@ -632,7 +632,7 @@ type HttpClient =
             res.returnCode <- this.returncode
             res.returnHeaders <-
                 this.returnHeaders
-                |> regex_matches(string__regex(@".*?" + regexCRLF))
+                |> regex_matches(str__regex(@".*?" + regexCRLF))
                 |> Array.map(fun line -> line.Substring(0,line.Length - 2))
 
             res

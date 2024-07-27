@@ -17,11 +17,11 @@ let r3 = string__regexIgnoreCase "<SCRIPT.*?</SCRIPT>"
 let r4 = string__regexIgnoreCase "<!--.*?-->"
 let r5 = string__regexIgnoreCase "<STYLE.*?</STYLE>"
 
-let unCharRegex_nonBracket = string__regex "\W+"    // 非单词字符
-let charRegex_nonBracket = string__regex "\w+"    // 单词字符
-let charRegex = string__regex(@"(\W+)")
-let blankRegex = string__regex(@"(\s+)")
-let escapeCharRegex = string__regex(@"(\\+)")
+let unCharRegex_nonBracket = str__regex "\W+"    // 非单词字符
+let charRegex_nonBracket = str__regex "\w+"    // 单词字符
+let charRegex = str__regex(@"(\W+)")
+let blankRegex = str__regex(@"(\s+)")
+let escapeCharRegex = str__regex(@"(\\+)")
 
 type ContentOfPosition =
     | Head = 0
@@ -815,8 +815,8 @@ let rec getContentAndNextTag (dict:Dictionary<string,string>) (kvArr:string[]) (
 
     else ()
 
-let regex_linkStartWithChar = string__regex "^\w"
-let regex_prefixEndWith = string__regex "/+$"
+let regex_linkStartWithChar = str__regex "^\w"
+let regex_prefixEndWith = str__regex "/+$"
 let handlUrlProtocol (link: string) (prefix: string) =
     let mutable newLink = link
     let nPrefix = regex_prefixEndWith.Replace(prefix,"").Trim()
@@ -1551,5 +1551,5 @@ let deleteSpecificNodeChain (node:Node) (nodeChain:string[]) =
     checkAndDeleteChain 0 None node
         
     
-let cleanBlankCharsInHtml(html:string) = string__regex("(?<=>)\s+(?=<)").Replace(html,"")
+let cleanBlankCharsInHtml(html:string) = str__regex("(?<=>)\s+(?=<)").Replace(html,"")
 

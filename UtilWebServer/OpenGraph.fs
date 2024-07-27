@@ -18,7 +18,7 @@ open Util.Zmq
 
 open UtilWebServer.DbLogger
 
-let r1 = string__regex "<meta .*?>"
+let r1 = str__regex "<meta .*?>"
 
 let parse html = 
 

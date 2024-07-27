@@ -68,7 +68,7 @@ let r1 =
         "(?<SH>\d\d)";
         ":(?<SM>\d\d)" |]
     |> linesConcat
-    |> string__regex
+    |> str__regex
 
 //2022-04-18T05:40:00.000Z  Z:零时区
 let r2 = 
@@ -80,7 +80,7 @@ let r2 =
         ":(?<SS>\d\d)";
         ".(?<MIL>\d\d\d)" |]
     |> linesConcat
-    |> string__regex
+    |> str__regex
 
 //2022-04-17 19:49:08Z      Z:零时区
 let r3 = 
@@ -91,7 +91,7 @@ let r3 =
         ":(?<MM>\d\d)";
         ":(?<SS>\d\d)" |]
     |> linesConcat
-    |> string__regex
+    |> str__regex
 
 //202204171949
 let r5 = 
@@ -101,7 +101,7 @@ let r5 =
         "(?<HH>\d\d)";
         "(?<MM>\d\d)" |]
     |> linesConcat
-    |> string__regex
+    |> str__regex
 
 //20220417
 let r6 = 
@@ -109,7 +109,7 @@ let r6 =
         "(?<MO>\d\d)";
         "(?<DD>\d\d)" |]
     |> linesConcat
-    |> string__regex
+    |> str__regex
 
 //Mon, 18 Apr 2022 23:19:06 GMT
 let r7 = 
@@ -120,7 +120,7 @@ let r7 =
         ":(?<MM>\d\d)";
         ":(?<SS>\d\d)" |]
     |> linesConcat
-    |> string__regex
+    |> str__regex
 
 // Sat Apr 23 21:14:58 HKT 2022
 let r8 = 
@@ -132,7 +132,7 @@ let r8 =
         " (?<ZONE>\D+)";
         " (?<YYYY>\d\d\d\d)" |]
     |> linesConcat
-    |> string__regex
+    |> str__regex
 
 let parse_MM(str:string) = 
     match str.ToUpper().Substring(0,3) with
@@ -206,7 +206,7 @@ let parse offseto (s:string) =
     if(res.Ticks = DateTime.MinValue.Ticks) then
         groups <-
             s
-            |> regex_matches(string__regex(@"\d+"))
+            |> regex_matches(str__regex(@"\d+"))
             |> linesConcat
             |> str__groups(r5)
         if(groups.Length = 6 && s.Contains(groups.[0])) then
@@ -222,7 +222,7 @@ let parse offseto (s:string) =
     if(res.Ticks = DateTime.MinValue.Ticks) then
         groups <-
             s
-            |> regex_matches(string__regex(@"\d+"))
+            |> regex_matches(str__regex(@"\d+"))
             |> linesConcat
             |> str__groups(r6)
         if(groups.Length = 4 && s.Contains(groups.[0])) then

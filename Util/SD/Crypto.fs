@@ -404,8 +404,8 @@ let ecgPoint__json (ecp:ecPoint) =
     let x,y = ecp
     "{\"x\":\"" + (x |> bigint__hex) + "\",\"y\":\"" + (y |> bigint__hex) + "\"}"
 
-let rx = @"(?<=\x22x\x22:\x22)\d+" |> Text.string__regex
-let ry = @"(?<=\x22y\x22:\x22)\d+" |> Text.string__regex
+let rx = @"(?<=\x22x\x22:\x22)\d+" |> Text.str__regex
+let ry = @"(?<=\x22y\x22:\x22)\d+" |> Text.str__regex
 
 let json__ecgPoint json = 
     let sx = Util.Text.find ("\"x\":\"","\",\"") json

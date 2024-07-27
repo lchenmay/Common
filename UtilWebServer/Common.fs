@@ -25,7 +25,8 @@ let output:string -> unit =
         Console.OutputEncoding <- Encoding.Unicode
         prompt since >> Console.WriteLine
 
-type Host = {
+type Host<'Data> = {
+mutable data: 'Data
 mutable zmq: bool
 mutable port: int
 mutable conn: string
@@ -51,9 +52,9 @@ session: string }
 
 type SessionsTemplate<'User,'Data> = ConcurrentDictionary<string,SessionTemplate<'User,'Data>>
 
-type RuntimeTemplate<'User,'SessionData,'Data> = {
-host: Host
-data: 'Data
+type RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData> = {
+host: Host<'HostData>
+data: 'RuntimeData
 users: ConcurrentDictionary<int64,'User>
 sessions: ConcurrentDictionary<string,SessionTemplate<'User,'SessionData>>
 output: string -> unit }

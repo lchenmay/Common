@@ -60,8 +60,8 @@ let wsDecode (bin:byte[]) =
 
 let wsEncode (bin: byte[]) =
 
-    //let opcode = 1 // Text
-    let opcode = 2 // Bin
+    let opcode = 1 // Text
+    //let opcode = 2 // Bin
 
     let mutable frame = Array.zeroCreate 10    
     let mutable indexStartRawData = -1

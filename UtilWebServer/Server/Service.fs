@@ -9,18 +9,11 @@ open Util.CollectionModDict
 open Util.Concurrent
 open Util.Bin
 
+open UtilWebServer.Common
 open UtilWebServer.Server.Common
 open UtilWebServer.Server.Net
 
-let prepEngine 
-    output
-    echo
-    folder
-    defaultHtml
-    h404o
-    runtime
-    wsHandler
-    port = 
+let startEngine runtime = 
 
     let buffers = new ConcurrentStack<Buffer>()
     [| 0 .. 1000 - 1|]
@@ -30,33 +23,19 @@ let prepEngine
             bin = Array.zeroCreate bufferLength }
         buffers.Push buffer)
 
-    {
-        output = output
-        echo = echo
-        folder = folder
-        defaultHtml = defaultHtml
-        h404o = h404o
-        runtime = runtime
-        wsHandler = wsHandler
-        port = port
-        listener = new TcpListener(IPAddress.Any, port)
-        connId = ref 0L
-        queue = createMDInt64<Conn> 8
-        keeps = createMDInt64<Conn> 8 }
+    runtime.listener <- new TcpListener(IPAddress.Any, runtime.host.port)
 
-let startEngine engine = 
+    "Listening at: " + runtime.host.port.ToString()
+    |> runtime.output
 
-    "Listening at: " + engine.port.ToString()
-    |> engine.output
-
-    engine.listener.Start()
+    runtime.listener.Start()
 
     let exHandler thread (ex:exn) =
-        ex.ToString() |> engine.output
-        thread |> engine.output
+        ex.ToString() |> runtime.output
+        thread |> runtime.output
 
-    threadCyclerIntervalTry ThreadPriority.Highest 30 (exHandler "Accept") (cycleAccept engine)
-    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "Rcv") (cycleRcv engine)
-    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "WS") (cycleWs engine)
+    threadCyclerIntervalTry ThreadPriority.Highest 30 (exHandler "Accept") (cycleAccept runtime)
+    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "Rcv") (cycleRcv runtime)
+    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "WS") (cycleWs runtime)
     
 

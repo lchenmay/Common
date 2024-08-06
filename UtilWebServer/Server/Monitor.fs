@@ -25,18 +25,18 @@ open Util.HttpServer
 open Util.WebSocket
 open Util.Concurrent
 
-open UtilWebServer.Server.Common
+open UtilWebServer.Common
 
-let outputHex engine caption hexData = 
-    caption |> engine.output
+let outputHex output caption hexData = 
+    caption |> output
 
     hexData
     |> hex
-    |> engine.output
+    |> output
 
-let engine__monitor engine = 
-    [|  ("connId", engine.connId.ToString() |> Json.Str)
-        ("queue", engine.queue.count.ToString() |> Json.Str)
-        ("keeps", engine.keeps.count.ToString() |> Json.Str) |]
+let apiMonitor runtime = 
+    [|  ("connId", runtime.connId.Value.ToString() |> Json.Str)
+        ("queue", runtime.queue.count.ToString() |> Json.Str)
+        ("keeps", runtime.keeps.count.ToString() |> Json.Str) |]
     |> Json.Braket
 

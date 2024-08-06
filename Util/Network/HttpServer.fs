@@ -222,25 +222,24 @@ let incomingProcess (bin:byte[]) =
         || txt.StartsWith "POST" 
         || txt.StartsWith "OPTIONS" then
 
-        let key = regex_match rxSecWebSocketKey txt
+        let key = (regex_match rxSecWebSocketKey txt).Trim()
 
         if key.Length > 0 then
-            let s = 
-                key.Trim() + webSocketUUID
-                |> Encoding.UTF8.GetBytes
-                |> System.Security.Cryptography.SHA1.Create().ComputeHash
-                |> Convert.ToBase64String
 
-            let w = empty__TextBlockWriter()
-
-            let headers = new Dictionary<string,string>()
-            headers["Connection"] <- "Upgrade"
-            headers["Upgrade"] <- "websocket"
-            headers["Sec-WebSocket-Accept"] <- s
-            headers["Sec-WebSocket-Protocol"] <- "binary"
+            let headers = 
+                let headers = new Dictionary<string,string>()
+                headers["Connection"] <- "Upgrade"
+                headers["Upgrade"] <- "websocket"
+                headers["Sec-WebSocket-Accept"] <- 
+                    key + webSocketUUID
+                    |> Encoding.UTF8.GetBytes
+                    |> Crypto.bin__sha1bin
+                    |> Convert.ToBase64String
+                //headers["Sec-WebSocket-Protocol"] <- "binary"
+                headers__txt headers
 
             [|  "HTTP/1.1 101 Switching Protocols"
-                headers__txt headers
+                headers
                 crlf    |]
             |> String.concat crlf
             |> Encoding.ASCII.GetBytes

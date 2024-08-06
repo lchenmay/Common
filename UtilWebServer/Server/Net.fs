@@ -10,6 +10,7 @@ open Util.Http
 open Util.HttpServer
 open Util.WebSocket
 
+open UtilWebServer.Common
 open UtilWebServer.Server.Common
 open UtilWebServer.Server.File
 open UtilWebServer.Server.Monitor
@@ -31,27 +32,23 @@ let read conn =
      with
     | ex -> None
 
-let rcv engine conn = 
+let rcv runtime conn = 
 
     async{
-        [|  "Conn [" + conn.id.ToString() + "]"
-            " = " + conn.state.ToString() |]
-        |> String.Concat
-        |> engine.output
 
         "Conn [" + conn.id.ToString() + "] Receving ..."
-        |> engine.output
+        |> runtime.output
     
 
         match read conn with
         | Some incoming -> 
 
             "Incomining " + incoming.Length.ToString() + " bytes"
-            |> engine.output
+            |> runtime.output
 
             incoming
             |> hex
-            |> engine.output
+            |> runtime.output
 
             match incomingProcess incoming with
             | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
@@ -61,13 +58,13 @@ let rcv engine conn =
 
                     let outgoing =
                         req
-                        |> engine.echo
+                        |> runtime.echo
                         |> oPipelineNone (fun _ -> 
                             fileService 
-                                engine.folder 
-                                engine.defaultHtml 
+                                runtime.host.fsDir
+                                runtime.host.defaultHtml
                                 req)
-                        |> oPipelineNoneHandlero [||] engine.h404o
+                        |> oPipelineNoneHandlero [||] runtime.h404o
                         |> Option.get
 
                     try
@@ -79,35 +76,34 @@ let rcv engine conn =
 
             | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
 
-                "Upgrade"
-                |> engine.output
+                upgrade |> outputHex runtime.output "Upgrade"
 
                 conn.ns.Write(upgrade,0,upgrade.Length)
 
                 conn.state <- ConnState.Keep
-                engine.keeps[conn.id] <- conn
+                runtime.keeps[conn.id] <- conn
 
                 "Rcv -> Keep"
-                |> engine.output
+                |> runtime.output
 
             | _ -> ()
         | None -> ()
         
         if conn.state <> ConnState.Keep then
-            drop engine (Some engine.queue) conn
+            drop (Some runtime.queue) conn
     }
 
-let cycleAccept engine = fun () ->
-    "Accept" |> engine.output
+let cycleAccept runtime = fun () ->
+    "Accept" |> runtime.output
 
-    let client = engine.listener.AcceptTcpClient()
-    let id = Interlocked.Increment engine.connId
+    let client = runtime.listener.AcceptTcpClient()
+    let id = Interlocked.Increment runtime.connId
 
-    let conn = checkoutConn engine id client
-    engine.queue[conn.id] <- conn
+    let conn = checkoutConn id client
+    runtime.queue[conn.id] <- conn
 
-    "Client accepted [" + id.ToString() + "], Queue = " + engine.queue.count.ToString()
-    |> engine.output
+    "Client accepted [" + id.ToString() + "], Queue = " + runtime.queue.count.ToString()
+    |> runtime.output
 
     //s.Close()
 
@@ -116,28 +112,28 @@ let cycleRcv engine = fun () ->
     |> Array.filter(fun conn -> conn.ns.DataAvailable)
     |> Array.iter(fun conn -> rcv engine conn |> Async.Start)
 
-let cycleWs engine = fun () ->
+let cycleWs runtime = fun () ->
 
-    engine.keeps.array()
+    runtime.keeps.array()
     |> Array.filter(fun conn -> conn.ns.DataAvailable)
     |> Array.Parallel.iter(fun conn -> 
     
         match read conn with
         | Some incoming ->
-            incoming |> outputHex engine "WS Incoming Raw:"
+            incoming |> outputHex runtime.output "WS Incoming Raw:"
             match wsDecode incoming with
             | Some decoded -> 
-                decoded |> outputHex engine "WS Incoming Decoded:"
-                match engine.wsHandler decoded with
+                decoded |> outputHex runtime.output "WS Incoming Decoded:"
+                match runtime.wsHandler decoded with
                 | Some rep ->
-                    rep |> outputHex engine "WS Outgoging Raw:"
+                    rep |> outputHex runtime.output "WS Outgoging Raw:"
                     try
                         let encoded = rep |> wsEncode
-                        encoded |> outputHex engine "WS Outgoging Encoded:"
+                        encoded |> outputHex runtime.output "WS Outgoging Encoded:"
                         encoded |> conn.ns.Write
                     with
-                    | ex -> drop engine (Some engine.keeps) conn
+                    | ex -> drop (Some runtime.keeps) conn
                 | None -> ()
-            | None -> engine.output "Decode failed"
-        | None -> drop engine (Some engine.keeps) conn)
+            | None -> runtime.output "Decode failed"
+        | None -> drop (Some runtime.keeps) conn)
 

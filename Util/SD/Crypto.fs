@@ -31,6 +31,11 @@ let bin__sha1(bin:byte[]) =
             |> BitConverter.ToString)
     hash.ToUpper().Replace("-","")
 
+let bin__sha1bin(bin:byte[]) =
+    lock sha1 (fun () ->
+        bin
+        |> sha1.ComputeHash)
+
 let bin__sha256(bin:byte[]) =
     let hash = 
         lock sha256 (fun () ->

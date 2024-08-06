@@ -24,11 +24,7 @@ open Util.HttpServer
 open Util.WebSocket
 open Util.Concurrent
 
-type ConnState = 
-| Idle
-| Rcv
-| Snd
-| Keep
+open UtilWebServer.Common
 
 type WsMsg = unit
 type WsFrame = unit
@@ -40,37 +36,12 @@ type Buffer = {
 bb: BytesBuilder
 bin: byte[] }
 
-type Conn = {
-since: DateTime
-id: int64 
-client: TcpClient
-ns: NetworkStream
-mutable idleSince: DateTime
-mutable state: ConnState }
-
-type Engine<'Runtime> = {
-output: string -> unit
-echo: HttpRequest -> byte[] option
-folder: string
-defaultHtml: string
-h404o: (unit -> byte[]) option
-runtime: 'Runtime
-wsHandler: byte[] -> byte[] option
-port:int
-listener: TcpListener
-connId: ref<int64>
-queue: ModDict<int64,Conn>
-keeps: ModDict<int64,Conn> }
-with override this.ToString() = 
-        [|  "ID " + this.connId.Value.ToString() 
-            "ConnRcv " + this.queue.count.ToString() |]
-        |> String.concat crlf
 
 let bufferAsNull = {
     bb = new BytesBuilder()
     bin = [||] }
 
-let checkoutConn engine id client = 
+let checkoutConn id client = 
 
     {
         since = DateTime.UtcNow
@@ -80,7 +51,7 @@ let checkoutConn engine id client =
         idleSince = DateTime.UtcNow
         state = ConnState.Idle }
 
-let drop engine (collectiono:ModDict<int64,Conn> option) conn = 
+let drop (collectiono:ModDict<int64,Conn> option) conn = 
 
     match collectiono with
     | Some collection ->

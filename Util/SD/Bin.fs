@@ -139,6 +139,9 @@ let private hex_line(sb:List<string>,buffer:char[],col) =
 
 let hex(bs:byte[]) =
     let sb = new List<string>()
+
+    sb.Add(Util.Text.crlf)
+
     let col = 16
     let hex_length = 4
     let dec_length = 4
@@ -161,8 +164,8 @@ let hex(bs:byte[]) =
         let b = bs.[ii]
         let cs =
             match b with
-            | CR -> "CR".ToCharArray()
-            | LF -> "LF".ToCharArray()
+            | CR -> [| '/'; 'r' |]
+            | LF -> [| '/'; 'n' |]
             | 32uy -> "  ".ToCharArray()
             | _ -> (b.ToString "X").PadLeft(2,'0').ToCharArray()
         cs.CopyTo(buffer, row_length + 1 + i * 3)

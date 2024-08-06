@@ -113,7 +113,7 @@ let apiList item__json =
     Seq.toArray >> Array.map item__json >> wrapOkAry
 
 
-let apiMonitorPerf = 
+let apiMonitorPerf() = 
 
     stats None
     |> Array.map(fun i -> 

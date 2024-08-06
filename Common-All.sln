@@ -19,7 +19,11 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "UtilBlazor", "UtilBlazor\Ut
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "UtilWebServer", "UtilWebServer\UtilWebServer.fsproj", "{C06CABCA-89ED-4ED7-A664-43D2F6D74118}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UtilCs", "UtilCs\UtilCs.csproj", "{5F12AF73-96F4-4056-A9EC-E30BFDBFF0D7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UtilCs", "UtilCs\UtilCs.csproj", "{5F12AF73-96F4-4056-A9EC-E30BFDBFF0D7}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Demo", "Demo\Demo.fsproj", "{D03CF13E-4F0F-434F-B4D5-DCB4D3FAF6C3}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "JWebServer", "JWebServer\JWebServer.fsproj", "{95569685-5D84-4C5E-AFD5-9776512C61FD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -61,6 +65,14 @@ Global
 		{5F12AF73-96F4-4056-A9EC-E30BFDBFF0D7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5F12AF73-96F4-4056-A9EC-E30BFDBFF0D7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5F12AF73-96F4-4056-A9EC-E30BFDBFF0D7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D03CF13E-4F0F-434F-B4D5-DCB4D3FAF6C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D03CF13E-4F0F-434F-B4D5-DCB4D3FAF6C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D03CF13E-4F0F-434F-B4D5-DCB4D3FAF6C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D03CF13E-4F0F-434F-B4D5-DCB4D3FAF6C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{95569685-5D84-4C5E-AFD5-9776512C61FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{95569685-5D84-4C5E-AFD5-9776512C61FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{95569685-5D84-4C5E-AFD5-9776512C61FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{95569685-5D84-4C5E-AFD5-9776512C61FD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

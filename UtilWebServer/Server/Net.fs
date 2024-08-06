@@ -6,6 +6,8 @@ open System.Threading
 open Util.ADT
 open Util.CollectionModDict
 open Util.Bin
+open Util.Text
+open Util.Json
 open Util.Http
 open Util.HttpServer
 open Util.WebSocket
@@ -124,11 +126,19 @@ let cycleWs runtime = fun () ->
             match wsDecode incoming with
             | Some decoded -> 
                 decoded |> outputHex runtime.output "WS Incoming Decoded:"
-                match runtime.wsHandler decoded with
+
+                match 
+                    decoded
+                    |> Text.Encoding.UTF8.GetString
+                    |> str__root
+                    |> runtime.wsHandler with
                 | Some rep ->
-                    rep |> outputHex runtime.output "WS Outgoging Raw:"
                     try
-                        let encoded = rep |> wsEncode
+                        let encoded = 
+                            rep
+                            |> json__strFinal
+                            |> Text.Encoding.UTF8.GetBytes
+                            |> wsEncode
                         encoded |> outputHex runtime.output "WS Outgoging Encoded:"
                         encoded |> conn.ns.Write
                     with

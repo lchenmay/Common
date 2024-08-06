@@ -12,6 +12,7 @@ open System.Diagnostics
 open Util.Cat
 open Util.CollectionModDict
 open Util.Console
+open Util.Json
 open Util.Http
 open Util.Zmq
 
@@ -78,7 +79,7 @@ sessions: ConcurrentDictionary<string,SessionTemplate<'User,'SessionData>>
 output: string -> unit
 mutable echo: HttpRequest -> byte[] option
 mutable h404o: (unit -> byte[]) option
-mutable wsHandler: byte[] -> byte[] option
+mutable wsHandler: Json -> Json option
 mutable listener: TcpListener
 connId: ref<int64>
 queue: ModDict<int64,Conn>

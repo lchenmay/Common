@@ -91,6 +91,15 @@ let minWithIndex (data:float[]) =
             index <- i)
     float index,min
 
+let meanWeighted (weights:float[]) (data:float[]) =
+
+    let sum =
+        [| 0 .. weights.Length - 1|]
+        |> Array.map(fun i -> weights[i] * data[i])
+        |> Array.sum
+
+    sum/(Array.sum weights)
+
 let meanVar (data:float[]) = 
     let sum = data |> Array.sum
     let mean = 
@@ -109,6 +118,23 @@ let meanVar (data:float[]) =
             0.0
 
     mean,var
+
+let meanVarMiddleRange (data:float[]) = 
+    if data.Length > 0 then
+        let sum = data |> Array.sum
+        let mean = sum / (float data.Length)
+        let var = 
+            [| 0 .. data.Length - 1 |]
+            |> Array.map(fun i -> 
+                let diff = data[i] - mean
+                diff * diff / (float data.Length))
+            |> Array.sum
+        let max = data |> Array.max
+        let min = data |> Array.min
+        let middle = 0.5 * (max + min)
+        mean,var,middle,min,max
+    else
+        0.0,0.0,0.0,0.0,0.0
 
 let median (data:float[]) = 
     if data.Length > 0 then
@@ -138,6 +164,9 @@ let median3 (data:float[]) =
         median, a, b, c, d
     else
         0.0,0.0,0.0,0.0,0.0
+
+let sortIndex (data:float[]) spot = 
+    (Array.filter(fun i -> spot > i) data).Length
 
 // Number theory =============================================================
 

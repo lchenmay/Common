@@ -30,6 +30,10 @@ type ConnState =
 | Snd
 | Keep
 
+type WsMsg = unit
+type WsFrame = unit
+
+
 let bufferLength = 16 * 1024
 
 type Buffer = {
@@ -197,6 +201,13 @@ let prepEngine
         queue = createMDInt64<Conn> 8
         keeps = createMDInt64<Conn> 8 }
 
+let outputHex engine caption hexData = 
+    caption |> engine.output
+
+    hexData
+    |> hex
+    |> engine.output
+
 let read conn = 
 
     try
@@ -213,7 +224,6 @@ let read conn =
 
      with
     | ex -> None
-
 
 let rcv engine conn = 
 
@@ -281,8 +291,7 @@ let rcv engine conn =
             drop engine (Some engine.queue) conn
     }
 
-let cycleAccept engine = 
-
+let cycleAccept engine = fun () ->
     "Accept" |> engine.output
 
     let client = engine.listener.AcceptTcpClient()
@@ -296,74 +305,34 @@ let cycleAccept engine =
 
     //s.Close()
 
-let cycleRcv engine = 
+let cycleRcv engine = fun () ->
+    engine.queue.array()
+    |> Array.filter(fun conn -> conn.ns.DataAvailable)
+    |> Array.iter(fun conn -> rcv engine conn |> Async.Start)
 
-    let all = engine.queue.array()
+let cycleWs engine = fun () ->
 
-    let items = 
-        all
-        |> Array.filter(fun conn -> conn.ns.DataAvailable)
-
-    //[|  "Rcv " + items.Length.ToString() 
-    //    " / "
-    //    + all.Length.ToString() |]
-    //|> String.Concat
-    //|> engine.output
-
-    items
-    |> Array.iter(fun conn -> 
-        rcv engine conn
-        |> Async.Start)
-
-let cycleWs engine =
-
-    let all = 
-        engine.keeps.array()
-        |> Array.filter(fun conn -> conn.ns.DataAvailable)
-
-    let items = 
-        all
-        |> Array.filter(fun conn -> conn.ns.DataAvailable)
-    
-    //[|  "Ws " + items.Length.ToString() 
-    //    " / "
-    //    + all.Length.ToString() |]
-    //|> String.Concat
-    //|> engine.output
-
-    items
+    engine.keeps.array()
+    |> Array.filter(fun conn -> conn.ns.DataAvailable)
     |> Array.Parallel.iter(fun conn -> 
-        "Conn [" + conn.id.ToString() + "] Receving ..."
-        |> engine.output
     
         match read conn with
         | Some incoming ->
-
-            "Incomining " + incoming.Length.ToString() + " bytes"
-            |> engine.output
-
-            incoming
-            |> hex
-            |> engine.output
-
+            incoming |> outputHex engine "WS Incoming Raw:"
             match wsDecode incoming with
-            | Some bs -> 
-                engine.output "Decoded:"
-                bs
-                |> hex
-                |> engine.output
+            | Some decoded -> 
+                decoded |> outputHex engine "WS Incoming Decoded:"
+                match engine.wsHandler decoded with
+                | Some rep ->
+                    rep |> outputHex engine "WS Outgoging Raw:"
+                    try
+                        let encoded = rep |> wsEncode
+                        encoded |> outputHex engine "WS Outgoging Encoded:"
+                        encoded |> conn.ns.Write
+                    with
+                    | ex -> drop engine (Some engine.keeps) conn
+                | None -> ()
             | None -> engine.output "Decode failed"
-                    
-            match engine.wsHandler incoming with
-            | Some rep -> 
-                try
-                    rep
-                    |> wsEncode
-                    |> conn.ns.Write
-                with
-                | ex -> drop engine (Some engine.keeps) conn
-            | None -> ()
-            
         | None -> drop engine (Some engine.keeps) conn)
 
 let startEngine engine = 
@@ -373,25 +342,12 @@ let startEngine engine =
 
     engine.listener.Start()
 
-    let exHandler note (ex:exn) =
+    let exHandler thread (ex:exn) =
         ex.ToString() |> engine.output
-        note |> engine.output
-        ()
+        thread |> engine.output
 
-    (fun _ -> cycleAccept engine)
-    |> threadCyclerIntervalTry ThreadPriority.Highest 30 (exHandler "Accept")
-    
-    (fun _ -> cycleRcv engine)
-    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (fun ex ->
-        ex.ToString() |> engine.output
-        "Rcv" |> engine.output
-        ())
-
-
-    (fun _ -> cycleWs engine)
-    |> threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (fun ex ->
-        ex.ToString() |> engine.output
-        "WS" |> engine.output
-        ())
+    threadCyclerIntervalTry ThreadPriority.Highest 30 (exHandler "Accept") (cycleAccept engine)
+    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "Rcv") (cycleRcv engine)
+    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "WS") (cycleWs engine)
     
 

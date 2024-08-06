@@ -110,7 +110,7 @@ let bsx__httprequest(ip,port,acceptedat,receivedat,sendstartedat,sendendedat) bs
                 bin = bs;
                 str = str;
                 domainname = dict.["Host"];
-                topline = topline.Value;
+                requestLine = topline.Value;
                 method = method;
                 pathline = pathline;
                 path = path;
@@ -231,11 +231,16 @@ let incomingProcess (bin:byte[]) =
                 |> System.Security.Cryptography.SHA1.Create().ComputeHash
                 |> Convert.ToBase64String
 
+            let w = empty__TextBlockWriter()
+
+            let headers = new Dictionary<string,string>()
+            headers["Connection"] <- "Upgrade"
+            headers["Upgrade"] <- "websocket"
+            headers["Sec-WebSocket-Accept"] <- s
+            headers["Sec-WebSocket-Protocol"] <- "binary"
+
             [|  "HTTP/1.1 101 Switching Protocols"
-                "Connection: Upgrade"
-                "Upgrade: websocket"
-                "Sec-WebSocket-Accept: " + s
-                "Sec-WebSocket-Protocol: binary"
+                headers__txt headers
                 crlf    |]
             |> String.concat crlf
             |> Encoding.ASCII.GetBytes

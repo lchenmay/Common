@@ -19,6 +19,9 @@ let freqCurCodes =
         "GBP"
         "CHF"
         "JPY"
+        "CAD"
+        "AUD"
+        "NZD"
         "BTC"
         "ETH"
         "CNY" |]

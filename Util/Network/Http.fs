@@ -92,12 +92,18 @@ let create_cookie_expiry(expiry:DateTime) =
 
 let regex_ip = new Regex(@"[^\x2c\s]+", Util.Text.regex_options)
 
+let headers__txt (headers:Dictionary<string,string>) = 
+    headers.Keys
+    |> Seq.toArray
+    |> Array.map(fun k -> k + ": " + headers[k])
+    |> String.concat crlf
+
 type HttpRequest =
     {   
         bin:byte[];
         str:string;
         domainname:string;
-        topline:string;
+        requestLine:string;
         method:string;
         mutable pathline:string;
         path:string[];
@@ -127,7 +133,7 @@ let empty__HttpRequest() =
         bin = [||];
         str = "";
         domainname = "";
-        topline = "";
+        requestLine = "";
         method = "";
         pathline = "";
         path = [||];

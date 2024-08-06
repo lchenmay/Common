@@ -1,4 +1,4 @@
-﻿module JWebServer.Net
+﻿module UtilWebServer.Server.Net
 
 open System
 open System.Threading
@@ -10,9 +10,9 @@ open Util.Http
 open Util.HttpServer
 open Util.WebSocket
 
-open JWebServer.Common
-open JWebServer.File
-open JWebServer.Monitor
+open UtilWebServer.Server.Common
+open UtilWebServer.Server.File
+open UtilWebServer.Server.Monitor
 
 let read conn = 
 

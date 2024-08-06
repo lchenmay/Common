@@ -21,6 +21,11 @@
     <Compile Include="OpenGraph.fs" />
     <Compile Include="SSR.fs" />
     <Compile Include="Cache.fs" />
+    <Compile Include="Server\Common.fs" />
+    <Compile Include="Server\File.fs" />
+    <Compile Include="Server\Monitor.fs" />
+    <Compile Include="Server\Net.fs" />
+    <Compile Include="Server\Service.fs" />
   </ItemGroup>
 
   <ItemGroup>

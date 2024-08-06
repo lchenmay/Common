@@ -1,4 +1,4 @@
-﻿module JWebServer.Monitor
+﻿module UtilWebServer.Server.Monitor
 
 open LanguagePrimitives
 
@@ -25,7 +25,7 @@ open Util.HttpServer
 open Util.WebSocket
 open Util.Concurrent
 
-open JWebServer.Common
+open UtilWebServer.Server.Common
 
 let outputHex engine caption hexData = 
     caption |> engine.output

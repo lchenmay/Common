@@ -113,3 +113,25 @@ let apiList item__json =
     Seq.toArray >> Array.map item__json >> wrapOkAry
 
 
+let apiMonitorPerf = 
+
+    stats None
+    |> Array.map(fun i -> 
+        let k,v,elapse,max,mil,histogram = i
+
+        let total = v.sum |> TimeSpan.FromTicks
+        let mean = 
+            (float v.sum) / (float v.count) 
+            |> int64 
+            |> TimeSpan.FromTicks
+        let rps =
+            let measurespan = (v.last - v.start) |> TimeSpan.FromTicks
+            (float v.count) / measurespan.TotalSeconds
+
+        [|  ("key", k |> Json.Str)
+            ("count", v.count.ToString() |> Json.Num)
+            ("totalMil", total.TotalMilliseconds.ToString("0.000") |> Json.Num)
+            ("avgMil", mean.TotalMilliseconds.ToString("0.000") |> Json.Num)
+            ("rps", rps.ToString("0.000") |> Json.Num ) |] 
+        |> Json.Braket)
+    |> wrapOkAry

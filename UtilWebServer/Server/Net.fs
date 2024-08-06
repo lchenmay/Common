@@ -4,6 +4,7 @@ open System
 open System.Threading
 
 open Util.ADT
+open Util.Perf
 open Util.CollectionModDict
 open Util.Bin
 open Util.Text
@@ -38,9 +39,7 @@ let rcv runtime conn =
 
     async{
 
-        "Conn [" + conn.id.ToString() + "] Receving ..."
-        |> runtime.output
-    
+        //"Conn [" + conn.id.ToString() + "] Receving ..." |> runtime.output
 
         match read conn with
         | Some incoming -> 
@@ -120,6 +119,7 @@ let cycleWs runtime = fun () ->
     |> Array.filter(fun conn -> conn.ns.DataAvailable)
     |> Array.Parallel.iter(fun conn -> 
     
+        use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/Array.Parallel")
         match read conn with
         | Some incoming ->
             incoming |> outputHex runtime.output "WS Incoming Raw:"
@@ -127,11 +127,16 @@ let cycleWs runtime = fun () ->
             | Some decoded -> 
                 decoded |> outputHex runtime.output "WS Incoming Decoded:"
 
-                match 
+                let msg =  
                     decoded
                     |> Text.Encoding.UTF8.GetString
                     |> str__root
-                    |> runtime.wsHandler with
+
+                let repo = 
+                    use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/wsHandler")
+                    msg |> runtime.wsHandler 
+
+                match repo with
                 | Some rep ->
                     try
                         let encoded = 

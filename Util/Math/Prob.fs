@@ -7,6 +7,9 @@ open System.Security.Cryptography
 
 // Random =============================================================
 
+// [0,exclusive)
+let rand__int32 exclusive = RandomNumberGenerator.GetInt32 exclusive
+
 let ts__rand divisor (ts:TimeSpan) = 
     let s = DateTime.UtcNow.Millisecond % 1000
     let ticks = float(ts.Ticks) * float(s) * 0.001 / divisor

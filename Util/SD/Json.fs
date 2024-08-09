@@ -141,6 +141,19 @@ let tryFindNumByAtt attName json =
         | _ -> ""
     | _ -> ""
 
+let tryFindAryByAtt attName json =
+    match json with
+    | Json.Braket items -> 
+        match 
+            items 
+            |> Array.tryFind(fun (n,_) -> n = attName) with
+        | Some (n,v) -> 
+            match v with
+            | Json.Ary s -> s
+            | _ -> [| |]
+        | _ -> [| |]
+    | _ -> [| |]
+
 let inline tryAddBracket<'T> json (attName, attValue:'T)  =
     let appendItems items = Array.singleton >> Array.append items
 

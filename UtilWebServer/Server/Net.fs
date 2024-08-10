@@ -94,6 +94,18 @@ let rcv runtime conn =
             drop (Some runtime.queue) conn
     }
 
+let snd runtime json conn = 
+    try
+        let encoded = 
+            json
+            |> json__strFinal
+            |> Text.Encoding.UTF8.GetBytes
+            |> wsEncode
+        encoded |> outputHex runtime.output "WS Outgoging Encoded:"
+        encoded |> conn.ns.Write
+    with
+    | ex -> drop (Some runtime.keeps) conn
+
 let cycleAccept runtime = fun () ->
     "Accept" |> runtime.output
 
@@ -108,15 +120,27 @@ let cycleAccept runtime = fun () ->
 
     //s.Close()
 
-let cycleRcv engine = fun () ->
-    engine.queue.array()
-    |> Array.filter(fun conn -> conn.ns.DataAvailable)
-    |> Array.iter(fun conn -> rcv engine conn |> Async.Start)
+let cycleRcv runtime = fun () ->
+    runtime.queue.array()
+    |> Array.filter(fun conn -> 
+        try
+            conn.ns.DataAvailable
+        with
+        | ex -> 
+            drop (Some runtime.queue) conn
+            false)
+    |> Array.iter(fun conn -> rcv runtime conn |> Async.Start)
 
 let cycleWs runtime = fun () ->
 
     runtime.keeps.array()
-    |> Array.filter(fun conn -> conn.ns.DataAvailable)
+    |> Array.filter(fun conn -> 
+        try
+            conn.ns.DataAvailable
+        with
+        | ex -> 
+            drop (Some runtime.queue) conn
+            false)
     |> Array.Parallel.iter(fun conn -> 
     
         use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/Array.Parallel")
@@ -137,17 +161,7 @@ let cycleWs runtime = fun () ->
                     msg |> runtime.wsHandler 
 
                 match repo with
-                | Some rep ->
-                    try
-                        let encoded = 
-                            rep
-                            |> json__strFinal
-                            |> Text.Encoding.UTF8.GetBytes
-                            |> wsEncode
-                        encoded |> outputHex runtime.output "WS Outgoging Encoded:"
-                        encoded |> conn.ns.Write
-                    with
-                    | ex -> drop (Some runtime.keeps) conn
+                | Some rep -> snd runtime rep conn
                 | None -> ()
             | None -> runtime.output "Decode failed"
         | None -> drop (Some runtime.keeps) conn)

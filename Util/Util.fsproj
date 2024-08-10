@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+	  <Compile Include="AssemblyInfo.fs" />
 	  <Compile Include="ADT.fs" />
 	  <Compile Include="OS\Perf.fs" />
 	  <Compile Include="OS\ObjectConvert.fs" />
@@ -16,7 +17,6 @@
 	  <Compile Include="OS\Console.fs" />
 	  <Compile Include="OS\Concurrent.fs" />
 	  <Compile Include="OS\Runtime.fs" />
-	  <Compile Include="AssemblyInfo.fs" />
 	  <Compile Include="Math\Cat.fs" />
 	  <Compile Include="Math\Math.fs" />
 	  <Compile Include="Math\Prob.fs" />

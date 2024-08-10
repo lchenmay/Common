@@ -38,4 +38,7 @@ let startEngine runtime =
     threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "Rcv") (cycleRcv runtime)
     threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "WS") (cycleWs runtime)
     
+let PushAll runtime json = 
+    runtime.keeps.array()
+    |> Array.Parallel.iter(snd runtime json)
 

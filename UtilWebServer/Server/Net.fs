@@ -94,17 +94,23 @@ let rcv runtime conn =
             drop (Some runtime.queue) conn
     }
 
-let snd runtime json conn = 
+let snd runtime (bin:byte[]) conn = 
     try
-        let encoded = 
-            json
-            |> json__strFinal
-            |> Text.Encoding.UTF8.GetBytes
-            |> wsEncode OpCode.Text
-        encoded |> outputHex runtime.output "WS Outgoging Encoded:"
-        encoded |> conn.ns.Write
+        bin |> conn.ns.Write
     with
     | ex -> drop (Some runtime.keeps) conn
+
+let sndJson runtime json conn = 
+    let raw = 
+        json
+        |> json__strFinal
+        |> Text.Encoding.UTF8.GetBytes
+    let encoded = raw |> wsEncode OpCode.Text
+
+    raw |> outputHex runtime.output "WS Outgoging Raw:"
+    encoded |> outputHex runtime.output "WS Outgoging Encoded:"
+
+    snd runtime encoded conn
 
 let cycleAccept runtime = fun () ->
     "Accept" |> runtime.output
@@ -156,21 +162,27 @@ let cycleWs runtime = fun () ->
 
                     decoded |> outputHex runtime.output "WS Incoming Decoded:"
 
-                    if opcode = OpCode.Ping then
-                        ()
+                    match opcode with
+                    | OpCode.Ping ->
+                        let msg = decoded |> wsEncode OpCode.Pong
+                        snd runtime msg conn
+                    | OpCode.Text -> 
 
-                    let msg =  
-                        decoded
-                        |> Text.Encoding.UTF8.GetString
-                        |> str__root
+                        let msg =  
+                            decoded
+                            |> Text.Encoding.UTF8.GetString
+                            |> str__root
 
-                    let repo = 
-                        use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/wsHandler")
-                        msg |> runtime.wsHandler 
+                        let repo = 
+                            use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/wsHandler")
+                            msg |> runtime.wsHandler 
 
-                    match repo with
-                    | Some rep -> snd runtime rep conn
-                    | None -> ()
+                        match repo with
+                        | Some rep -> sndJson runtime rep conn
+                        | None -> ()
+
+                    | _ -> ()
+
                 | None -> runtime.output "Decode failed"
         | None -> drop (Some runtime.keeps) conn)
 

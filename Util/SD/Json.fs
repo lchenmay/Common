@@ -60,6 +60,8 @@ type Json =
 | Ary of Json[]
 | Null
 
+let empty = Json.Braket [| |]
+
 type Token = 
 | StrQuoted of string
 | StrGeneral of string

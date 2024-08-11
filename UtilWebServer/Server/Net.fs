@@ -100,7 +100,7 @@ let snd runtime json conn =
             json
             |> json__strFinal
             |> Text.Encoding.UTF8.GetBytes
-            |> wsEncode
+            |> wsEncode OpCode.Text
         encoded |> outputHex runtime.output "WS Outgoging Encoded:"
         encoded |> conn.ns.Write
     with
@@ -146,23 +146,31 @@ let cycleWs runtime = fun () ->
         use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/Array.Parallel")
         match read conn with
         | Some incoming ->
-            incoming |> outputHex runtime.output "WS Incoming Raw:"
-            match wsDecode incoming with
-            | Some decoded -> 
-                decoded |> outputHex runtime.output "WS Incoming Decoded:"
+            if incoming.Length > 0 then
+                incoming |> outputHex runtime.output "WS Incoming Raw:"
+                let bits = bytes__bits incoming
+                bits |> bit__txt |> runtime.output
 
-                let msg =  
-                    decoded
-                    |> Text.Encoding.UTF8.GetString
-                    |> str__root
+                match wsDecode incoming with
+                | Some (opcode,decoded) -> 
 
-                let repo = 
-                    use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/wsHandler")
-                    msg |> runtime.wsHandler 
+                    decoded |> outputHex runtime.output "WS Incoming Decoded:"
 
-                match repo with
-                | Some rep -> snd runtime rep conn
-                | None -> ()
-            | None -> runtime.output "Decode failed"
+                    if opcode = OpCode.Ping then
+                        ()
+
+                    let msg =  
+                        decoded
+                        |> Text.Encoding.UTF8.GetString
+                        |> str__root
+
+                    let repo = 
+                        use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/wsHandler")
+                        msg |> runtime.wsHandler 
+
+                    match repo with
+                    | Some rep -> snd runtime rep conn
+                    | None -> ()
+                | None -> runtime.output "Decode failed"
         | None -> drop (Some runtime.keeps) conn)
 

@@ -37,6 +37,12 @@ let idbinComparer = new IDByteArrayComparer()
 type BinIndexed = byte[] * Ref<int>
 
 [<Literal>]
+let TRUE = 0xFFuy
+
+[<Literal>]
+let FALSE = 0x00uy
+
+[<Literal>]
 let CR = 0x0Duy
 
 [<Literal>]
@@ -432,3 +438,86 @@ let concurrentDictionary__bin
     (dict:System.Collections.Concurrent.ConcurrentDictionary<'k,'v>,kvp__bin) =
         dict.ToArray() 
         |> array__bin kvp__bin bb
+
+
+// ======== Bits ==================
+
+let bit__txt (bits:bool[]) =
+    let mutable index = 0
+    [| 0 .. bits.Length - 1 |]
+    |> Array.map(fun i -> 
+        index <- index + 1
+        let s = 
+            if bits[i] then
+                "1"
+            else
+                "0"
+        if index % 8 = 0 then
+            s + " "
+        else if index % 4 = 0 then
+            s + "-"
+        else
+            s)
+    |> String.concat ""
+
+
+let bitsZero = byte 0
+
+let (<<<<) (bits:bool[]) offset: bool[] = 
+    let res = Array.zeroCreate bits.Length
+    [| 0 .. bits.Length - 1 - offset |]
+    |> Array.iter(fun i ->
+        res[i] <- bits[i + offset])
+    res
+
+let (>>>>) (bits:bool[]) offset: bool[] = 
+    let res = Array.zeroCreate bits.Length
+    [| offset .. bits.Length - 1 |]
+    |> Array.iter(fun i ->
+        res[i] <- bits[i - offset])
+    res
+
+let bitsOnes = 
+    [|  0b10000000
+        0b01000000
+        0b00100000
+        0b00010000
+        0b00001000
+        0b00000100
+        0b00000010
+        0b00000001  |]
+    |> Array.map byte
+
+let checkBit (b:byte) index = 
+    b &&& bitsOnes[index] <> bitsZero
+
+let byte__bits (a:byte) = 
+    let mutable b = a
+    [| 0 .. 8 - 1 |]
+    |> Array.map(fun i -> 
+        let res = b &&& bitsOnes[0] <> bitsZero
+        b <- b <<< 1
+        res)
+
+let bits__byte (bs:bool[]) = 
+    [|  0 .. 8 - 1 |]
+    |> Array.map(fun i -> 
+        if bs[i] then
+            bitsOnes[i]
+        else
+            FALSE)
+    |> Array.sum
+
+let bytes__bits = Array.map byte__bits >> Array.concat
+let bits__bytes (bits:bool[]) = 
+    [| 0 .. bits.Length/8 - 1 |]
+    |> Array.map(fun i -> 
+        Array.sub bits (i * 8) 8
+        |> bits__byte)
+
+let bits = 
+    [| 0 .. 256 - 1 |]
+    |> Array.map(fun i -> 
+        i |> uint8 |> byte
+        )
+

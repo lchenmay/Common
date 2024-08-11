@@ -21,9 +21,90 @@ open Util.Http
 open Util.HttpServer
 open Util.Concurrent
 
+// RFC6455
+// https://datatracker.ietf.org/doc/html/rfc6455
+// https://blog.csdn.net/xmcy001122/article/details/117226953
+
+// Data Framing
+
+type OpCode =
+| Continuation = 0
+| Text = 1
+| Bin = 2
+| Close = 8
+| Ping = 9
+| Pong = 10
+
+type Frame = {
+fin: bool         
+opCode: OpCode    
+mask: bool       
+payloadLen: int
+maskKey: byte[]
+payload: byte[] }
+
+let parse (bytes:byte[]) = 
+
+    let bits = bytes__bits bytes
+    let mutable index = 0
+
+    if bytes.Length >= 2 then
+
+        let mask = bits[8]
+
+        index <- index + 4       
+        let opcode:OpCode = 
+            (Array.sub bits index 8) >>>> 4
+            |> bits__byte
+            |> uint
+            |> int
+            |> EnumOfValue
+
+        let payLoadLen = 
+            index <- index + 4 + 1
+            let payLoadLen = 
+                (Array.sub bits index 8) >>>> 1
+                |> bits__byte
+                |> uint
+                |> int
+
+            if payLoadLen = 126 then
+                index <- index + 16
+                payLoadLen
+            else if payLoadLen = 127 then
+                index <- index + 64
+                payLoadLen
+            else
+                payLoadLen
+
+        let maskKey = 
+            if mask && bits.Length >= index + 32 then
+                let maskKey = Array.sub bits index 32
+                index <- index  + 32
+                maskKey |> bits__bytes
+            else
+                [||]
+
+        {   fin = bits[0]
+            opCode = opcode
+            mask = mask
+            payloadLen = payLoadLen
+            maskKey = maskKey
+            payload = [||] } |> Some
+    else
+        None
+
+
+
 let wsDecode (bin:byte[]) =
     try
-        let mask = bin[1] &&& byte 0b10000000 <> byte 0 // must be true, "All messages from the client to the server have this bit set"
+        let opcode = 
+            match parse bin with
+            | Some frame -> frame.opCode
+            | None -> OpCode.Close
+
+        // must be true, "All messages from the client to the server have this bit set"
+        let mask = bin[1] &&& byte 0b10000000 <> byte 0
         let mutable offset = 2
         let mutable msglen = (bin[1] &&& byte 0b01111111) |> int32
         match msglen with
@@ -43,7 +124,7 @@ let wsDecode (bin:byte[]) =
         | _ -> ()
     
         if msglen = 0 then
-            Some [||]
+            Some (opcode,[||])
         else
             if mask then
                 let decoded = Array.zeroCreate msglen
@@ -53,21 +134,17 @@ let wsDecode (bin:byte[]) =
                 while (i < msglen) && (i < bin.Length - offset) do
                     decoded[i] <- byte (bin[offset + i] ^^^ masks[i % 4])
                     i <- i + 1    
-                Some decoded
+                Some (opcode,decoded)
             else
                 None
     with ex -> None
 
-let wsEncode (bin: byte[]) =
-
-    let opcode = 1 // Text
-    //let opcode = 2 // Bin
-
+let wsEncode (opcode:OpCode) (bin: byte[])  =
     let mutable frame = Array.zeroCreate 10    
     let mutable indexStartRawData = -1
     let mutable length = bin.Length
     
-    frame[0] <- byte (128 + opcode)
+    frame[0] <- byte (128 + (EnumToValue opcode))
     if length <= 125 then
         frame[1] <- byte length
         indexStartRawData <- 2

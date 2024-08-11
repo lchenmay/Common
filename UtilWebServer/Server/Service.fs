@@ -8,10 +8,16 @@ open System.Collections.Concurrent
 open Util.CollectionModDict
 open Util.Concurrent
 open Util.Bin
+open Util.Json
 
 open UtilWebServer.Common
 open UtilWebServer.Server.Common
 open UtilWebServer.Server.Net
+
+    
+let PushAll runtime json = 
+    runtime.keeps.array()
+    |> Array.Parallel.iter(snd runtime json)
 
 let startEngine runtime = 
 
@@ -37,8 +43,11 @@ let startEngine runtime =
     threadCyclerIntervalTry ThreadPriority.Highest 30 (exHandler "Accept") (cycleAccept runtime)
     threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "Rcv") (cycleRcv runtime)
     threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "WS") (cycleWs runtime)
-    
-let PushAll runtime json = 
-    runtime.keeps.array()
-    |> Array.Parallel.iter(snd runtime json)
+
+    // Heartbeat
+    (fun _ -> 
+        [| |]
+        |> Json.Braket
+        |> PushAll runtime)
+    |> asyncCyclerInterval (30 * 1000)
 

@@ -26,6 +26,7 @@ open Util.WebSocket
 open Util.Concurrent
 
 open UtilWebServer.Common
+open UtilWebServer.Api
 
 let outputHex output caption hexData = 
     caption |> output
@@ -36,8 +37,8 @@ let outputHex output caption hexData =
 
 let apiMonitor runtime = 
 
-    [|  ("connId", runtime.connId.Value.ToString() |> Json.Str)
+    [|  ok
+        ("connId", runtime.connId.Value.ToString() |> Json.Str)
         ("queue", runtime.queue.count.ToString() |> Json.Str)
         ("keeps", runtime.keeps.count.ToString() |> Json.Str) |]
-    |> Json.Braket
 

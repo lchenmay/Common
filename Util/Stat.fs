@@ -2,6 +2,7 @@
 
 open System.Collections.Generic
 
+open Util.Math
 open Util.Bin
 open Util.Json
 open Util.Text
@@ -26,6 +27,46 @@ anchor: float
 digit: int
 unit: string
 stat: Stat }
+
+let sample__stat (sample:float[]) = 
+    let mean,var,middle,min,max = meanVarMiddleRange sample
+    let median,a,b,c,d = median3 sample
+
+    {   mean = mean
+        var = var
+        middle = middle
+        median = median
+        ma = a
+        mb = b
+        mc = c
+        md = d
+        min = min
+        max = max
+        count = sample.Length }
+
+let spot__SpotInStat (digit,unit) spot samples = 
+
+    let stat = sample__stat samples
+
+    if stat.count > 0 && stat.max > stat.min then
+
+        let index = sortIndex samples spot
+
+        {   deviation = 2.0 * (float (index - samples.Length/2))/(float samples.Length) * 100.0
+            spot = spot
+            anchor = stat.median
+            digit = digit
+            unit = unit
+            stat = stat }
+    else
+        {   deviation = 0.0
+            spot = spot
+            anchor = spot
+            digit = digit
+            unit = unit
+            stat = stat }
+
+
 
 
 // [Stat] Structure

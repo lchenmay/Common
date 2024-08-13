@@ -44,10 +44,3 @@ let startEngine runtime =
     threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "Rcv") (cycleRcv runtime)
     threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "WS") (cycleWs runtime)
 
-    // Heartbeat
-    (fun _ -> 
-        [| |]
-        |> Json.Braket
-        |> PushAll runtime)
-    |> asyncCyclerInterval (30 * 1000)
-

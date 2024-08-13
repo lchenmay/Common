@@ -25,14 +25,14 @@ extern bool ShowWindow(IntPtr hWnd, int nCmdShow)
 
 [<DllImport(@"kernel32.dll", CallingConvention = CallingConvention.Cdecl)>]
 extern bool GetVolumeInformation(
-        string rootPathName,
-        StringBuilder volumeNameBuffer,
-        int volumeNameSize,
-        uint& volumeSerialNumber,
-        uint& maximumComponentLength,
-        uint& fileSystemFlags,
-        StringBuilder fileSystemNameBuffer,
-        int nFileSystemNameSize)
+    string rootPathName,
+    StringBuilder volumeNameBuffer,
+    int volumeNameSize,
+    uint& volumeSerialNumber,
+    uint& maximumComponentLength,
+    uint& fileSystemFlags,
+    StringBuilder fileSystemNameBuffer,
+    int nFileSystemNameSize)
 
 // get memory usage
 let mutable total_mem_size = 0L
@@ -104,6 +104,12 @@ let getMechineID () =
     |> BitConverter.GetBytes
     |> Crypto.bin__sha256bin
     |> Bin.bytes__hex
+
+let pid___running (pid: int) =
+    try
+        Process.GetProcessById(pid).HasExited |> not
+    with
+    | _  -> false
 
 let startProcess os path argAdder =
 

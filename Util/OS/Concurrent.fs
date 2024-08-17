@@ -3,10 +3,22 @@
 open System
 open System.Threading
 open System.Threading.Tasks
+open System.Linq.Expressions
 
 open Microsoft.FSharp.Control
+open Microsoft.FSharp.Linq.RuntimeHelpers
 open FSharpx.Control
 
+let await task = 
+    async{
+        return! Async.AwaitTask task
+    }
+    |> Async.RunSynchronously
+
+let lambda__linqExp<'T> lambda = 
+    lambda
+    |> LeafExpressionConverter.QuotationToExpression
+    |> unbox<Expression<'T>>
 
 let wait(criterion:unit -> bool, timeout, ratio)(logging:string -> unit):bool =
 

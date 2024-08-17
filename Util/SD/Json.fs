@@ -339,17 +339,33 @@ and parseArray (index:int ref, tokens: Token []) =
     while finished = false && index.Value < tokens.Length do
         match tokens[index.Value] with
         | Symbol c -> 
-
             match c with
             | ']' -> 
                 finished <- true
                 index.Value <- index.Value + 1
-
             | '{' -> 
                 let v = parseBraket(index,tokens)
                 v |> items.Add
+            | _ ->  index.Value <- index.Value + 1
+            
+        | Token.StrQuoted v -> 
+            v |> Json.Str |> items.Add
+            index.Value <- index.Value + 2
 
-            | _ -> index.Value <- index.Value + 1
+        | Token.StrGeneral v -> 
+            match v with 
+            | "true" ->
+                Json.True |> items.Add
+                index.Value <- index.Value + 2
+            | "false" ->
+                Json.False |> items.Add
+                index.Value <- index.Value + 2
+            | "null" ->
+                Json.Null |> items.Add
+                index.Value <- index.Value + 2
+            | _ ->
+                v |> Json.Num |> items.Add
+                index.Value <- index.Value + 2
 
         | _ -> index.Value <- index.Value + 1
 

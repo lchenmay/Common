@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Collections
 open System.Collections.Generic
+open System.Collections.Concurrent
 open System.Text
 open System.Numerics
 
@@ -383,6 +384,12 @@ let List__bin<'T> item__bin (bb:BytesBuilder) (list:List<'T>) =
 let bin__List<'T> bin__item (bi:BinIndexed) = 
     new List<'T>(bin__array bin__item bi)
 
+let ListImmutable__bin<'T> item__bin (bb:BytesBuilder) (list:'T list) =
+    list |> List.toArray |> array__bin item__bin bb 
+
+let bin__ListImmutable<'T> (bin__item:BinIndexed -> 'T) (bi:BinIndexed) = 
+    (bin__array bin__item bi) |> Array.toList
+
 let bin__ConcurrentBag<'T> (bin__data:BinIndexed -> 'T) bi = 
 
     let bag = new System.Collections.Concurrent.ConcurrentBag<'T>()
@@ -424,20 +431,31 @@ let bin__Dictionary<'K,'V>
             let v = bin__val bi
             dict.Add(k,v)))
 
+let ConcurrentDictionary__bin
+    key__bin 
+    val__bin
+    (bb:BytesBuilder)
+    (dict:ConcurrentDictionary<'k,'v>) =
+        lock dict (fun _ ->
+            int32__bin bb dict.Count
+            dict.Keys
+            |> Seq.toArray
+            |> Array.iter(fun k -> 
+                key__bin bb k
+                val__bin bb (dict[k])))
+
 let bin__ConcurrentDictionary<'K,'V> 
-    (bin__kvp:BinIndexed -> KeyValuePair<'K,'V>)
-    (dict:System.Collections.Concurrent.ConcurrentDictionary<'K,'V>)
+    bin__key
+    bin__val
+    (dict:ConcurrentDictionary<'K,'V>)
     bi = 
     lock dict (fun _ ->
         dict.Clear()
-        bin__kvp |> bin__array <| bi
-        |> Array.iter(fun kvp -> dict.[kvp.Key] <- kvp.Value))
-        
-let concurrentDictionary__bin
-    (bb:BytesBuilder)
-    (dict:System.Collections.Concurrent.ConcurrentDictionary<'k,'v>,kvp__bin) =
-        dict.ToArray() 
-        |> array__bin kvp__bin bb
+        [| 0 .. (bin__int32 bi) - 1 |]
+        |> Array.iter(fun i -> 
+            let k = bin__key bi
+            let v = bin__val bi
+            dict[k] <- v))
 
 
 // ======== Bits ==================

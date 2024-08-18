@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Collections.Concurrent
 open System.Text
 
 open Util.Text
@@ -1024,6 +1025,14 @@ let json__Listo<'T> (json__itemo:Json -> 'T option) json =
     | Some items -> new List<'T>(items) |> Some
     | None -> None
 
+let ListImmutable__json<'T> item__json (ls:'T list) = 
+    ls |> List.toArray |> array__json item__json
+
+let json__ListImmutableo<'T> (json__itemo:Json -> 'T option) json = 
+    match json__arrayo json__itemo json with
+    | Some items -> items |> Array.toList |> Some
+    | None -> None
+
 let Option__json<'T> item__json (o:'T option) =
     match o with
     | Some v -> v |> item__json
@@ -1065,6 +1074,40 @@ let json__Dictionaryo<'K,'V>
                     let vo = json__valo valo.Value
                     if ko.IsSome && vo.IsSome then
                         dict.Add(ko.Value,vo.Value))
+            Some dict
+        | _ -> None)
+
+let ConcurrentDictionary__json
+    key__json
+    val__json
+    (dict:ConcurrentDictionary<'k,'v>) =
+        lock dict (fun _ ->
+            dict.Keys
+            |> Seq.toArray
+            |> Array.map(fun k -> 
+                [|  "key",(key__json k)
+                    "val",val__json dict[k] |]
+                |> Json.Braket)
+            |> Json.Ary)
+
+let json__ConcurrentDictionaryo<'K,'V> 
+    (json__keyo:Json -> 'K option)
+    (json__valo:Json -> 'V option)
+    (dict:ConcurrentDictionary<'K,'V>)
+    json = 
+    lock dict (fun _ ->
+        dict.Clear()
+        match json with
+        | Json.Ary items -> 
+            items
+            |> Array.iter(fun i -> 
+                let keyo = json__tryFindByName i "key"
+                let valo = json__tryFindByName i "val"
+                if keyo.IsSome && valo.IsSome then
+                    let ko = json__keyo keyo.Value
+                    let vo = json__valo valo.Value
+                    if ko.IsSome && vo.IsSome then
+                        dict[ko.Value] <- vo.Value)
             Some dict
         | _ -> None)
 

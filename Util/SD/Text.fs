@@ -1312,10 +1312,15 @@ let writeTextBlock (buffer:List<string>) tb =
     
     match tb with
     | AppendEnd s -> 
-        if buffer.Count = 0 then
-            buffer.Add s
-        else
-            buffer[buffer.Count - 1] <- buffer[buffer.Count - 1] + s
+        try
+            if buffer.Count = 0 then
+                buffer.Add s
+            else
+                buffer[buffer.Count - 1] <- buffer[buffer.Count - 1] + s
+        with
+        | _ -> 
+            ()
+
     | MultiLine lines -> lines |> buffer.AddRange
     | Newline s -> s |> buffer.Add
     | NewlineBlank -> "" |> buffer.Add

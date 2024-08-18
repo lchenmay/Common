@@ -1,5 +1,13 @@
 ﻿module Util.ADT // Algebraic Data Type
 
+let oPipelineProcessSomeWithDefault defaultval hSome o =
+    match o with
+    | Some v -> v |> hSome
+    | None -> defaultval
+
+let oPipelineProcessSome hSome o = 
+    oPipelineProcessSomeWithDefault ()  hSome o
+
 let oPipeline hSome hNone o = 
     match o with
     | Some v -> v |> hSome

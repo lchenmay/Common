@@ -1123,4 +1123,20 @@ let findInt64Value = findInt64ValueByAttNameWithDefault 0
 let findBoolValue = findBoolValueByAttNameWithDefault false
 let findDateTimeValueFromUnixTime =
     utc_starting
-    |> findUnixDateTimeValueByAttNameWithDefault 
+    |> findUnixDateTimeValueByAttNameWithDefault
+    
+let processAryOnlyWithDefault defaultVal h json =
+    match json with
+    | Json.Ary items -> items |> h
+    | _ -> defaultVal
+
+let processAryOnly =  processAryOnlyWithDefault ()
+
+let processStrOnlyWithDefault defaultVal h json =
+    match json with
+    | Json.Str s -> s |> h
+    | _ -> defaultVal
+
+let processStrOnly =  processStrOnlyWithDefault ()
+
+

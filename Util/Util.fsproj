@@ -10,6 +10,7 @@
 
   <ItemGroup>
 	  <Compile Include="AssemblyInfo.fs" />
+	  <Compile Include="Flow.fs" />
 	  <Compile Include="ADT.fs" />
 	  <Compile Include="OS\Perf.fs" />
 	  <Compile Include="OS\ObjectConvert.fs" />

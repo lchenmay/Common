@@ -22,6 +22,9 @@ let freqCurCodes =
         "CAD"
         "AUD"
         "NZD"
+        "TRY"
+        "MXN"
+        "ZAR"
         "BTC"
         "ETH"
         "CNY" |]

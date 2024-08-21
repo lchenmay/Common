@@ -232,7 +232,7 @@ let str__tokens (s:string) =
                 quoted <- true
             else
                 sb.ToString() 
-                |> System.Uri.UnescapeDataString
+                |> unescape_unicode
                 |> Token.StrQuoted 
                 |> tokens.Add
                 sb.Clear() |> ignore

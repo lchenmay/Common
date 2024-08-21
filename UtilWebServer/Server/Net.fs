@@ -181,6 +181,7 @@ let cycleWs runtime = fun () ->
                         | Some rep -> sndJson runtime rep conn
                         | None -> ()
 
+                    | OpCode.Close -> drop (Some runtime.keeps) conn
                     | _ -> ()
 
                 | None -> runtime.output "Decode failed"

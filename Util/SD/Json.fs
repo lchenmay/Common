@@ -231,7 +231,10 @@ let str__tokens (s:string) =
                 sb.Clear() |> ignore
                 quoted <- true
             else
-                sb.ToString() |> Token.StrQuoted |> tokens.Add
+                sb.ToString() 
+                |> System.Uri.UnescapeDataString
+                |> Token.StrQuoted 
+                |> tokens.Add
                 sb.Clear() |> ignore
                 quoted <- false
         else 
@@ -351,22 +354,22 @@ and parseArray (index:int ref, tokens: Token []) =
             
         | Token.StrQuoted v -> 
             v |> Json.Str |> items.Add
-            index.Value <- index.Value + 2
+            index.Value <- index.Value + 1
 
         | Token.StrGeneral v -> 
             match v with 
             | "true" ->
                 Json.True |> items.Add
-                index.Value <- index.Value + 2
+                index.Value <- index.Value + 1
             | "false" ->
                 Json.False |> items.Add
-                index.Value <- index.Value + 2
+                index.Value <- index.Value + 1
             | "null" ->
                 Json.Null |> items.Add
-                index.Value <- index.Value + 2
+                index.Value <- index.Value + 1
             | _ ->
                 v |> Json.Num |> items.Add
-                index.Value <- index.Value + 2
+                index.Value <- index.Value + 1
 
         | _ -> index.Value <- index.Value + 1
 
@@ -1182,4 +1185,8 @@ let processStrOnlyWithDefault defaultVal h json =
 
 let processStrOnly =  processStrOnlyWithDefault ()
 
+let processNumOnlyWithDefault defaultVal h json =
+    match json with
+    | Json.Num s -> s |> h
+    | _ -> defaultVal
 

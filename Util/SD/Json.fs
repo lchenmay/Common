@@ -1053,11 +1053,20 @@ let Dictionary__json
         lock dict (fun _ ->
             dict.Keys
             |> Seq.toArray
-            |> Array.map(fun k -> 
-                [|  "key",(key__json k)
-                    "val",val__json dict[k] |]
-                |> Json.Braket)
-            |> Json.Ary)
+            //|> Array.map(fun key -> 
+            //    [|  "key",(key__json k)
+            //        "val",val__json dict[k] |]
+            //|> Json.Ary)
+            |> Array.map(fun key -> 
+                let k = 
+                    match key__json key with
+                    | Json.Str s -> s
+                    | Json.Num s -> "\"" + s + "\""
+                    | _ -> ""
+
+                let v = val__json dict[key]
+                (k,v))
+            |> Json.Braket)
 
 let json__Dictionaryo<'K,'V> 
     (json__keyo:Json -> 'K option)

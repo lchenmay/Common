@@ -666,7 +666,7 @@ type HttpClient =
         member this.post(url:string, postdata:string,contenttype:string) = this.go(fun (p,body,dns,conn) -> body)(url,postdata,contenttype)
 
         member this.get(url) = 
-            lock(this)(fun () ->
+            lock this (fun () ->
                 let mutable res = this.go(fun (p,body,dns,conn) -> body)(url,"","")
 
                 match res.returnCode with

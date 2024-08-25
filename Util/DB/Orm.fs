@@ -395,7 +395,7 @@ let tablename__ledger = Dictionary<string, int64>()
 let str__enums = Dictionary<string*string, string[]>()
     
 let build_create_sql metadata = create_sql(metadata.table,metadata.sps)
-let build_update_sql metadata = update_sql(metadata.table,metadata.sql_update,metadata.sps)
+let build_update_sql metadata = update_sql(metadata.table,metadata.sql_update(),metadata.sps)
 
 
 let batch output processor (conn,top,where,order,metadata) =

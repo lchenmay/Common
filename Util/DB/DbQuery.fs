@@ -112,7 +112,7 @@ let line_handler handler x =
 
             let mutable keep = true
             while keep && reader.Read() do
-                let array = Array.zeroCreate x.fieldcount
+                let array = Array.zeroCreate reader.FieldCount
                 let id = reader.GetInt64(0)
                 reader.GetValues array |> ignore
                 if handler(array,x) = false then

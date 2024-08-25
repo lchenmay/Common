@@ -94,30 +94,31 @@ let line_handler handler x =
 
         match sc with
         | SqlCmd.SqlServer sc -> 
-            use sdr = sc.ExecuteReader()
-            x.fieldcount <- sdr.FieldCount
+            use reader = sc.ExecuteReader()
+            x.fieldcount <- reader.FieldCount
 
             let mutable keep = true
-            while keep && sdr.Read() do
+            while keep && reader.Read() do
                 let array = Array.zeroCreate x.fieldcount
-                sdr.GetValues array |> ignore
+                reader.GetValues array |> ignore
                 if handler(array,x) = false then
                     keep <- false
 
-            sdr.Close()
+            reader.Close()
 
         | SqlCmd.PostgreSql sc -> 
 
-            use sdr = sc.ExecuteReader()
+            use reader = sc.ExecuteReader()
 
             let mutable keep = true
-            while keep && sdr.Read() do
+            while keep && reader.Read() do
                 let array = Array.zeroCreate x.fieldcount
-                sdr.GetValues array |> ignore
+                let id = reader.GetInt64(0)
+                reader.GetValues array |> ignore
                 if handler(array,x) = false then
                     keep <- false
 
-            sdr.Close()
+            reader.Close()
 
         connClose conn
 

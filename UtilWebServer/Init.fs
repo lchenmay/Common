@@ -71,7 +71,7 @@ let updateDbStructure runtime conn =
     "Updating database structure ... " |> runtime.output
 
     let file = 
-        match runtime.host.database with
+        match rdbms with
         | Rdbms.SqlServer -> "/sqlSQLServer.sql"
         | Rdbms.PostgreSql -> "/sqlPostgreSQL.sql"
 

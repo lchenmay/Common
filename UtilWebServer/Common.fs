@@ -38,7 +38,6 @@ mutable conn: string
 defaultHtml: string
 mutable url: string
 
-mutable database: Util.Db.Rdbms
 mutable updateDatabase: bool
 
 mutable openDiscordAppId: string

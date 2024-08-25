@@ -69,14 +69,14 @@ let loadAllBulk<'p> output conn metadata =
 let updateDbStructure runtime conn = 
 
     "Updating database structure ... " |> runtime.output
+
+    let file = 
+        match runtime.host.database with
+        | Rdbms.SqlServer -> "/sqlSQLServer.sql"
+        | Rdbms.PostgreSql -> "/sqlPostgreSQL.sql"
+
     match
-
-        let file = 
-            match runtime.host.database with
-            | Rdbms.SqlServer -> "/sqlSQLServer.sql"
-            | Rdbms.PostgreSql -> "/sqlPostgreSQL.sql"
-
-        Environment.CurrentDirectory() + file
+        Environment.CurrentDirectory + file
         |> File.ReadAllText
         |> txOne conn runtime.output with
     | Suc x -> 

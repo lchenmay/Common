@@ -70,7 +70,13 @@ let updateDbStructure runtime conn =
 
     "Updating database structure ... " |> runtime.output
     match
-        Environment.CurrentDirectory + "/OrmTypes.sql"
+
+        let file = 
+            match runtime.host.database with
+            | Rdbms.SqlServer -> "/sqlSQLServer.sql"
+            | Rdbms.PostgreSql -> "/sqlPostgreSQL.sql"
+
+        Environment.CurrentDirectory() + file
         |> File.ReadAllText
         |> txOne conn runtime.output with
     | Suc x -> 

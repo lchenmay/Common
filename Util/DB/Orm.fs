@@ -187,49 +187,65 @@ let create_sql
 
     let sps:SqlParam[] = p |> sps_loader
 
-    let text = 
+    let w = empty__TextBlockWriter()
+
+    match rdbms with
+    | Rdbms.SqlServer -> 
+        [|  "INSERT INTO [" + table + "] ("
+            "[ID],[Createdat],[Updatedat],[Sort]," |]
+    | Rdbms.PostgreSql -> 
+        [|  "INSERT INTO " + table.ToLower() + " ("
+            "id,createdat,updatedat,sort," |]
+    |> w.multiLine
+
+    let names = 
+        sps
+        |> Array.map(fun sp ->
+            let name,t,v = sp |> sp__data
+            name)
+
+    names
+    |> Array.map(fun i ->
         match rdbms with
-        | Rdbms.SqlServer -> 
-            
-            let w = empty__TextBlockWriter()
+        | Rdbms.SqlServer -> "[" + i + "]"
+        | Rdbms.PostgreSql -> i.ToLower())
+    |> String.concat ","
+    |> w.newline
 
-            [|  "INSERT INTO [" + table + "] ("
-                "[ID],[Createdat],[Updatedat],[Sort]," |]
-            |> w.multiLine
+    match rdbms with
+    | Rdbms.SqlServer ->
+        [|  ") VALUES ("
+            "@ID,@Createdat,@Updatedat,@Sort," |]
+    | Rdbms.PostgreSql ->
+        [|  ") VALUES ("
+            "@id,@createdat,@updatedat,@sort," |]
+    |> w.multiLine
 
-            let names = 
-                sps
-                |> Array.map(fun sp ->
-                    let name,t,v = sp |> sp__data
-                    name)
+    names
+    |> Array.map(fun i ->
+        match rdbms with
+        | Rdbms.SqlServer -> "@" + i
+        | Rdbms.PostgreSql -> "@" + i.ToLower())
+    |> String.concat ","
+    |> w.newline
 
-            names
-            |> Array.map(fun i -> "[" + i + "]")
-            |> String.concat ","
-            |> w.newline
+    ")" |> w.newline
 
-            [|  ") VALUES ("
-                "@ID,@Createdat,@Updatedat,@Sort," |]
-            |> w.multiLine
-
-            names
-            |> Array.map(fun i -> "@" + i)
-            |> String.concat ","
-            |> w.newline
-
-            ")" |> w.newline
-
-            w.text()
-
-        | Rdbms.PostgreSql -> ""
-
-    {   text = text
+    {   text = w.text()
         ps =     
             [|  
-                [|  "ID", id
-                    "Createdat", createdat.Ticks
-                    "Updatedat", updatedat.Ticks
-                    "Sort", sort |] |> Array.map kvp__sqlparam
+                match rdbms with
+                | Rdbms.SqlServer ->
+                    [|  "ID", id
+                        "Createdat", createdat.Ticks
+                        "Updatedat", updatedat.Ticks
+                        "Sort", sort |]
+                | Rdbms.PostgreSql ->
+                    [|  "id", id
+                        "createdat", createdat.Ticks
+                        "updatedat", updatedat.Ticks
+                        "sort", sort |]
+                |> Array.map kvp__sqlparam
                 sps |]
             |> Array.concat }
 
@@ -245,15 +261,24 @@ let create_incremental(conn,output,table,sp_loader)(id:Ref<int64>,p) =
     let currenttime = DateTime.UtcNow
     currentid,currenttime,create(conn,output,table,sp_loader)(currentid,currenttime,p)
 
-let update_sql(table,fieldassigns,m__ps)(id:int64,ctime:DateTime,p)=
+let update_sql (table,fieldassigns,m__ps) (id:int64,ctime:DateTime,p) =
     let sps = m__ps p
+
     let ps = 
-        [|  "ID",id
-            "Updatedat",ctime.Ticks |]
+        match rdbms with
+        | Rdbms.SqlServer ->
+            [|  "ID",id
+                "Updatedat",ctime.Ticks |]
+        | Rdbms.PostgreSql ->
+            [|  "id",id
+                "updatedat",ctime.Ticks |]
         |> Array.map kvp__sqlparam
 
     {
-        text = "UPDATE ["+table+"] SET "+fieldassigns+" WHERE ID=@ID";
+        text = 
+            match rdbms with
+            | Rdbms.SqlServer -> "UPDATE [" + table + "] SET " + fieldassigns + " WHERE ID=@ID";
+            | Rdbms.PostgreSql -> "UPDATE " + table.ToLower() + " SET " + fieldassigns + " WHERE id=@id";
         ps = [|sps;ps|] |> Array.concat }
 
 let update
@@ -295,10 +320,17 @@ let loadall
     where =
 
     match 
-        [| "SELECT ";
-            fieldorders;
-            " FROM [" + table + "] ";
-            where |]
+        match rdbms with
+        | Rdbms.SqlServer -> 
+            [| "SELECT ";
+                fieldorders;
+                " FROM [" + table + "] ";
+                where |]
+        | Rdbms.PostgreSql -> 
+            [| "SELECT ";
+                fieldorders;
+                " FROM " + table.ToLower() + " ";
+                where |]
         |> String.Concat
         |> str__sql
         |> multiline_query conn with
@@ -340,7 +372,7 @@ let data__ps(creator, assignor) =
 
 type MetadataTypes<'p> = 
     {
-        fieldorders: string
+        fieldorders: unit -> string
         db__rcd: Object[] -> Rcd<'p>
         wrapper: ( (int64*DateTime*DateTime*int64) * 'p) -> Rcd<'p>
         sps: 'p -> SqlParam[]
@@ -350,7 +382,7 @@ type MetadataTypes<'p> =
         empty__p: unit -> 'p
         rcd__bin: BytesBuilder -> Rcd<'p> -> unit
         bin__rcd: (byte[] * Ref<int>) -> Rcd<'p>
-        sql_update: string
+        sql_update: unit -> string
         rcd_update: (string -> unit) -> Rcd<'p> -> unit
         table: string
         shorthand: string }
@@ -389,7 +421,7 @@ let batch output processor (conn,top,where,order,metadata) =
         let threads =
             match
                 [| "SELECT TOP " + top.ToString();
-                    metadata.fieldorders;
+                    metadata.fieldorders();
                     " FROM [" + metadata.table + "]";
                     " " + where;
                     " " + order |]
@@ -561,7 +593,7 @@ let rcds__bin conn (top,where) metadata =
 
     match
         [| "SELECT " + top;
-            metadata.fieldorders;
+            metadata.fieldorders();
             " FROM [" + metadata.table + "] " + where |]
         |> String.Concat
         |> str__sql
@@ -606,7 +638,7 @@ let loaderByID(key,metadata,conn,output,exnLogger) id =
 
     match 
         [|"SELECT ";
-            metadata.fieldorders;
+            metadata.fieldorders();
             " FROM [" + metadata.table + "] ";
             " WHERE ID=" + id.ToString() |]
         |> String.Concat

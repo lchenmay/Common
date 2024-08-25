@@ -26,7 +26,7 @@ let loadAll output conn metadata h =
     match 
         ""
         |> Util.Orm.loadall conn
-            (metadata.table,metadata.fieldorders,metadata.db__rcd) with
+            (metadata.table,metadata.fieldorders(),metadata.db__rcd) with
     | Some items ->
         items
         |> Array.iter h
@@ -53,7 +53,7 @@ let loadAllBulk<'p> output conn metadata =
         true
 
     match
-        [|  "SELECT " + metadata.fieldorders
+        [|  "SELECT " + metadata.fieldorders()
             " FROM " + metadata.table
             " order by ID asc" |]
         |> String.Concat

@@ -431,6 +431,32 @@ let bin__Dictionary<'K,'V>
             let v = bin__val bi
             dict.Add(k,v)))
 
+let SortedDictionary__bin
+    key__bin 
+    val__bin
+    (bb:BytesBuilder)
+    (dict:SortedDictionary<'k,'v>) =
+        lock dict (fun _ ->
+            int32__bin bb dict.Count
+            dict.Keys
+            |> Seq.toArray
+            |> Array.iter(fun k -> 
+                key__bin bb k
+                val__bin bb (dict[k])))
+
+let bin__SortedDictionary<'K,'V> 
+    bin__key
+    bin__val
+    (dict:SortedDictionary<'K,'V>)
+    bi = 
+    lock dict (fun _ ->
+        dict.Clear()
+        [| 0 .. (bin__int32 bi) - 1 |]
+        |> Array.iter(fun i -> 
+            let k = bin__key bi
+            let v = bin__val bi
+            dict.Add(k,v)))
+
 let ConcurrentDictionary__bin
     key__bin 
     val__bin

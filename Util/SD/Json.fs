@@ -1053,10 +1053,6 @@ let Dictionary__json
         lock dict (fun _ ->
             dict.Keys
             |> Seq.toArray
-            //|> Array.map(fun key -> 
-            //    [|  "key",(key__json k)
-            //        "val",val__json dict[k] |]
-            //|> Json.Ary)
             |> Array.map(fun key -> 
                 let k = 
                     match key__json key with
@@ -1072,6 +1068,45 @@ let json__Dictionaryo<'K,'V>
     (json__keyo:Json -> 'K option)
     (json__valo:Json -> 'V option)
     (dict:Dictionary<'K,'V>)
+    json = 
+    lock dict (fun _ ->
+        dict.Clear()
+        match json with
+        | Json.Ary items -> 
+            items
+            |> Array.iter(fun i -> 
+                let keyo = json__tryFindByName i "key"
+                let valo = json__tryFindByName i "val"
+                if keyo.IsSome && valo.IsSome then
+                    let ko = json__keyo keyo.Value
+                    let vo = json__valo valo.Value
+                    if ko.IsSome && vo.IsSome then
+                        dict.Add(ko.Value,vo.Value))
+            Some dict
+        | _ -> None)
+
+let SortedDictionary__json
+    key__json
+    val__json
+    (dict:SortedDictionary<'k,'v>) =
+        lock dict (fun _ ->
+            dict.Keys
+            |> Seq.toArray
+            |> Array.map(fun key -> 
+                let k = 
+                    match key__json key with
+                    | Json.Str s -> s
+                    | Json.Num s -> "\"" + s + "\""
+                    | _ -> ""
+
+                let v = val__json dict[key]
+                (k,v))
+            |> Json.Braket)
+
+let json__SortedDictionaryo<'K,'V> 
+    (json__keyo:Json -> 'K option)
+    (json__valo:Json -> 'V option)
+    (dict:SortedDictionary<'K,'V>)
     json = 
     lock dict (fun _ ->
         dict.Clear()

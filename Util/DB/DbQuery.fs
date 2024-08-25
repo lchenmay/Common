@@ -160,7 +160,7 @@ let singleline_query conn sql =
     match r2 with
     | Suc x ->
         if x.lines.Count = 1 then
-            x.line <- Some(x.lines.[0])
+            x.line <- Some x.lines[0]
             Suc x
         else if x.lines.Count = 0 then
             Fail(Zero,x)
@@ -171,9 +171,13 @@ let singleline_query conn sql =
 let singlevalue_query conn sql =
     match singleline_query conn sql with
     | Suc x ->
-        let v = x.line.Value.[0]
-        if v.GetType() <> typeof<System.DBNull> then
-            Some(x.line.Value.[0])
+        let vs = x.line.Value
+        if vs.Length = 1 then
+            let v = vs[0]
+            if v.GetType() <> typeof<System.DBNull> then
+                Some(x.line.Value[0])
+            else
+                None
         else
             None
     | _ -> None

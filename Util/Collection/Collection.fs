@@ -183,6 +183,20 @@ let dict__clone (dict:Dictionary<'K,'V>) =
 
     res
 
+let checkOrCreateDictionary 
+    creator (dict:Dictionary<'K,'V>) 
+    key = 
+    if dict.ContainsKey key = false then
+        dict[key] <- creator key
+    dict[key]
+
+let checkOrCreateSortedDictionary 
+    creator (dict:SortedDictionary<'K,'V>) 
+    key = 
+    if dict.ContainsKey key = false then
+        dict[key] <- creator key
+    dict[key]
+
 //<string> ================================================
 
 let checkfield(fields:Dictionary<string,string>) key =

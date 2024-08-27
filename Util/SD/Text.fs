@@ -1371,6 +1371,10 @@ type TextBlockWriter (buffer:List<string>) =
             else
                 buffer.RemoveAt index
 
+    member this.text delim = 
+        buffer.ToArray()
+        |> String.concat delim
+
     member this.text() = 
         buffer.ToArray()
         |> String.Concat

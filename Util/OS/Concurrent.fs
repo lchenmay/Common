@@ -20,6 +20,18 @@ let lambda__linqExp<'T> lambda =
     |> LeafExpressionConverter.QuotationToExpression
     |> unbox<Expression<'T>>
 
+let fun__Func<'T> (body:'T -> unit) = 
+    let f = 
+        (fun input ->
+            Task.Run(fun _ -> body input))
+    new Func<'T,Task>(f)
+
+let fun__FuncUnit (body:unit -> unit) = 
+    let f = 
+        (fun input ->
+            Task.Run(fun _ -> body()))
+    new Func<Task>(f)
+
 let wait(criterion:unit -> bool, timeout, ratio)(logging:string -> unit):bool =
 
     let since = DateTime.UtcNow

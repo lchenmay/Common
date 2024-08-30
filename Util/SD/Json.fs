@@ -1215,6 +1215,13 @@ let findDateTimeValueFromUnixTime =
     utc_starting
     |> findUnixDateTimeValueByAttNameWithDefault
     
+let processBraketOnlyWithDefault defaultVal h json =
+    match json with
+    | Json.Braket items -> items |> h
+    | _ -> defaultVal
+
+let processBraketOnly =  processBraketOnlyWithDefault ()
+
 let processAryOnlyWithDefault defaultVal h json =
     match json with
     | Json.Ary items -> items |> h

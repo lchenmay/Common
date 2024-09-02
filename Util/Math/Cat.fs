@@ -7,20 +7,9 @@ open System.Collections.Generic
 type Hom<'X,'Y> = 'X -> 'Y
 type End<'X> = 'X -> 'X
 
-
-// ==============================================
-// Monad
-
 type CtxWrapper<'ctx,'ex> =
 | Suc of 'ctx
 | Fail of 'ex * 'ctx
-
-    static member iter f c = 
-        match c with
-        | Suc x -> f x
-        | Fail(ex,x) -> ()
-
-let FailWith x ex = Fail(ex,x)
 
 let (>>=) c f = 
     match c with

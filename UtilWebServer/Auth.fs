@@ -26,7 +26,6 @@ open UtilWebServer.Open
 open UtilWebServer.Api
 open UtilWebServer.Session
 
-
 type AuthParams<'p,'complex> = {
 getSocialAuthBiz: 'p -> int64
 setSocialAuthBiz: 'p -> int64 -> unit
@@ -82,6 +81,16 @@ let tryCreateUser
             ecs[rcd.ID] <- ec
             ec)
 
+let checkDiscordUser runtime checkoutEu (uid, username, avatar) = 
+    match 
+        (uid.ToString(),username,avatar)
+        |> checkoutEu runtime "DISCORD" with
+    | Some user -> 
+        user 
+        |> user__session runtime.sessions
+        |> Some
+    | None -> None
+
 
 let socialAuth 
     (erInternal,erInvalideParameter,erUnauthorized) 
@@ -104,31 +113,31 @@ let socialAuth
         let redirectUrl = tryFindStrByAtt "redirectUrl" json
 
         match biz with
-        | "DISCORD" ->
-            match
-                Discord.requestAccessToken
-                    discord
-                    redirectUrl
-                    code
-                |> Discord.requestUserInfo with
-            | Some (uid,usernameWithdiscriminator, avatar, json) -> 
+        //| "DISCORD" ->
+        //    match
+        //        Discord.requestAccessToken
+        //            discord
+        //            redirectUrl
+        //            code
+        //        |> Discord.requestUserInfo with
+        //    | Some (uid,usernameWithdiscriminator, avatar, json) -> 
 
-                match 
-                    (uid.ToString(),usernameWithdiscriminator,avatar)
-                    |> checkoutEu "DISCORD" with
-                | Some user -> 
+        //        match 
+        //            (uid.ToString(),usernameWithdiscriminator,avatar)
+        //            |> checkoutEu "DISCORD" with
+        //        | Some user -> 
 
-                    let session = 
-                        user 
-                        |> user__session runtime.sessions
+        //            let session = 
+        //                user 
+        //                |> user__session runtime.sessions
 
-                    [|  ok
-                        ("session", session.session |> Json.Str)
-                        ("ec", user |> v__json)   |]
+        //            [|  ok
+        //                ("session", session.session |> Json.Str)
+        //                ("ec", user |> v__json)   |]
 
-                | None -> er erInternal
+        //        | None -> er erInternal
 
-            | None -> er erInvalideParameter
+        //    | None -> er erInvalideParameter
 
         | _ -> er erInvalideParameter
 

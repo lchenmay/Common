@@ -40,9 +40,10 @@ mutable url: string
 
 mutable updateDatabase: bool
 
-mutable openDiscordAppId: string
-mutable openDiscordPubKey: string
-mutable openDiscordSecret: string
+mutable DiscordAppId: string
+mutable DiscordPubKey: string
+mutable DiscordSecret: string
+mutable DiscordRedirect: string
 
 mutable fsDir: string }
 

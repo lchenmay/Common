@@ -12,28 +12,60 @@ open Util.HttpClient
 open Discord
 open Discord.WebSocket
 
+(*
+
+Loading UserInfo via Discord OAuth
+
+1. Setup Discord App with:
+
+a) client_id = app_id
+b) client_secret
+c) redirect_url
+d) permission scope: identity
+e) generated_url from c) and d)
+
+2. End user visit:
+
+f) generated_url e) from browser an
+g) Discord redirects the web page to the redirect_url c) with param code=xxx
+h) Obtain code=xxx
+
+Call sample:
+
+let code = "m02dtmoYgEe6UNuB9P3CZ9IqfyfBoA"
+
+let accessToken =
+    UtilWebServer.Open.Discord.requestAccessToken
+        (runtime.host.DiscordAppId,runtime.host.DiscordSecret)
+        runtime.host.DiscordRedirect
+        code
+
+let res = 
+    UtilWebServer.Open.Discord.requestUserInfo accessToken
+
+*)
+
 let requestAccessToken
     (client_id,client_sceret)
     redirect_url
     code = 
 
-    let hc = empty__HttpClient()
+    let urlRequestAuthCode = "https://discordapp.com/api/oauth2/token"
 
+    let hc = Util.HttpClient.empty__HttpClient()
     let postdata = 
-        [|  ("client_id",client_id |> Json.Str)
-            ("client_secret",client_sceret |> Json.Str)
-            ("grant_type","authorization_code" |> Json.Str)
-            ("redirect_uri",redirect_url |> Json.Str)
-            ("code",code |> Json.Str)  |]
-        |> Json.Braket
-        |> json__strFinal
-
-    let url = "https://discordapp.com/api/oauth2/token"
-
-    let resobj = hc.post(url,postdata)
-    resobj.html 
-    |> str__root
-    |> tryFindStrByAtt "access_token"
+        [|  "client_id=" + client_id
+            "&client_secret=" + client_sceret
+            "&grant_type=authorization_code"
+            "&redirect_uri=" + redirect_url
+            "&code=" + code  |]
+        |> String.Concat
+    let json = hc.post(urlRequestAuthCode,postdata).html
+    let code = 
+        json 
+        |> str__root
+        |> tryFindStrByAtt "access_token"
+    code,json
 
 let requestUserInfo access_token = 
 
@@ -171,23 +203,26 @@ let token__client token =
 
 let sendMsg (client:DiscordSocketClient) guildId channelId (content,embedding) = 
 
-    let guild = client.GetGuild guildId
-    let channel = guild.GetTextChannel channelId
+    try
+        let guild = client.GetGuild guildId
+        let channel = guild.GetTextChannel channelId
 
 
-    let eb = (new EmbedBuilder()).WithDescription embedding
-    //await Context.Channel.SendMessageAsync("", false, eb.Build());
+        let eb = (new EmbedBuilder()).WithDescription embedding
+        //await Context.Channel.SendMessageAsync("", false, eb.Build());
 
 
-    let t = channel.SendMessageAsync(content,false,eb.Build())
-    //let t = channel.SendMessageAsync content
+        let t = channel.SendMessageAsync(content,false,eb.Build())
+        //let t = channel.SendMessageAsync content
 
-    let mutable finished = false
+        let mutable finished = false
 
-    async{
-        let! res = Async.AwaitTask t
-        finished <- true
-    }|> Async.RunSynchronously
+        async{
+            let! res = Async.AwaitTask t
+            finished <- true
+        }|> Async.RunSynchronously
 
-    while finished = false do
-        System.Threading.Thread.Sleep 300
+        while finished = false do
+            System.Threading.Thread.Sleep 300
+    with
+    | _ -> ()

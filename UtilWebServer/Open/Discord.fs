@@ -209,6 +209,7 @@ let sendMsg (client:DiscordSocketClient) guildId channelId (content,embedding) =
 
 
         let eb = (new EmbedBuilder()).WithDescription embedding
+        eb.Color <- new Color(0x24,0xEB,0x1F)
         //await Context.Channel.SendMessageAsync("", false, eb.Build());
 
 

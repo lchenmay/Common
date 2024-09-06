@@ -750,7 +750,8 @@ let timespan__userfriendly(ts:TimeSpan) =
     else 
         ts.TotalSeconds.ToString("0.00")+" S"
 
-let timestamp__userfriendly(dt:DateTime) = DateTime.UtcNow.Subtract(dt) |> timespan__userfriendly
+let timestamp__userfriendlyPast (dt:DateTime) = DateTime.UtcNow.Subtract dt |> timespan__userfriendly
+let timestamp__userfriendlyFuture (dt:DateTime) = dt.Subtract DateTime.UtcNow |> timespan__userfriendly
 
 let getverifycode()=
     let ticks = DateTime.UtcNow.Ticks.ToString()

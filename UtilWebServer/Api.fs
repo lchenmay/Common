@@ -63,10 +63,25 @@ let echoApiHandler branch req =
     let service = req.path[1]
     let api = req.path[2]
 
-    let json = str__root req.body
+    let req = str__root req.body
 
-    branch service api json
-    |> Json.Braket
+    let rep = 
+        req
+        |> branch service api 
+        |> Json.Braket
+
+    if api = "listGames" then
+        
+        let a = rep |> json__strFinal
+        let l = a.Length
+        let c = a.Substring(l-1000)
+        let b = rep |> json__strFinal
+
+
+        
+        ()
+
+    rep
     |> json__strFinal
     |> str__StandardResponse "application/json"
 

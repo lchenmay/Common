@@ -1376,9 +1376,13 @@ type TextBlockWriter (buffer:List<string>) =
         buffer.ToArray()
         |> String.concat delim
 
-    member this.text() = 
+    member this.text() =
         buffer.ToArray()
         |> String.Concat
+        //let sb = new StringBuilder()
+        //buffer.ToArray()
+        //|> Array.iter(fun line -> line |> sb.Append |> ignore)
+        //sb.ToString()
 
     member this.count() = 
         let ary = buffer.ToArray()

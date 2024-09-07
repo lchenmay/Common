@@ -70,17 +70,6 @@ let echoApiHandler branch req =
         |> branch service api 
         |> Json.Braket
 
-    if api = "listGames" then
-        
-        let a = rep |> json__strFinal
-        let l = a.Length
-        let c = a.Substring(l-1000)
-        let b = rep |> json__strFinal
-
-
-        
-        ()
-
     rep
     |> json__strFinal
     |> str__StandardResponse "application/json"

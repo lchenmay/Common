@@ -183,6 +183,30 @@ let dict__clone (dict:Dictionary<'K,'V>) =
 
     res
 
+let tryCheckOrCreateDictionary 
+    creator (dict:Dictionary<'K,'V>) 
+    key = 
+    if dict.ContainsKey key = false then
+        match creator key with
+        | Some v -> 
+            dict[key] <- v
+            Some v
+        | None -> None
+    else
+        Some dict[key]
+
+let tryCheckOrCreateSortedDictionary 
+    creator (dict:SortedDictionary<'K,'V>) 
+    key = 
+    if dict.ContainsKey key = false then
+        match creator key with
+        | Some v -> 
+            dict[key] <- v
+            Some v
+        | None -> None
+    else
+        Some dict[key]
+
 let checkOrCreateDictionary 
     creator (dict:Dictionary<'K,'V>) 
     key = 

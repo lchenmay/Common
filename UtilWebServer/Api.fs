@@ -116,8 +116,11 @@ let apiUpdate bin__rcd x =
 let apiList item__json = 
     Seq.toArray >> Array.map item__json >> wrapOkAry
 
+let apiPing x =
+    [|  ok
+        ("timestamp",Json.Num (DateTime.UtcNow.Ticks.ToString()))   |]
 
-let apiMonitorPerf() = 
+let apiMonitorPerf x = 
 
     stats None
     |> Array.map(fun i -> 

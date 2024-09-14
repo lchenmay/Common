@@ -7,6 +7,8 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Linq
 
+open Util.Perf
+
 let filter<'A,'B> matcher (data:'A[]) = 
     let res = List<'B>()
     data
@@ -186,6 +188,7 @@ let dict__clone (dict:Dictionary<'K,'V>) =
 let tryCheckOrCreateDictionary 
     creator (dict:Dictionary<'K,'V>) 
     key = 
+
     if dict.ContainsKey key = false then
         match creator key with
         | Some v -> 
@@ -198,6 +201,7 @@ let tryCheckOrCreateDictionary
 let tryCheckOrCreateSortedDictionary 
     creator (dict:SortedDictionary<'K,'V>) 
     key = 
+
     if dict.ContainsKey key = false then
         match creator key with
         | Some v -> 
@@ -210,6 +214,7 @@ let tryCheckOrCreateSortedDictionary
 let checkOrCreateDictionary 
     creator (dict:Dictionary<'K,'V>) 
     key = 
+
     if dict.ContainsKey key = false then
         dict[key] <- creator key
     dict[key]
@@ -217,6 +222,7 @@ let checkOrCreateDictionary
 let checkOrCreateSortedDictionary 
     creator (dict:SortedDictionary<'K,'V>) 
     key = 
+
     if dict.ContainsKey key = false then
         dict[key] <- creator key
     dict[key]

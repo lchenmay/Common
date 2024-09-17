@@ -227,6 +227,41 @@ let checkOrCreateSortedDictionary
         dict[key] <- creator key
     dict[key]
 
+let clearDictionary 
+    filter
+    (dict:Dictionary<'K,'V>) = 
+
+    lock dict (fun i -> 
+        let keys = dict.Keys |> Seq.toArray
+        keys
+        |> Array.map(fun k -> k,dict[k])
+        |> Array.filter(fun (k,v) -> filter v)
+        |> Array.map(fun (k,v) -> dict.Remove k)
+        |> ignore)
+
+let clearSortedDictionary 
+    filter
+    (dict:SortedDictionary<'K,'V>) = 
+
+    lock dict (fun i -> 
+        let keys = dict.Keys |> Seq.toArray
+        keys
+        |> Array.map(fun k -> k,dict[k])
+        |> Array.filter(fun (k,v) -> filter v)
+        |> Array.map(fun (k,v) -> dict.Remove k)
+        |> ignore)
+
+let clearConcurrentDictionary 
+    filter
+    (dict:ConcurrentDictionary<'K,'V>) = 
+
+    lock dict (fun i -> 
+        let keys = dict.Keys |> Seq.toArray
+        keys
+        |> Array.map(fun k -> k,dict[k])
+        |> Array.filter(fun (k,v) -> filter v)
+        |> Array.map(fun (k,v) -> dict.Remove k)
+        |> ignore)
 
 //<string> ================================================
 

@@ -89,7 +89,11 @@ let tryLoadFromJsonIdWrapOK
         |> wrapOk n
     | None -> er e
 
+let nullParam = 
+    [|  ("Er",Json.Str "") |]
+
 let runApi branching x =
+
     match
         x
         |> bind branching with
@@ -97,7 +101,7 @@ let runApi branching x =
         use cw = new CodeWrapper("branch.exe")
 
         match x.json with
-        | Json.Null -> [| ok |]
+        | Json.Null -> nullParam
         | _ -> 
             match x.proco with
             | Some p ->

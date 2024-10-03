@@ -96,11 +96,14 @@ let runApi branching x =
     | Suc x -> 
         use cw = new CodeWrapper("branch.exe")
 
-        match x.proco with
-        | Some p ->
-            use cw = new CodeWrapper("Api." + x.api)
-            p x
-        | None -> [| ok |]
+        match x.json with
+        | Json.Null -> [| ok |]
+        | _ -> 
+            match x.proco with
+            | Some p ->
+                use cw = new CodeWrapper("Api." + x.api)
+                p x
+            | None -> [| ok |]
     | Fail(e,x) -> er e
 
 let apiCreate bin__p x = 

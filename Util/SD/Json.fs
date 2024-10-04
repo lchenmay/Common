@@ -344,6 +344,9 @@ let rec parseBraket (index:int ref, tokens: Token []) =
 
                     | _ -> 
                         index.Value <- index.Value + 2
+                else
+                    finished <- true
+                    index.Value <- index.Value + 1
 
             | ']' -> 
                 finished <- true

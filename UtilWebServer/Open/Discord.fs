@@ -201,7 +201,12 @@ let token__client token =
 
     client
 
-let sendMsg (client:DiscordSocketClient) guildId channelId (content,embedding) = 
+let sendMsg output (client:DiscordSocketClient) guildId channelId (content,embedding) = 
+
+    [|  "guild = " + guildId.ToString()
+        ", channel = " + channelId.ToString() |]
+    |> String.Concat
+    |> output
 
     try
         let guild = client.GetGuild guildId
@@ -218,6 +223,8 @@ let sendMsg (client:DiscordSocketClient) guildId channelId (content,embedding) =
 
         let mutable finished = false
 
+        output "Sending ..."
+
         async{
             let! res = Async.AwaitTask t
             finished <- true
@@ -225,5 +232,10 @@ let sendMsg (client:DiscordSocketClient) guildId channelId (content,embedding) =
 
         while finished = false do
             System.Threading.Thread.Sleep 300
+
+        output "Finished."
     with
-    | _ -> ()
+    | ex -> 
+        ex.ToString() |> output
+
+

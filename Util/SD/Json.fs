@@ -1201,7 +1201,7 @@ let ModDict__json
                 |> Json.Braket)
             |> Json.Ary)
 
-let json__ModDict<'k,'v> 
+let json__ModDicto<'k,'v> 
     exp2__md
     (json__keyo:Json -> 'k option)
     (json__valo:Json -> 'v option)
@@ -1222,13 +1222,13 @@ let json__ModDict<'k,'v>
                     md[ko.Value] <- vo.Value)
     | _ -> ()
 
-    md
+    Some md
 
-let ModDictStr__json<'v> = ModDict__json str__json
-let json__ModDictStr<'v> = json__ModDict createModDictStr<'v> json__stro
+let ModDictStr__json val__json md = ModDict__json str__json val__json md
+let json__ModDictStro<'v> = json__ModDicto createModDictStr<'v> json__stro
 
 let ModDictInt64__json<'v> = ModDict__json int64__json
-let json__ModDictInt64<'v> = json__ModDict createModDictInt64<'v> json__int64o
+let json__ModDictInt64o<'v> = json__ModDicto createModDictInt64<'v> json__int64o
 
 let findStrValueByAttNameWithDefault def attName j =
     match tryFindByAtt attName j with

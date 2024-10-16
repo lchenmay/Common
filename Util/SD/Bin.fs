@@ -485,8 +485,8 @@ let bin__ConcurrentDictionary<'K,'V>
             dict[k] <- v))
 
 let ModDict__bin
-    key__bin 
-    val__bin
+    (key__bin:BytesBuilder -> 'k -> unit) 
+    (val__bin:BytesBuilder -> 'v -> unit)
     (bb:BytesBuilder)
     (md:ModDict<'k,'v>) =
         int32__bin bb md.exp2
@@ -512,24 +512,11 @@ let bin__ModDict
 
     md
 
-let ModDictStr__bin
-    val__bin
-    (bb:BytesBuilder)
-    (md:ModDictStr<'v>) = 
-    ModDict__bin str__bin
-
+let ModDictStr__bin val__bin bb md = ModDict__bin str__bin val__bin bb md
 let bin__ModDictStr<'v> = bin__ModDict createModDictStr<'v> bin__str 
 
-let ModDictInt64__bin 
-    val__bin
-    (bb:BytesBuilder)
-    (md:ModDictInt64<'v>) = 
-    ModDict__bin int64__bin
-
-let bin__ModDictInt64
-    bin__val
-    bi = 
-    bin__ModDict createModDictInt64 bin__int64
+let ModDictInt64__bin<'v> = ModDict__bin int64__bin
+let bin__ModDictInt64<'v> = bin__ModDict createModDictInt64 bin__int64
 
 // ======== Bits ==================
 

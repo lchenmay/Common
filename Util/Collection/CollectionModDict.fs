@@ -168,3 +168,20 @@ let createModDictStr<'v> exp2: ModDictStr<'v> =
         current_concurrency = 0
         timeout = 1000 }
 
+let ModDictInt64__dict (md:ModDictInt64<'v>) = 
+    new Dictionary<int64,'v>(md.ToArray(),comparerInt64)
+
+let dict__ModDictInt64 (dict:Dictionary<int64,'v>) = 
+    let md = createModDictInt64 4
+    dict
+    |> Seq.iter(fun kvp -> md[kvp.Key] <- kvp.Value)
+
+
+let ModDictStr__dict (md:ModDictStr<'v>) = 
+    new Dictionary<string,'v>(md.ToArray(),comparerString)
+
+let dict__ModDictStr (dict:Dictionary<string,'v>) = 
+    let md = createModDictStr 4
+    dict
+    |> Seq.iter(fun kvp -> md[kvp.Key] <- kvp.Value)
+

@@ -1189,46 +1189,25 @@ let json__ConcurrentDictionaryo<'K,'V>
             Some dict
         | _ -> None)
 
-let ModDict__json
-    key__json
-    val__json
-    (md:ModDict<'k,'v>) =
-        lock md (fun _ ->
-            md.ToArray()
-            |> Array.map(fun kvp -> 
-                [|  "key",(key__json kvp.Key)
-                    "val",val__json kvp.Value |]
-                |> Json.Braket)
-            |> Json.Ary)
+let ModDictInt64__json val__json md = 
+    md
+    |> ModDictInt64__dict
+    |> Dictionary__json int64__json val__json
 
-let json__ModDicto<'k,'v> 
-    exp2__md
-    (json__keyo:Json -> 'k option)
-    (json__valo:Json -> 'v option)
-    json = 
+let json__ModDictInt64o json__valo dict json = 
+    match json__Dictionaryo json__int64o json__valo dict json with
+    | Some dict -> dict__ModDictInt64 |> Some
+    | None -> None
 
-    let md:ModDict<'k,'v> = exp2__md 1
+let ModDictStr__json val__json md = 
+    md
+    |> ModDictStr__dict
+    |> Dictionary__json str__json val__json
 
-    match json with
-    | Json.Ary items -> 
-        items
-        |> Array.iter(fun i -> 
-            let keyo = json__tryFindByName i "key"
-            let valo = json__tryFindByName i "val"
-            if keyo.IsSome && valo.IsSome then
-                let ko = json__keyo keyo.Value
-                let vo = json__valo valo.Value
-                if ko.IsSome && vo.IsSome then
-                    md[ko.Value] <- vo.Value)
-    | _ -> ()
-
-    Some md
-
-let ModDictStr__json val__json md = ModDict__json str__json val__json md
-let json__ModDictStro<'v> = json__ModDicto createModDictStr<'v> json__stro
-
-let ModDictInt64__json<'v> = ModDict__json int64__json
-let json__ModDictInt64o<'v> = json__ModDicto createModDictInt64<'v> json__int64o
+let json__ModDictStro json__valo dict json = 
+    match json__Dictionaryo json__int64o json__valo dict json with
+    | Some dict -> dict__ModDictInt64 |> Some
+    | None -> None
 
 let findStrValueByAttNameWithDefault def attName j =
     match tryFindByAtt attName j with

@@ -184,4 +184,5 @@ let dict__ModDictStr (dict:Dictionary<string,'v>) =
     let md = createModDictStr 4
     dict
     |> Seq.iter(fun kvp -> md[kvp.Key] <- kvp.Value)
+    md
 

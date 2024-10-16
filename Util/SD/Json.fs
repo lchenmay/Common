@@ -1205,8 +1205,8 @@ let ModDictStr__json val__json md =
     |> Dictionary__json str__json val__json
 
 let json__ModDictStro json__valo dict json = 
-    match json__Dictionaryo json__int64o json__valo dict json with
-    | Some dict -> dict__ModDictInt64 |> Some
+    match json__Dictionaryo json__stro json__valo dict json with
+    | Some dict -> dict__ModDictStr |> Some
     | None -> None
 
 let findStrValueByAttNameWithDefault def attName j =

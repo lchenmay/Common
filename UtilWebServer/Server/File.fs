@@ -11,7 +11,7 @@ open Util.HttpServer
 
 let mutable fileErLoggero: (string * exn -> unit) option = None
 
-let cacheFile = createMDStr<DateTime * (byte[])> 8
+let cacheFile = createModDictStr<DateTime * (byte[])> 8
 
 let checkoutFile mime f = 
     try

@@ -19,8 +19,8 @@ let empty__Stats() = {
 type ModDict<'k,'v> = 
     {
         localizer: 'k -> int
-        exp2: int
-        partitions: Dictionary<'k,'v>[]
+        mutable exp2: int
+        mutable partitions: Dictionary<'k,'v>[]
         mutable count: int
         stats: Stats
         mutable concurrency_limit:int
@@ -99,6 +99,18 @@ type ModDict<'k,'v> =
             if partition.ContainsKey key then
                 partition.Remove key |> ignore
                 Interlocked.Decrement(&this.count) |> ignore)
+
+let ModDict_empty() = 
+    {
+        localizer = (fun id -> 0)
+        exp2 = 0
+        partitions = [| |]
+        count = 0 
+        stats = empty__Stats() 
+        concurrency_limit = 0
+        max_concurrency = 0
+        current_concurrency = 0
+        timeout = 1000 }
 
 type ModDictInt64<'v> = ModDict<int64,'v>
 type ModDictStr<'v> = ModDict<string,'v>

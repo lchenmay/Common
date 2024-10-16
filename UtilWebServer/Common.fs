@@ -104,5 +104,5 @@ let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
         wsHandler = (fun _ -> None)
         listener = new TcpListener(IPAddress.Any, 80)
         connId = ref 0L
-        queue = createMDInt64<Conn> 8
-        keeps = createMDInt64<Conn> 8 }
+        queue = createModDictInt64<Conn> 8
+        keeps = createModDictInt64<Conn> 8 }

@@ -33,7 +33,7 @@ let runTest output =
 
     let d1 = new Dictionary<int64,BigInteger>()
     let d2 = new ConcurrentDictionary<int64,BigInteger>()
-    let d3 = Util.CollectionModDict.createMDInt64<BigInteger> 10
+    let d3 = Util.CollectionModDict.createModDictInt64<BigInteger> 10
 
     let n = 1024 * 1024
 

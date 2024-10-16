@@ -22,9 +22,8 @@
 	  <Compile Include="Math\Math.fs" />
 	  <Compile Include="Math\Prob.fs" />
 	  <Compile Include="Math\LinearAlgebra.fs" />
-	  <Compile Include="Collection\Collection.fs" />
 	  <Compile Include="Collection\CollectionModDict.fs" />
-	  <Compile Include="Collection\CollectionSortedAccessor.fs" />
+	  <Compile Include="Collection\Collection.fs" />
 	  <Compile Include="Collection\LinearCache.fs" />
 	  <Compile Include="Math\Combinatorics.fs" />
 	  <Compile Include="SD\Base64.fs" />

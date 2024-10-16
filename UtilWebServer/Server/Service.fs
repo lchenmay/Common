@@ -16,7 +16,7 @@ open UtilWebServer.Server.Net
 
     
 let PushAll runtime json = 
-    runtime.keeps.array()
+    runtime.keeps.Values
     |> Array.Parallel.iter(sndJson runtime json)
 
 let startEngine runtime = 

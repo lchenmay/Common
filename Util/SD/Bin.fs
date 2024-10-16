@@ -10,6 +10,7 @@ open System.Numerics
 
 open Util.Perf
 open Util.Collection
+open Util.CollectionModDict
 open Util.Json
 
 type ByteArrayComparer() = 
@@ -483,6 +484,53 @@ let bin__ConcurrentDictionary<'K,'V>
             let v = bin__val bi
             dict[k] <- v))
 
+let ModDict__bin
+    key__bin 
+    val__bin
+    (bb:BytesBuilder)
+    (md:ModDict<'k,'v>) =
+        int32__bin bb md.exp2
+        md.ToArray()
+        |> array__bin (fun bb kvp -> 
+            key__bin bb kvp.Key
+            val__bin bb kvp.Value) bb
+
+let bin__ModDict 
+    exp2__md
+    bin__key
+    bin__val
+    bi = 
+
+    let exp2 = bin__int32 bi
+    let md:ModDict<'k,'v> = exp2__md exp2
+
+    bin__array (fun bi -> 
+        let k = bin__key bi
+        let v = bin__val bi
+        k,v) bi
+    |> Array.iter(fun (k,v) -> md[k] <- v)
+
+let ModDictStr__bin
+    val__bin
+    (bb:BytesBuilder)
+    (md:ModDictStr<'v>) = 
+    ModDict__bin str__bin
+
+let bin__ModDictStr 
+    bin__val
+    bi = 
+    bin__ModDict createModDictStr bin__str
+
+let ModDictInt64__bin 
+    val__bin
+    (bb:BytesBuilder)
+    (md:ModDictInt64<'v>) = 
+    ModDict__bin int64__bin
+
+let bin__ModDictInt64
+    bin__val
+    bi = 
+    bin__ModDict createModDictInt64 bin__int64
 
 // ======== Bits ==================
 

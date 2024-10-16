@@ -11,13 +11,13 @@ open Util.HttpServer
 
 let mutable fileErLoggero: (string * exn -> unit) option = None
 
-let cacheFile = create_mdIntString<DateTime * (byte[])> 8
+let cacheFile = createMDStr<DateTime * (byte[])> 8
 
 let checkoutFile mime f = 
     try
         if cacheFile.ContainsKey f then
             if DateTime.UtcNow.Subtract(fst cacheFile[f]).TotalMinutes > 1.0 then
-                cacheFile.remove f
+                cacheFile.Remove f
 
         if cacheFile.ContainsKey f = false then
             cacheFile[f] <- DateTime.UtcNow,File.ReadAllBytes f

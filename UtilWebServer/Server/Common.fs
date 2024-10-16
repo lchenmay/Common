@@ -54,9 +54,7 @@ let checkoutConn id client =
 let drop (collectiono:ModDict<int64,Conn> option) conn = 
 
     match collectiono with
-    | Some collection ->
-        if collection.ContainsKey conn.id then
-            collection.remove conn.id
+    | Some collection -> collection.Remove conn.id
     | None -> ()
 
     try

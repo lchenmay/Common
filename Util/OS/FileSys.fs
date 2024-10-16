@@ -279,39 +279,6 @@ let rec unpack (errors:List<string * string>) bi folder =
 let bin__path bin = unpack (new List<string * string>()) (bin,ref 0)
 let bin__pathwitherr errs bin = unpack errs (bin,ref 0)
 
-type ManagedFileSys =
-    {
-        md: ModDict<string,FileInfo>}
-
-    member this.locked_save mdi bs =
-            
-        let mutable res = ModDictTaskRes.Timeout
-            
-        try
-            System.IO.File.WriteAllBytes(mdi.key,bs)
-            res <- ModDictTaskRes.Accomplished
-        with
-        | :? System.IO.IOException as e -> res <- ModDictTaskRes.Exn
-        | ex -> res <- ModDictTaskRes.Exn
-
-        res
-
-    member this.savemulti mode (tasks:seq<string*byte[]>) = 
-
-        tasks
-        |> Seq.iter(fun task -> 
-            let file,bs = task
-            this.md.concurrent_task(None)(
-                mode,
-                (fun key -> new FileInfo(key)),
-                (fun mdi prms -> File.WriteAllBytes(mdi.key,prms)))
-                (file,bs))
-
-let empty__ManagedFileSys timeout = 
-    let res = { md = create_mdIntString<FileInfo> 8 }
-    res.md.timeout <- timeout
-    res
-
 let try_write_text_add path (text:string[]) =
     try
             

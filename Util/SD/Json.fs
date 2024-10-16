@@ -7,6 +7,8 @@ open System.Text
 
 open Util.Text
 open Util.Time
+open Util.CollectionModDict
+open Util.Collection
 
 (*
 JSON有三类元素： 
@@ -1184,6 +1186,39 @@ let json__ConcurrentDictionaryo<'K,'V>
                     let vo = json__valo valo.Value
                     if ko.IsSome && vo.IsSome then
                         dict[ko.Value] <- vo.Value)
+            Some dict
+        | _ -> None)
+
+let ModDict__json
+    key__json
+    val__json
+    (md:ModDict<'k,'v>) =
+        lock md (fun _ ->
+            md.ToArray()
+            |> Array.map(fun kvp -> 
+                [|  "key",(key__json kvp.Key)
+                    "val",val__json kvp.Value |]
+                |> Json.Braket)
+            |> Json.Ary)
+
+let json__ModDict<'k,'v> 
+    (json__keyo:Json -> 'k option)
+    (json__valo:Json -> 'v option)
+    (md:ModDict<'k,'v>)
+    json = 
+    lock md (fun _ ->
+        md.Clear()
+        match json with
+        | Json.Ary items -> 
+            items
+            |> Array.iter(fun i -> 
+                let keyo = json__tryFindByName i "key"
+                let valo = json__tryFindByName i "val"
+                if keyo.IsSome && valo.IsSome then
+                    let ko = json__keyo keyo.Value
+                    let vo = json__valo valo.Value
+                    if ko.IsSome && vo.IsSome then
+                        md[ko.Value] <- vo.Value)
             Some dict
         | _ -> None)
 

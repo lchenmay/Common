@@ -8,6 +8,7 @@ open System.Collections.Immutable
 open System.Linq
 
 open Util.Perf
+open Util.CollectionModDict
 
 let filter<'A,'B> matcher (data:'A[]) = 
     let res = List<'B>()
@@ -211,6 +212,20 @@ let tryCheckOrCreateSortedDictionary
     else
         Some dict[key]
 
+
+let tryCheckOrCreateModDict
+    creator (md:ModDict<'k,'v>) 
+    k = 
+
+    if md.ContainsKey k = false then
+        match creator k with
+        | Some v -> 
+            md[k] <- v
+            Some v
+        | None -> None
+    else
+        Some md[k]
+
 let checkOrCreateDictionary 
     creator (dict:Dictionary<'K,'V>) 
     key = 
@@ -226,6 +241,14 @@ let checkOrCreateSortedDictionary
     if dict.ContainsKey key = false then
         dict[key] <- creator key
     dict[key]
+
+let checkOrCreateModDict
+    creator (md:ModDict<'k,'v>) 
+    k = 
+
+    if md.ContainsKey k = false then
+        md[k] <- creator k
+    md[k]
 
 let clearDictionary 
     filter

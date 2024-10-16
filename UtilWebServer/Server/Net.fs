@@ -127,7 +127,7 @@ let cycleAccept runtime = fun () ->
     //s.Close()
 
 let cycleRcv runtime = fun () ->
-    runtime.queue.array()
+    runtime.queue.Values
     |> Array.filter(fun conn -> 
         try
             conn.ns.DataAvailable
@@ -139,7 +139,7 @@ let cycleRcv runtime = fun () ->
 
 let cycleWs runtime = fun () ->
 
-    runtime.keeps.array()
+    runtime.keeps.Values
     |> Array.filter(fun conn -> 
         try
             conn.ns.DataAvailable

@@ -1202,25 +1202,33 @@ let ModDict__json
             |> Json.Ary)
 
 let json__ModDict<'k,'v> 
+    exp2__md
     (json__keyo:Json -> 'k option)
     (json__valo:Json -> 'v option)
-    (md:ModDict<'k,'v>)
     json = 
-    lock md (fun _ ->
-        md.Clear()
-        match json with
-        | Json.Ary items -> 
-            items
-            |> Array.iter(fun i -> 
-                let keyo = json__tryFindByName i "key"
-                let valo = json__tryFindByName i "val"
-                if keyo.IsSome && valo.IsSome then
-                    let ko = json__keyo keyo.Value
-                    let vo = json__valo valo.Value
-                    if ko.IsSome && vo.IsSome then
-                        md[ko.Value] <- vo.Value)
-            Some dict
-        | _ -> None)
+
+    let md:ModDict<'k,'v> = exp2__md 1
+
+    match json with
+    | Json.Ary items -> 
+        items
+        |> Array.iter(fun i -> 
+            let keyo = json__tryFindByName i "key"
+            let valo = json__tryFindByName i "val"
+            if keyo.IsSome && valo.IsSome then
+                let ko = json__keyo keyo.Value
+                let vo = json__valo valo.Value
+                if ko.IsSome && vo.IsSome then
+                    md[ko.Value] <- vo.Value)
+    | _ -> ()
+
+    md
+
+let ModDictStr__json<'v> = ModDict__json str__json
+let json__ModDictStr<'v> = json__ModDict createModDictStr<'v> json__stro
+
+let ModDictInt64__json<'v> = ModDict__json int64__json
+let json__ModDictInt64<'v> = json__ModDict createModDictInt64<'v> json__int64o
 
 let findStrValueByAttNameWithDefault def attName j =
     match tryFindByAtt attName j with

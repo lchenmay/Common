@@ -510,16 +510,15 @@ let bin__ModDict
         k,v) bi
     |> Array.iter(fun (k,v) -> md[k] <- v)
 
+    md
+
 let ModDictStr__bin
     val__bin
     (bb:BytesBuilder)
     (md:ModDictStr<'v>) = 
     ModDict__bin str__bin
 
-let bin__ModDictStr 
-    bin__val
-    bi = 
-    bin__ModDict createModDictStr bin__str
+let bin__ModDictStr<'v> = bin__ModDict createModDictStr<'v> bin__str 
 
 let ModDictInt64__bin 
     val__bin

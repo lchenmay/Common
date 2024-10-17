@@ -131,7 +131,7 @@ let private comparerInt64 = new ComparerInt64()
 let createModDictInt64<'v> exp2: ModDictInt64<'v> = 
     let mods = exp2_mods<int64,'v> comparerInt64 exp2
     {
-        localizer = (fun id -> int(id % mods.LongLength))
+        localizer = (fun id -> moduloInt64 id mods.LongLength |> int)
         exp2 = exp2
         partitions = mods
         count = 0 
@@ -158,11 +158,7 @@ let createModDictStr<'v> exp2: ModDictStr<'v> =
         localizer = (fun (k:string) ->
             let bin = k |> System.Text.Encoding.UTF8.GetBytes
             let i = BigInteger bin
-            let mod = i % m |> int
-            if mod >= 0 then
-                mod
-            else
-                mod + m) 
+            moduloBigNumber (BigInteger bin) m |> int)
         exp2 = exp2
         partitions = mods 
         count = 0 

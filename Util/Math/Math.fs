@@ -15,6 +15,15 @@ let int32Pow x y =
     |> Array.iter(fun i -> p <- p * x)
     p
 
+// Int64 ====================
+
+let moduloInt64 a b =
+    let r = a % b
+    if r < 0L then
+        r + b
+    else 
+        r
+
 // Big number =============================================================
 
 let e2s256 = 
@@ -28,7 +37,7 @@ let bin__bigint256 (bin:byte[]) =
         e2s256[i * 8] * (BigInteger.CreateTruncating v))
     |> Array.sum
     
-let modulo a b = 
+let moduloBigNumber a b = 
     let r = a % b
     if r < BigInteger.Zero then
         r + b
@@ -239,7 +248,7 @@ let rec gcdBezout (a:BigInteger,b:BigInteger) =
     if b.IsZero then
         a, BigInteger.One, BigInteger.Zero
     else
-        let gcd,x,y = gcdBezout (b, modulo a b)
+        let gcd,x,y = gcdBezout (b, moduloBigNumber a b)
         gcd, y, x - (a / b) * y
 
 let gfInv p n = 
@@ -247,9 +256,9 @@ let gfInv p n =
     use cw = new CodeWrapper("Util.Math.gfInv")
 
     let gcd,x,y = gcdBezout (n,p)
-    modulo ((modulo x p) + p) p
+    moduloBigNumber ((moduloBigNumber x p) + p) p
 
-let gfDiv p x y = modulo (x * (gfInv p y)) p
+let gfDiv p x y = moduloBigNumber (x * (gfInv p y)) p
 
 // Elliptic Curve =============================================================
 // y^2 = x^3 + ax + b
@@ -291,8 +300,8 @@ let ecGaloisAdd p a (P:ecPoint,Q:ecPoint) =
         match mo with
         | None -> infy
         | Some m ->
-            let rx = modulo (m * m - px - qx)  p
-            let ry = modulo (- py - m * (rx - px)) p
+            let rx = moduloBigNumber (m * m - px - qx)  p
+            let ry = moduloBigNumber (- py - m * (rx - px)) p
             rx,ry
 
 // https://graui.de/code/elliptic2/

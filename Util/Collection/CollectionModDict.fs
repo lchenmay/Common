@@ -158,7 +158,11 @@ let createModDictStr<'v> exp2: ModDictStr<'v> =
         localizer = (fun (k:string) ->
             let bin = k |> System.Text.Encoding.UTF8.GetBytes
             let i = BigInteger bin
-            i % m |> int) 
+            let mod = i % m |> int
+            if mod >= 0 then
+                mod
+            else
+                mod + m) 
         exp2 = exp2
         partitions = mods 
         count = 0 

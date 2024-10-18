@@ -201,7 +201,7 @@ let token__client token =
 
     client
 
-let sendMsg output (client:DiscordSocketClient) guildId channelId (content,embedding) = 
+let sendMsg output (client:DiscordSocketClient) guildId channelId (content,embedding:string) = 
 
     [|  "guild = " + guildId.ToString()
         ", channel = " + channelId.ToString() |]
@@ -212,14 +212,15 @@ let sendMsg output (client:DiscordSocketClient) guildId channelId (content,embed
         let guild = client.GetGuild guildId
         let channel = guild.GetTextChannel channelId
 
+        let t = 
+            if embedding.Length > 0 then
+                let eb = (new EmbedBuilder()).WithDescription embedding
+                eb.Color <- new Color(0x24,0xEB,0x1F)
+                //await Context.Channel.SendMessageAsync("", false, eb.Build());
 
-        let eb = (new EmbedBuilder()).WithDescription embedding
-        eb.Color <- new Color(0x24,0xEB,0x1F)
-        //await Context.Channel.SendMessageAsync("", false, eb.Build());
-
-
-        let t = channel.SendMessageAsync(content,false,eb.Build())
-        //let t = channel.SendMessageAsync content
+                channel.SendMessageAsync(content,false,eb.Build())
+            else
+                channel.SendMessageAsync content
 
         let mutable finished = false
 

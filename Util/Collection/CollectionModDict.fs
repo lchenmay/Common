@@ -16,10 +16,18 @@ let empty__Stats() = {
     totalAccess = 0L
     maxConcurrency = 0L }
 
+let exp2_mods<'k,'v>
+    (comparer:IEqualityComparer<'k>)
+    exp2 =
+    let mutable partition = int32Pow 2 exp2
+    [| 0 .. partition - 1 |]
+    |> Array.map(fun i -> new Dictionary<'k,'v>(comparer))
+
 type ModDict<'k,'v> = 
     {
         localizer: 'k -> int
         mutable exp2: int
+        comparer:IEqualityComparer<'k>
         mutable partitions: Dictionary<'k,'v>[]
         mutable count: int
         stats: Stats
@@ -100,11 +108,24 @@ type ModDict<'k,'v> =
                 partition.Remove key |> ignore
                 Interlocked.Decrement(&this.count) |> ignore)
 
+    member this.Reset exp2 = 
+        lock this (fun _ -> 
+
+            let ary = this.ToArray()
+
+            this.exp2 <- exp2
+            this.partitions <- exp2_mods<'k,'v> this.comparer this.exp2
+            this.Clear()
+
+            ary
+            |> Array.iter(fun kvp -> this[kvp.Key] <- kvp.Value))
+
 let ModDict_empty() = 
     {
         localizer = (fun id -> 0)
         exp2 = 0
         partitions = [| |]
+        comparer = null
         count = 0 
         stats = empty__Stats() 
         concurrency_limit = 0
@@ -114,13 +135,6 @@ let ModDict_empty() =
 
 type ModDictInt64<'v> = ModDict<int64,'v>
 type ModDictStr<'v> = ModDict<string,'v>
-
-let exp2_mods<'k,'v>
-    (comparer:IEqualityComparer<'k>)
-    exp2 =
-    let mutable partition = int32Pow 2 exp2
-    [| 0 .. partition - 1 |]
-    |> Array.map(fun i -> new Dictionary<'k,'v>(comparer))
 
 type private ComparerInt64() =
     interface IEqualityComparer<int64> with
@@ -133,6 +147,7 @@ let createModDictInt64<'v> exp2: ModDictInt64<'v> =
     {
         localizer = (fun id -> moduloInt64 id mods.LongLength |> int)
         exp2 = exp2
+        comparer = comparerInt64
         partitions = mods
         count = 0 
         stats = empty__Stats() 
@@ -160,6 +175,7 @@ let createModDictStr<'v> exp2: ModDictStr<'v> =
             let i = BigInteger bin
             moduloBigNumber (BigInteger bin) m |> int)
         exp2 = exp2
+        comparer = comparerString
         partitions = mods 
         count = 0 
         stats = empty__Stats() 

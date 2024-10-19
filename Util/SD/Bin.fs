@@ -515,8 +515,16 @@ let bin__ModDict
 let ModDictStr__bin val__bin bb md = ModDict__bin str__bin val__bin bb md
 let bin__ModDictStr<'v> = bin__ModDict createModDictStr<'v> bin__str 
 
-let ModDictInt64__bin<'v> = ModDict__bin int64__bin
-let bin__ModDictInt64<'v> = bin__ModDict createModDictInt64 bin__int64
+let ModDictInt64__bin
+    (val__bin:BytesBuilder -> 'v -> unit)
+    (bb:BytesBuilder)
+    (md:ModDict<'k,'v>) =
+    ModDict__bin int64__bin val__bin bb md
+
+let bin__ModDictInt64
+    bin__val
+    bi: ModDictInt64<'v> = 
+    bin__ModDict createModDictInt64 bin__int64 bin__val bi
 
 // ======== Bits ==================
 

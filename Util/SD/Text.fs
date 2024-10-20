@@ -401,6 +401,23 @@ let str__lines (delim:string) (s:string) =
 
     lines.ToArray()
 
+let tryTake (lines:string[]) (head:string,rear:string) back =
+    
+    match lines |> Array.tryFindIndex(fun line -> line.StartsWith head) with
+    | Some i1 ->
+
+        let residual = Array.sub lines i1 (lines.Length - i1)
+
+        match
+            if back then
+                residual |> Array.tryFindIndexBack(fun line -> line.StartsWith rear)
+            else
+                residual |> Array.tryFindIndex(fun line -> line.StartsWith rear) with
+        | Some i2 -> Array.sub residual 0 (i2 + 1)
+        | None -> [| |]
+    | None -> [| |]
+
+
 // Time ==============================================================
 
 let date_key(utc:DateTime)=

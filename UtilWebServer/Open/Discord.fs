@@ -201,7 +201,12 @@ let token__client token =
 
     client
 
-let sendMsg output (client:DiscordSocketClient) guildId channelId (content,embedding:string) = 
+let sendMsg 
+    output 
+    (client:DiscordSocketClient) 
+    guildId 
+    channelId 
+    (content,embedding:string) = 
 
     [|  "guild = " + guildId.ToString()
         ", channel = " + channelId.ToString() |]
@@ -238,5 +243,55 @@ let sendMsg output (client:DiscordSocketClient) guildId channelId (content,embed
     with
     | ex -> 
         ex.ToString() |> output
+
+let sendMsgWithButton
+    output 
+    (client:DiscordSocketClient) 
+    guildId 
+    channelId 
+    (content,embedding:string) = 
+
+    [|  "guild = " + guildId.ToString()
+        ", channel = " + channelId.ToString() |]
+    |> String.Concat
+    |> output
+
+    try
+        let guild = client.GetGuild guildId
+        let channel = guild.GetTextChannel channelId
+
+        let button1 = 
+            (new ButtonBuilder()).WithLabel("😢Not a Glitch").WithStyle(ButtonStyle.Danger).WithCustomId("NO")
+        let button2 = 
+            (new ButtonBuilder()).WithLabel("🔪GLITCH!!!").WithStyle(ButtonStyle.Success).WithCustomId("YES")
+        let cb = (new ComponentBuilder()).WithButton(button1).WithButton(button2)
+
+        let t = 
+            if embedding.Length > 0 then
+                let eb = (new EmbedBuilder()).WithDescription embedding
+                eb.Color <- new Color(0x24,0xEB,0x1F)
+                //await Context.Channel.SendMessageAsync("", false, eb.Build());
+
+                channel.SendMessageAsync(content,false,eb.Build(), null, null, null,cb.Build())
+            else
+                channel.SendMessageAsync content
+
+        let mutable finished = false
+
+        output "Sending ..."
+
+        async{
+            let! res = Async.AwaitTask t
+            finished <- true
+        }|> Async.RunSynchronously
+
+        while finished = false do
+            System.Threading.Thread.Sleep 300
+
+        output "Finished."
+    with
+    | ex -> 
+        ex.ToString() |> output
+
 
 

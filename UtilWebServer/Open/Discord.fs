@@ -220,11 +220,6 @@ let sendMsg
         let guild = client.GetGuild guildId
         let channel = guild.GetTextChannel channelId
 
-        let button1 = 
-            (new ButtonBuilder()).WithLabel("😢Not a Glitch").WithStyle(ButtonStyle.Danger).WithCustomId("NO")
-        let button2 = 
-            (new ButtonBuilder()).WithLabel("🔪GLITCH!!!").WithStyle(ButtonStyle.Success).WithCustomId("YES")
-
         let mutable cb = (new ComponentBuilder())
         match prepo with
         | Some prep -> cb <- prep cb

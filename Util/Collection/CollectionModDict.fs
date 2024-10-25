@@ -121,9 +121,9 @@ type ModDict<'k,'v> =
             |> Array.iter(fun kvp -> this[kvp.Key] <- kvp.Value))
 
 let ModDict_empty() = 
-    {
+    let md = {
         localizer = (fun id -> 0)
-        exp2 = 1
+        exp2 = 0
         partitions = [| |]
         comparer = null
         count = 0 
@@ -132,6 +132,8 @@ let ModDict_empty() =
         max_concurrency = 0
         current_concurrency = 0
         timeout = 1000 }
+    md.Reset 1
+    md
 
 type ModDictInt64<'v> = ModDict<int64,'v>
 type ModDictStr<'v> = ModDict<string,'v>

@@ -518,7 +518,7 @@ let bin__ModDictStr<'v> = bin__ModDict createModDictStr<'v> bin__str
 let ModDictInt64__bin
     (val__bin:BytesBuilder -> 'v -> unit)
     (bb:BytesBuilder)
-    (md:ModDict<'k,'v>) =
+    (md:ModDictInt64<'v>) =
     ModDict__bin int64__bin val__bin bb md
 
 let bin__ModDictInt64

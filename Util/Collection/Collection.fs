@@ -286,17 +286,6 @@ let clearConcurrentDictionary
         |> Array.map(fun (k,v) -> dict.Remove k)
         |> ignore)
 
-let clearModDict
-    filter
-    (dict:ModDict<'K,'V>) = 
-
-    lock dict (fun i -> 
-        dict.Keys
-        |> Array.map(fun k -> k,dict[k])
-        |> Array.filter(fun (k,v) -> filter v)
-        |> Array.map(fun (k,v) -> dict.Remove k)
-        |> ignore)
-
 //<string> ================================================
 
 let checkfield(fields:Dictionary<string,string>) key =

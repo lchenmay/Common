@@ -759,6 +759,10 @@ let httpGeta (headers:Dictionary<string,string> option) (url:string) =
     }
 
 let httpGet (headers:Dictionary<string,string> option) (url:string) = url |> httpGeta headers |> Async.RunSynchronously
+let httpGetSleep (interval:int) (headers:Dictionary<string,string> option) (url:string) =
+    let res = httpGet headers url
+    System.Threading.Thread.Sleep interval
+    res
 
 let httpPosta(url:string,postdata) = 
 

@@ -110,34 +110,31 @@ let socialAuth
         let json = x.json
         let biz = tryFindStrByAtt "biz" json
         let code = tryFindStrByAtt "code" json
-        let redirectUrl = tryFindStrByAtt "redirectUrl" json
+        let redirectUrl = tryFindStrByAtt "redirecturl" json
 
         match biz with
-        //| "DISCORD" ->
-        //    match
-        //        Discord.requestAccessToken
-        //            discord
-        //            redirectUrl
-        //            code
-        //        |> Discord.requestUserInfo with
-        //    | Some (uid,usernameWithdiscriminator, avatar, json) -> 
+        | "DISCORD" ->
+            let (token, js) = Discord.requestAccessToken discord redirectUrl code
+            match
+                token |> Discord.requestUserInfo with
+            | Some (uid,usernameWithdiscriminator, avatar, json) -> 
 
-        //        match 
-        //            (uid.ToString(),usernameWithdiscriminator,avatar)
-        //            |> checkoutEu "DISCORD" with
-        //        | Some user -> 
+                match 
+                    (uid.ToString(),usernameWithdiscriminator,avatar)
+                    |> checkoutEu "DISCORD" with
+                | Some user -> 
 
-        //            let session = 
-        //                user 
-        //                |> user__session runtime.sessions
+                    let session = 
+                        user 
+                        |> user__session runtime.sessions
 
-        //            [|  ok
-        //                ("session", session.session |> Json.Str)
-        //                ("ec", user |> v__json)   |]
+                    [|  ok
+                        ("session", session.session |> Json.Str)
+                        ("ec", user |> v__json)   |]
 
-        //        | None -> er erInternal
+                | None -> er erInternal
 
-        //    | None -> er erInvalideParameter
+            | None -> er erInvalideParameter
 
         | _ -> er erInvalideParameter
 

@@ -56,10 +56,10 @@ let requestAccessToken
     let postdata = 
         [|  "client_id=" + client_id
             "&client_secret=" + client_sceret
-            "&grant_type=authorization_code"
+            "&code=" + code
             "&redirect_uri=" + redirect_url
-            "&code=" + code  |]
-        |> String.Concat
+            "&grant_type=authorization_code"
+        |] |> String.Concat
     let json = hc.post(urlRequestAuthCode,postdata).html
     let code = 
         json 

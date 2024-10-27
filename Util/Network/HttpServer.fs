@@ -129,9 +129,9 @@ let bsx__httprequest(ip,port,acceptedat,receivedat,sendstartedat,sendendedat) bs
         log "Invalid HTTP request"
         None,(headers,body)
 
-let bs__httpRequest bs = 
+let bs__httpRequest (ip,bs) = 
     let now = DateTime.UtcNow
-    bsx__httprequest("",0,now,now,now,now) bs
+    bsx__httprequest(ip,0,now,now,now,now) bs
 
 let header(hres, bodybytes:byte[]) =
     let sb = new List<string>()
@@ -213,7 +213,7 @@ let str__StandardResponse mime (str:string) =
     |> bin__StandardResponse mime
 
 
-let incomingProcess (bin:byte[]) = 
+let incomingProcess (ip,bin:byte[]) = 
     
     let txt = bin |> Encoding.ASCII.GetString
 
@@ -245,8 +245,7 @@ let incomingProcess (bin:byte[]) =
             |> Encoding.ASCII.GetBytes
             |> HttpRequestWithWS.WebSocketUpgrade
         else
-            bin
-            |> bs__httpRequest
+            bs__httpRequest(ip,bin)
             |> HttpRequestWithWS.Echo
     else
         HttpRequestWithWS.InvalidRequest

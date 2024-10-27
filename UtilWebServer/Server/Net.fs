@@ -28,9 +28,7 @@ let read conn =
         bb.append bs
 
         let bin = bb.bytes()
-
-        bin
-        |> Some
+        Some (conn.client.Client.RemoteEndPoint.ToString(),bin)
 
      with
     | ex -> None
@@ -42,7 +40,7 @@ let rcv runtime conn =
         //"Conn [" + conn.id.ToString() + "] Receving ..." |> runtime.output
 
         match read conn with
-        | Some incoming -> 
+        | Some (ip,incoming) -> 
 
             "Incomining " + incoming.Length.ToString() + " bytes"
             |> runtime.output
@@ -51,7 +49,7 @@ let rcv runtime conn =
             |> hex
             |> runtime.output
 
-            match incomingProcess incoming with
+            match incomingProcess (ip,incoming) with
             | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
 
                 match reqo with

@@ -149,7 +149,7 @@ let cycleWs runtime = fun () ->
     
         use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/Array.Parallel")
         match read conn with
-        | Some incoming ->
+        | Some (ip,incoming) ->
             if incoming.Length > 0 then
                 incoming |> outputHex runtime.output "WS Incoming Raw:"
                 let bits = bytes__bits incoming

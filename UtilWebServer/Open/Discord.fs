@@ -1,5 +1,7 @@
 ﻿module UtilWebServer.Open.Discord
 
+open FSharp.Control
+
 open System
 open System.Threading
 open System.Threading.Tasks
@@ -200,6 +202,45 @@ let token__client token =
         System.Threading.Thread.Sleep 300
 
     client
+
+let loadMessages
+    output 
+    (client:DiscordSocketClient) 
+    guildId 
+    channelId  = 
+
+    [|  "guild = " + guildId.ToString()
+        ", channel = " + channelId.ToString() |]
+    |> String.Concat
+    |> output
+    
+    try
+        let guild = client.GetGuild guildId
+        let channel = guild.GetTextChannel channelId
+
+        output "Loading ..."
+        
+        let res = new System.Collections.Generic.List<IMessage>()
+        async{
+            let collection = channel.GetMessagesAsync() 
+            let e = collection.GetAsyncEnumerator()
+            while e.MoveNextAsync().AsTask() |> Async.AwaitTask |> Async.RunSynchronously do 
+                e.Current
+                |> Seq.toArray
+                |> res.AddRange
+        } |> Async.RunSynchronously
+        let a = res[0]
+        a
+        "Finished."
+        |> output
+
+        res.ToArray()
+    with
+    | ex -> 
+        ex.ToString() |> output
+
+        [| |]
+
 
 let sendMsg
     output 

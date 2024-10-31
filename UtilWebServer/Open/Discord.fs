@@ -229,8 +229,7 @@ let loadMessages
                 |> Seq.toArray
                 |> res.AddRange
         } |> Async.RunSynchronously
-        let a = res[0]
-        a
+
         "Finished."
         |> output
 

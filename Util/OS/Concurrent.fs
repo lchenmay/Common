@@ -114,6 +114,10 @@ let internal synchronize f =
 //        System.Console.WriteLine(" ... ")
 //        System.Threading.Thread.Sleep(1000)
 
+let waitSleep (interval:int) predicate = 
+    while predicate() do
+        System.Threading.Thread.Sleep interval
+
 let asyncCycler body = 
     async{
         while true do
@@ -180,6 +184,7 @@ let threadCyclerIntervalTry priority interval exception_handler body =
     let t = new Thread(f)
     t.Priority <- ThreadPriority.Highest
     t.Start()
+
 
 let asyncInNewThread body = 
     async {

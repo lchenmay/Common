@@ -732,30 +732,18 @@ let httpGeta (headers:Dictionary<string,string> option) (url:string) =
             use client = new System.Net.Http.HttpClient()
             client.Timeout <- new TimeSpan(0, 0, 20)
             let cts = new System.Threading.CancellationToken()
-            #if Debug
-            if url <> "https://ssr.gcms.cc/" then
-                printfn "-->Get Timeout = %A, url = %A" client.Timeout url
-            #endif
             if headers.IsSome && headers.Value.Count > 0 then
                 for kv in headers.Value do
                     client.DefaultRequestHeaders.Add(kv.Key,kv.Value)
             let! response = client.GetAsync(url,cts) |> Async.AwaitTask
             // response.EnsureSuccessStatusCode () |> ignore
-            #if Debug
-            if url <> "https://ssr.gcms.cc/" then
-                printfn "<--Get Reps : status = %A, url= %A" response.StatusCode url
-            #endif
             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            return response.StatusCode.ToString(), content
+            return (url,response.StatusCode.ToString()), content
         with
         | :? System.Threading.Tasks.TaskCanceledException as ex ->
-            let msg = sprintf "[%A] no response after 20 seconds . \n Exception %A" url ex
-            printfn "%s" msg
-            return msg,""
+            return (url,ex.ToString()),""
         | e -> 
-            let msg = url + " " + e.ToString()
-            printf "Get Exception : %A\n" msg
-            return msg,""
+            return (url,e.ToString()),""
     }
 
 let httpGet (headers:Dictionary<string,string> option) (url:string) = url |> httpGeta headers |> Async.RunSynchronously

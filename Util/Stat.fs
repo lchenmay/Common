@@ -18,6 +18,7 @@ mc: float
 md: float
 min: float
 max: float
+histogram: int[]
 count: int }
 
 type SpotInStat = {
@@ -27,6 +28,42 @@ anchor: float
 digit: int
 unit: string
 stat: Stat }
+
+let sample__histogram (sample:float[]) =
+
+    if sample.Length = 0 then
+        [| |]
+    else
+        let inf = sample |> Array.min
+        let sup =  sample |> Array.max
+        let range = sup - inf
+        if range = 0.0 then
+            [| sample.Length |]
+        else if sample.Length < 30 then
+            [| sample.Length |]
+        else
+            let n = 
+                if sample.Length < 100 then
+                    30
+                else if sample.Length > 300 then
+                    100
+                else
+                    50
+
+            let res = Array.zeroCreate n
+
+            sample
+            |> Array.iter(fun v -> 
+                let index = 
+                    let i = (float n) * (v - inf) / range |> int
+                    if i = n then
+                        n - 1
+                    else
+                        i
+                res[index] <- res[index] + 1)
+
+            res
+        
 
 let sample__stat (sample:float[]) = 
     let mean,var,middle,min,max = meanVarMiddleRange sample
@@ -42,6 +79,7 @@ let sample__stat (sample:float[]) =
         md = d
         min = min
         max = max
+        histogram = sample__histogram sample
         count = sample.Length }
 
 let spot__SpotInStat (digit,unit) spot samples = 
@@ -83,6 +121,7 @@ let Stat_empty(): Stat =
         md = 0.0
         min = 0.0
         max = 0.0
+        histogram = [| |]
         count = 0
     }
 
@@ -134,6 +173,9 @@ let bin__Stat (bi:BinIndexed):Stat =
         max =
             bi
             |> bin__float
+        histogram = 
+            bi
+            |> bin__array bin__int32
         count =
             bi
             |> bin__int32
@@ -151,6 +193,7 @@ let Stat__json (v:Stat) =
         ("md",float__json v.md)
         ("min",float__json v.min)
         ("max",float__json v.max)
+        ("histogram",array__json int32__json v.histogram)
         ("count",int32__json v.count)
          |]
     |> Json.Braket
@@ -287,6 +330,18 @@ let json__Stato (json:Json):Stat option =
                 passOptions <- false
                 None
 
+    let histogramo =
+        match json__tryFindByName json "histogram" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__arrayo json__int32o with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
     let counto =
         match json__tryFindByName json "count" with
         | None ->
@@ -311,6 +366,7 @@ let json__Stato (json:Json):Stat option =
             md = mdo.Value
             min = mino.Value
             max = maxo.Value
+            histogram = histogramo.Value
             count = counto.Value} |> Some
     else
         None

@@ -18,7 +18,7 @@ mc: float
 md: float
 min: float
 max: float
-histogram: int[]
+mutable histogram: int[]
 count: int }
 
 type SpotInStat = {

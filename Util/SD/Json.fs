@@ -120,7 +120,7 @@ let tryFindByAtt attName json =
     | Json.Braket items -> items |> Array.tryFind(fun (n,_) -> n = attName)
     | _ -> None
 
-let tryFindStrByAtt attName json =
+let tryFindStrByAttWithDefault dft attName json = 
     match json with
     | Json.Braket items -> 
         match 
@@ -129,9 +129,11 @@ let tryFindStrByAtt attName json =
         | Some (n,v) -> 
             match v with
             | Json.Str s -> s
-            | _ -> ""
-        | _ -> ""
-    | _ -> ""
+            | _ -> dft
+        | _ -> dft
+    | _ -> dft
+
+let tryFindStrByAtt = tryFindStrByAttWithDefault ""
 
 let tryFindNumByAtt attName json =
     match json with
@@ -145,6 +147,16 @@ let tryFindNumByAtt attName json =
             | _ -> ""
         | _ -> ""
     | _ -> ""
+
+let tryFindInt32ByAttWithDefault dft attName json = 
+    match tryFindNumByAtt attName json |> try_parse_int32 with
+    | Some v -> v
+    | None -> dft
+
+let tryFindFloatByAttWithDefault dft attName json = 
+    match tryFindNumByAtt attName json |> try_parse_float with
+    | Some v -> v
+    | None -> dft
 
 let tryFindAryByAtt attName json =
     match json with

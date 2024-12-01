@@ -203,3 +203,20 @@ let dict__ModDictStr (dict:Dictionary<string,'v>) =
     dict
     |> Seq.iter(fun kvp -> md[kvp.Key] <- kvp.Value)
     md
+
+let array__ModDictInt64 exp v__k items = 
+    let md = createModDictInt64 exp
+    items
+    |> Array.iter(fun v -> 
+        let k = v__k v
+        md[k] <- v)
+    md
+
+let array__ModDictStr exp v__k items = 
+    let md = createModDictStr exp
+    items
+    |> Array.iter(fun v -> 
+        let k = v__k v
+        md[k] <- v)
+    md
+

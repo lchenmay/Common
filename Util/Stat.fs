@@ -23,7 +23,7 @@ count: int }
 
 type SpotInStat = {
 deviation: float
-spot: float
+mutable spot: float
 anchor: float
 digit: int
 unit: string

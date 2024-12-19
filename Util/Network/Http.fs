@@ -90,7 +90,7 @@ let create_cookie_expiry(expiry:DateTime) =
         " GMT" |]
     |> String.concat("")
 
-let regex_ip = new Regex(@"[^\x2c\s]+", Util.Text.regex_options)
+let regex_ip = new Regex(@"[\w\.\x3a]+", Util.Text.regex_options)
 
 let headers__txt (headers:Dictionary<string,string>) = 
     headers.Keys
@@ -120,10 +120,13 @@ type HttpRequest =
 
     member this.remote_ip() = 
         let init_proxy_ip = 
-            ("X-Forwarded-For")
-            |> Util.Json.checkfield(this.headers)
-            |> Util.Text.regex_match(regex_ip)
-        if(init_proxy_ip.Length > 0) then
+            let k = "X-Forwarded-For"
+            if this.headers.ContainsKey k then
+                let v = this.headers[k]
+                v |> Util.Text.regex_match regex_ip
+            else
+                ""
+        if init_proxy_ip.Length > 0 then
             init_proxy_ip
         else 
             this.ip

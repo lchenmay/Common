@@ -43,7 +43,7 @@ let vueIndexFile__hashes file =
     hash1,hash2
 
 let render 
-    (hash1,hash2)
+    (hash1,hash2) GoogleAds
     ssrPage = 
         let html = $"""<!DOCTYPE html>
 <html lang="en">
@@ -60,6 +60,7 @@ let render
     <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
     <script type="module" crossorigin src="/js/index.{hash1}.js"></script>
     <link rel="stylesheet" crossorigin href="/as/index.{hash2}.css" />
+    {GoogleAds}
 </head>
 
 <body>

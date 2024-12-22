@@ -72,8 +72,8 @@ let render
   <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
   <script src="/panel.js"></script>
   {imports}
-  <script type="module" crossorigin src="https://jessi.love/js/index.{hash1}.js"></script>
-  <link rel="stylesheet" crossorigin href="https://jessi.love/as/index.{hash2}.css" />
+  <script type="module" crossorigin src="/js/index.{hash1}.js"></script>
+  <link rel="stylesheet" crossorigin href="/as/index.{hash2}.css" />
   {plugin}
 </head>
 

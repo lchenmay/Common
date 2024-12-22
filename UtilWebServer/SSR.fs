@@ -55,7 +55,8 @@ let render
     }
   </script>
         """
-        let html = $"""
+        
+        $"""
 <!DOCTYPE html>
 <html lang="en">
 
@@ -72,7 +73,6 @@ let render
   <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
   <script src="/panel.js"></script>
   {imports}
-
   <script type="module" crossorigin src="/js/index.{hash1}.js"></script>
   <link rel="stylesheet" crossorigin href="/as/index.{hash2}.css" />
   {plugin}
@@ -84,9 +84,8 @@ let render
 </body>
 
 </html>
-""" 
-
-        html |> Encoding.UTF8.GetBytes
+        """ 
+        |> Encoding.UTF8.GetBytes
 
 let hpattern (pattern:string) h x = 
     let req = x.req

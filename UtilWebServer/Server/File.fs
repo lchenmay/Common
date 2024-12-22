@@ -31,44 +31,45 @@ let checkoutFile mime f =
         handlero fileErLoggero (f,ex)
         None
 
-let fileService root defaultHtml req = 
+let fileService fsDir vueDeployDir req = 
 
-    if req.pathline = "/" then
-        Path.Combine(root, defaultHtml)
-        |> checkoutFile "text/html"
-    elif req.path.Length > 0 then
+    let mutable file = 
+        [|  [| fsDir |]
+            req.path |]
+        |> Array.concat
+        |> Path.Combine
 
-        let file = 
-            [|  [| root |]
+    if File.Exists file = false then
+        file <- 
+            [|  [| vueDeployDir |]
                 req.path |]
             |> Array.concat
             |> Path.Combine
 
-        if File.Exists file then
-            let filename = req.path[req.path.Length - 1]
+    if File.Exists file then
+        let filename = req.path[req.path.Length - 1]
 
-            let fileext = 
-                req.path[req.path.Length - 1]
-                |> Path.GetExtension
+        let fileext = 
+            req.path[req.path.Length - 1]
+            |> Path.GetExtension
 
-            let mime = 
-                match fileext.ToLower() with
-                | ".jpg" as ext -> 
-                    "image/jpeg"
-                | ".svg" | ".svgz" as ext -> 
-                    "image/svg+xml"
-                | ".jpeg" | ".png" | ".gif" | ".ico" | ".webp" as ext -> 
-                    "image/" + (ext.Substring 1)
-                | ".css" | ".html" | ".javascript" | ".txt" | ".xml" as ext ->
-                    "text/" + (ext.Substring 1)
-                | ".js" ->
-                    "text/javascript; charset=utf-8"
-                | ".mp4" ->
-                    "video/mp4"
-                | _ -> ""
+        let mime = 
+            match fileext.ToLower() with
+            | ".jpg" as ext -> 
+                "image/jpeg"
+            | ".svg" | ".svgz" as ext -> 
+                "image/svg+xml"
+            | ".jpeg" | ".png" | ".gif" | ".ico" | ".webp" as ext -> 
+                "image/" + (ext.Substring 1)
+            | ".css" | ".html" | ".javascript" | ".txt" | ".xml" as ext ->
+                "text/" + (ext.Substring 1)
+            | ".js" ->
+                "text/javascript; charset=utf-8"
+            | ".mp4" ->
+                "video/mp4"
+            | _ -> ""
 
-            file
-            |> checkoutFile mime
+        file
+        |> checkoutFile mime
 
-        else None
     else None

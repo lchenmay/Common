@@ -45,29 +45,46 @@ let vueIndexFile__hashes file =
 let render 
     (hash1,hash2) plugin
     ssrPage = 
-        let html = $"""<!DOCTYPE html>
+        let imports = 
+            """
+  <script type="importmap">
+    {
+      "imports": {
+        "@antv/x6": "https://cdn.jsdelivr.net/npm/@antv/x6@2.18.1/+esm"
+      }
+    }
+  </script>
+        """
+        let html = $"""
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <meta property="og:title" content="{ssrPage.title}" />
-    <meta property="og:description" content="{ssrPage.desc}" />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="{ssrPage.url}" />
-    <meta property="og:image" content="{ssrPage.image}" />
-    <title>{ssrPage.title}</title>
-    <meta name="description" content="{ssrPage.desc}" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
-    <script type="module" crossorigin src="/js/index.{hash1}.js"></script>
-    <link rel="stylesheet" crossorigin href="/as/index.{hash2}.css" />
-    {plugin}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta property="og:title" content="{ssrPage.title}" />
+  <meta property="og:description" content="{ssrPage.desc}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="{ssrPage.url}" />
+  <meta property="og:image" content="{ssrPage.image}" />
+  <title>{ssrPage.title}</title>
+  <meta name="description" content="{ssrPage.desc}" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+  <script src="/panel.js"></script>
+  {imports}
+  <script type="module" crossorigin src="https://jessi.love/js/index.{hash1}.js"></script>
+  <link rel="stylesheet" crossorigin href="https://jessi.love/as/index.{hash2}.css" />
+  {plugin}
 </head>
 
-<body>
-    <div id="app"></div>
-    <noscript>{ssrPage.noscript}</noscript>
+<body class="overflow-x-hidden">
+  <noscript>{ssrPage.noscript}</noscript>
+  <div id="app"></div>
 </body>
-</html>""" 
+
+</html>
+""" 
+
         html |> Encoding.UTF8.GetBytes
 
 let hpattern (pattern:string) h x = 

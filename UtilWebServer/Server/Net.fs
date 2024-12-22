@@ -61,7 +61,7 @@ let rcv runtime conn =
                         |> oPipelineNone (fun _ -> 
                             fileService 
                                 runtime.host.fsDir
-                                runtime.host.defaultHtml
+                                runtime.host.vueDeployDir
                                 req)
                         |> oPipelineNoneHandlero [||] runtime.h404o
                         |> Option.get

@@ -35,7 +35,6 @@ mutable data: 'Data
 mutable zmq: bool
 mutable port: int
 mutable conn: string
-defaultHtml: string
 mutable url: string
 
 mutable updateDatabase: bool
@@ -45,6 +44,7 @@ mutable DiscordPubKey: string
 mutable DiscordSecret: string
 mutable DiscordRedirect: string
 
+mutable vueDeployDir: string
 mutable fsDir: string }
 
 let port__zweb port = create__ZWeb 2 port LogLevel.All false [||]

@@ -63,7 +63,10 @@ let echoApiHandler branch req =
     let service = req.path[1]
     let api = req.path[2]
 
-    let req = str__root req.body
+    let req = 
+        req.body
+        |> System.Text.Encoding.UTF8.GetString 
+        |> str__root 
 
     let rep = 
         req

@@ -18,6 +18,8 @@ open Util.TcpServer
 
 
 let crlf = Util.Text.crlf
+let crlfcrlf = Util.Text.crlfcrlf
+let crlfcrlfBin = Encoding.ASCII.GetBytes crlfcrlf
 
 let reg_req_topline = new Regex(@"\S+", Util.Text.regex_options)
 let reg_req_header = new Regex(@"[\w-]+:\s+", Util.Text.regex_options)
@@ -28,13 +30,28 @@ let reg_req_query = new Regex(@"[^\x26]+", Util.Text.regex_options)
 let mutable logging = None
 let log line = if logging.IsSome then logging.Value("HTTP>" + line)
 
-let headers_body (reqbytes:byte[]) =
-    let request = reqbytes |> Encoding.UTF8.GetString |> HttpUtility.UrlDecode
-    let index = request.IndexOf(crlf + crlf)
-    if index >= 0 then
-        request,request.Substring(0, index), request.Substring(index + (crlf + crlf).Length)
-    else
-        request,request, ""
+let headers_body (bin:byte[]) =
+
+    match
+        [| crlfcrlfBin.Length .. bin.Length - 1 |]
+        |> Array.tryFind(fun i -> 
+            ([| 0 .. crlfcrlfBin.Length - 1|]
+            |> Array.filter(fun j -> crlfcrlfBin[j] = bin[i + j])
+            |> Array.length) = crlfcrlfBin.Length) with
+    | Some i -> 
+        let head = 
+            Array.sub bin 0 i
+            |> Encoding.UTF8.GetString 
+            |> HttpUtility.UrlDecode    
+        let body = 
+            Array.sub bin (i + crlfcrlfBin.Length) (bin.Length - i - crlfcrlfBin.Length)
+        head,body
+    | None -> 
+        let head = 
+            bin
+            |> Encoding.UTF8.GetString 
+            |> HttpUtility.UrlDecode    
+        head,[||]
 
 let topline_dict(headers:string) =
     let mutable topline = None
@@ -94,7 +111,7 @@ let query(path:string[]) =
     dict
 
 let bsx__httprequest(ip,port,acceptedat,receivedat,sendstartedat,sendendedat) bs =
-    let str, headers, body = headers_body bs
+    let headers, body = headers_body bs
     let topline, dict = topline_dict headers
     match topline with
     | Some tl ->
@@ -108,7 +125,10 @@ let bsx__httprequest(ip,port,acceptedat,receivedat,sendstartedat,sendendedat) bs
             else pathline
         Some {
                 bin = bs;
-                str = str;
+                str = 
+                    bs 
+                    |> Encoding.UTF8.GetString 
+                    |> HttpUtility.UrlDecode
                 domainname = dict.["Host"];
                 requestLine = topline.Value;
                 method = method;
@@ -217,8 +237,7 @@ let incomingProcess (ip,bin:byte[]) =
     
     let txt = bin |> Encoding.ASCII.GetString
 
-    if 
-        txt.StartsWith "GET" 
+    if  txt.StartsWith "GET" 
         || txt.StartsWith "POST" 
         || txt.StartsWith "OPTIONS" then
 
@@ -245,7 +264,7 @@ let incomingProcess (ip,bin:byte[]) =
             |> Encoding.ASCII.GetBytes
             |> HttpRequestWithWS.WebSocketUpgrade
         else
-            bs__httpRequest(ip,bin)
+            bs__httpRequest (ip,bin)
             |> HttpRequestWithWS.Echo
     else
         HttpRequestWithWS.InvalidRequest

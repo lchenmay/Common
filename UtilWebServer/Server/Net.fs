@@ -18,20 +18,37 @@ open UtilWebServer.Server.Common
 open UtilWebServer.Server.File
 open UtilWebServer.Server.Monitor
 
-let read conn = 
+let tryReadToEnd conn = 
+
+    let bb = new BytesBuilder()
+
+    let mutable ip = ""
+    let mutable offset = 0         
 
     try
-        let bb = new BytesBuilder()
 
-        let bs = Array.zeroCreate conn.client.Available
-        let count = conn.ns.Read(bs, 0, bs.Length)
-        bb.append bs
+        ip <- conn.client.Client.RemoteEndPoint.ToString()
+        while conn.client.Available > 0 do
+            let bs = Array.zeroCreate conn.client.Available
+            Console.WriteLine("conn[" + conn.id.ToString() + "] bs = " + bs.Length.ToString())
+            
+            let length = 
+                if offset + bs.Length < conn.client.Available then
+                    bs.Length
+                else
+                    conn.client.Available
+            Console.WriteLine("offset = " + offset.ToString())
+            Console.WriteLine("length = " + length.ToString())
+            let count = conn.ns.Read(bs, offset, length)
+            if count > 0 then
+                offset <- offset + count
+                bb.append bs
+    with
+    | ex -> 
+        Console.WriteLine("Exception: " + ex.ToString())
 
-        let bin = bb.bytes()
-        Some (conn.client.Client.RemoteEndPoint.ToString(),bin)
-
-     with
-    | ex -> None
+    let bin = bb.bytes()
+    ip,bin
 
 let rcv runtime conn = 
 
@@ -39,23 +56,28 @@ let rcv runtime conn =
 
         //"Conn [" + conn.id.ToString() + "] Receving ..." |> runtime.output
 
-        match read conn with
-        | Some (ip,incoming) -> 
+        let ip,incoming = tryReadToEnd conn
 
-            "Incomining " + incoming.Length.ToString() + " bytes"
-            |> runtime.output
+        "[" + conn.id.ToString() + "] Incomining " + incoming.Length.ToString() + " bytes"
+        |> runtime.output
 
-            incoming
-            |> hex
-            |> runtime.output
+        //incoming
+        //|> hex
+        //|> runtime.output
 
-            match incomingProcess (ip,incoming) with
-            | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
+        match incomingProcess (ip,incoming) with
+        | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
 
-                match reqo with
-                | Some req ->
+            match reqo with
+            | Some req ->
 
-                    let outgoing =
+                req.pathline |> runtime.output
+
+                let outgoing =
+
+                    if req.method = "OPTIONS" then
+                        [| |] |> bin__StandardResponse "text/html"
+                    else
                         req
                         |> runtime.echo
                         |> oPipelineNone (fun _ -> 
@@ -66,27 +88,26 @@ let rcv runtime conn =
                         |> oPipelineNoneHandlero [||] runtime.h404o
                         |> Option.get
 
-                    try
-                        conn.ns.Write(outgoing,0,outgoing.Length)
-                    with
-                    | ex -> ()
+                try
+                    conn.ns.Write(outgoing,0,outgoing.Length)
+                with
+                | ex -> ()
 
-                | None -> ()
+            | None -> ()
 
-            | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
+        | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
 
-                upgrade |> outputHex runtime.output "Upgrade"
+            upgrade |> outputHex runtime.output "Upgrade"
 
-                conn.ns.Write(upgrade,0,upgrade.Length)
+            conn.ns.Write(upgrade,0,upgrade.Length)
 
-                conn.state <- ConnState.Keep
-                runtime.keeps[conn.id] <- conn
+            conn.state <- ConnState.Keep
+            runtime.keeps[conn.id] <- conn
 
-                "Rcv -> Keep"
-                |> runtime.output
+            "Rcv -> Keep"
+            |> runtime.output
 
-            | _ -> ()
-        | None -> ()
+        | _ -> ()
         
         if conn.state <> ConnState.Keep then
             drop (Some runtime.queue) conn
@@ -148,40 +169,39 @@ let cycleWs runtime = fun () ->
     |> Array.Parallel.iter(fun conn -> 
     
         use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/Array.Parallel")
-        match read conn with
-        | Some (ip,incoming) ->
-            if incoming.Length > 0 then
-                incoming |> outputHex runtime.output "WS Incoming Raw:"
-                let bits = bytes__bits incoming
-                bits |> bit__txt |> runtime.output
+        let ip,incoming = tryReadToEnd conn
+        
+        if incoming.Length > 0 then
+            incoming |> outputHex runtime.output "WS Incoming Raw:"
+            let bits = bytes__bits incoming
+            bits |> bit__txt |> runtime.output
 
-                match wsDecode incoming with
-                | Some (opcode,decoded) -> 
+            match wsDecode incoming with
+            | Some (opcode,decoded) -> 
 
-                    decoded |> outputHex runtime.output "WS Incoming Decoded:"
+                decoded |> outputHex runtime.output "WS Incoming Decoded:"
 
-                    match opcode with
-                    | OpCode.Ping ->
-                        let msg = decoded |> wsEncode OpCode.Pong
-                        snd runtime msg conn
-                    | OpCode.Text -> 
+                match opcode with
+                | OpCode.Ping ->
+                    let msg = decoded |> wsEncode OpCode.Pong
+                    snd runtime msg conn
+                | OpCode.Text -> 
 
-                        let msg =  
-                            decoded
-                            |> Text.Encoding.UTF8.GetString
-                            |> str__root
+                    let msg =  
+                        decoded
+                        |> Text.Encoding.UTF8.GetString
+                        |> str__root
 
-                        let repo = 
-                            use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/wsHandler")
-                            msg |> runtime.wsHandler 
+                    let repo = 
+                        use cw = new CodeWrapper("UtilWebServer.Net.cycleWs/wsHandler")
+                        msg |> runtime.wsHandler 
 
-                        match repo with
-                        | Some rep -> sndJson runtime rep conn
-                        | None -> ()
+                    match repo with
+                    | Some rep -> sndJson runtime rep conn
+                    | None -> ()
 
-                    | OpCode.Close -> drop (Some runtime.keeps) conn
-                    | _ -> ()
+                | OpCode.Close -> drop (Some runtime.keeps) conn
+                | _ -> ()
 
-                | None -> runtime.output "Decode failed"
-        | None -> drop (Some runtime.keeps) conn)
+            | None -> runtime.output "Decode failed")
 

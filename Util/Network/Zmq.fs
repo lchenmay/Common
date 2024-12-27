@@ -577,21 +577,23 @@ let reqhandler__httpHandler
     (reqhandler: HttpRequest -> byte[])
     zweb =
 
-    match zweb.inboundHttp.TryDequeue() with
-    | true, p ->     
-        async {
-            //try
-                let reqo,(headers,body) = bs__httpRequest ("",p.bin)
-                match reqo with
-                | Some req ->
-                    let repbin = req |> reqhandler
-                    if repbin.Length > 0 then
-                        repbin 
-                        |> create__pakcet p.client
-                        |> pushHttpPacket zweb
-                | None -> ()
-        } |> Async.Start
-    | _ -> Thread.Sleep 10
+    //match zweb.inboundHttp.TryDequeue() with
+    //| true, p ->     
+    //    async {
+    //        //try
+    //            let reqo,(headers,body) = bs__httpRequest (ip,p.bin)
+    //            match reqo with
+    //            | Some req ->
+    //                let repbin = req |> reqhandler
+    //                if repbin.Length > 0 then
+    //                    repbin 
+    //                    |> create__pakcet p.client
+    //                    |> pushHttpPacket zweb
+    //            | None -> ()
+    //    } |> Async.Start
+    //| _ -> Thread.Sleep 10
+
+    ()
 
 let startTcpService zweb httpHandler wsHandler =
 
@@ -732,7 +734,7 @@ let req__ApiCtx runtime req =
         api = api
         ip = ""
         procedureo = None
-        postdata = req.body
+        postdata = req.body |> Encoding.UTF8.GetString
         cached = ""
         fields = req.query
         sessiono = None

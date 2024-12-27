@@ -98,38 +98,37 @@ let headers__txt (headers:Dictionary<string,string>) =
     |> Array.map(fun k -> k + ": " + headers[k])
     |> String.concat crlf
 
-type HttpRequest =
-    {   
-        bin:byte[];
-        str:string;
-        domainname:string;
-        requestLine:string;
-        method:string;
-        mutable pathline:string;
-        path:string[];
-        headers:Dictionary<string, string>;
-        query:Dictionary<string, string>;
-        body:string;
-        acceptedat:DateTime;
-        receivedat:DateTime;
-        sendstartedat:DateTime;
-        sendendedat:DateTime;
-        ip:string;
-        port:int;
-        file: string}
+type HttpRequest = {   
+bin:byte[]
+str:string
+domainname:string
+requestLine:string
+method:string
+mutable pathline:string
+path:string[]
+headers:Dictionary<string, string>
+query:Dictionary<string, string>
+body:byte[]
+acceptedat:DateTime
+receivedat:DateTime
+sendstartedat:DateTime
+sendendedat:DateTime
+ip:string
+port:int
+file: string }
 
-    member this.remote_ip() = 
-        let init_proxy_ip = 
-            let k = "X-Forwarded-For"
-            if this.headers.ContainsKey k then
-                let v = this.headers[k]
-                v |> Util.Text.regex_match regex_ip
-            else
-                ""
-        if init_proxy_ip.Length > 0 then
-            init_proxy_ip
-        else 
-            this.ip
+let remote_ip req = 
+    let init_proxy_ip = 
+        let k = "X-Forwarded-For"
+        if req.headers.ContainsKey k then
+            let v = req.headers[k]
+            v |> Util.Text.regex_match regex_ip
+        else
+            ""
+    if init_proxy_ip.Length > 0 then
+        init_proxy_ip
+    else 
+        req.ip
 
 let empty__HttpRequest() = 
     {   
@@ -142,7 +141,7 @@ let empty__HttpRequest() =
         path = [||];
         headers = new Dictionary<string, string>();
         query = new Dictionary<string, string>();
-        body = "";
+        body = [| |];
         acceptedat = DateTime.UtcNow;
         receivedat = DateTime.UtcNow;
         sendstartedat = DateTime.UtcNow;
@@ -168,7 +167,7 @@ let empty__HttpResponse() =
 
 
 type HttpRequestWithWS = 
-| Echo of (HttpRequest option) * (string * string)
+| Echo of (HttpRequest option) * (string * byte[])
 | WebSocketUpgrade of byte[]
 | InvalidRequest
 

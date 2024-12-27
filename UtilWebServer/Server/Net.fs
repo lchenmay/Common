@@ -23,29 +23,17 @@ let tryReadToEnd conn =
     let bb = new BytesBuilder()
 
     let mutable ip = ""
-    let mutable offset = 0         
 
     try
-
         ip <- conn.client.Client.RemoteEndPoint.ToString()
         while conn.client.Available > 0 do
             let bs = Array.zeroCreate conn.client.Available
-            Console.WriteLine("conn[" + conn.id.ToString() + "] bs = " + bs.Length.ToString())
-            
-            let length = 
-                if offset + bs.Length < conn.client.Available then
-                    bs.Length
-                else
-                    conn.client.Available
-            Console.WriteLine("offset = " + offset.ToString())
-            Console.WriteLine("length = " + length.ToString())
-            let count = conn.ns.Read(bs, offset, length)
+            let length = conn.client.Available
+            let count = conn.ns.Read(bs, 0, length)
             if count > 0 then
-                offset <- offset + count
                 bb.append bs
     with
-    | ex -> 
-        Console.WriteLine("Exception: " + ex.ToString())
+    | ex -> ()
 
     let bin = bb.bytes()
     ip,bin

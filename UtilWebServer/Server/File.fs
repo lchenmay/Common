@@ -98,6 +98,6 @@ abc
 
     let body = req.body
 
-    System.IO.File.WriteAllBytes("a.jpg",body)
+    System.IO.File.WriteAllBytes("aaa.jpg",body)
 
     [| |]

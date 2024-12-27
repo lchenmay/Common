@@ -110,6 +110,16 @@ let hapi echoApiHandler branch x =
     else
         Fail((),x)
 
+let echoUploadFile x =
+
+    let req = x.req
+    if req.path.Length = 1 then
+        if req.path[0] = "upload" then
+            ()
+
+    Suc x
+
+
 let hHomepage render x = 
     let req = x.req
     match req.pathline with

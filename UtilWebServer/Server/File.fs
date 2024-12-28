@@ -77,27 +77,3 @@ let fileService fsDir vueDeployDir req =
 
 let r1 = str__regex "(?<=-----------------------------)\d+"
 
-let fileUploadReceive (req:HttpRequest) = 
-
-(*
-
------------------------------13390593892577175696221916023
-Content-Disposition: form-data; name="file"; filename="aaa.txt"
-Content-Type: text/plain
-
-abc
------------------------------13390593892577175696221916023--
-
-*)
-
-    //let token = req.body |> regex_match r1
-    //let pattern = "-----------------------------" + token
-    //let i1 = req.body.IndexOf pattern
-    //let i2 = req.body.IndexOf crlfcrlf
-    //let i3 = req.body.LastIndexOf pattern
-
-    let body = req.body
-
-    System.IO.File.WriteAllBytes("aaa.jpg",body)
-
-    [| |]

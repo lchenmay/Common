@@ -32,12 +32,7 @@ let loggedPipeline (loc:string) conn pretx =
     else
         true
 
-let populateCreateTx 
-    pretx 
-    metadata 
-    p = 
-
-    let tid = Interlocked.Increment metadata.id
+let id__CreateTx tid pretx metadata p = 
 
     let rcd = 
         ((tid,pretx.dt,pretx.dt,tid),p)
@@ -48,6 +43,9 @@ let populateCreateTx
     |> pretx.sqls.Add
 
     rcd
+
+let populateCreateTx pretx metadata = 
+    id__CreateTx (Interlocked.Increment metadata.id) pretx metadata
 
 let populateUpdateTx
     pretx 

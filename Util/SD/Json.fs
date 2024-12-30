@@ -74,9 +74,8 @@ type Token =
 let rec json__str (w:TextBlockWriter) json = 
     match json with
     | Json.Str s ->
-        if s.IndexOf("\"") >= 0 && (s.IndexOf("[") >= 0 || s.IndexOf("{") >= 0) then
-            "\"" + (System.Web.HttpUtility.JavaScriptStringEncode s) + "\"" |> w.newline
-        else "\"" + s.Replace("\\u","%u").Replace("\r","").Replace("\n","").Replace("\t","").Replace("\"","'").Replace("\\n","").Replace("\\r","").Replace("\\","") + "\"" |> w.newline
+        let encoded = System.Web.HttpUtility.JavaScriptStringEncode s
+        "\"" + encoded + "\"" |> w.newline
     | Json.Html s -> "\"" + (System.Web.HttpUtility.JavaScriptStringEncode s) + "\"" |> w.newline
     | Json.Clean s -> "\"" + s.Replace("\\u","%u").Replace("\r","").Replace("\n","").Replace("\t","").Replace("\"","'").Replace("\\n","").Replace("\\r","").Replace("\\","") + "\"" |> w.newline
     | Json.Num s -> s |> w.newline

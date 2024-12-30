@@ -25,13 +25,14 @@ let tryReadToEnd conn =
     let mutable ip = ""
 
     try
-        ip <- conn.client.Client.RemoteEndPoint.ToString()
-        while conn.client.Available > 0 do
-            let bs = Array.zeroCreate conn.client.Available
-            let length = conn.client.Available
-            let count = conn.ns.Read(bs, 0, length)
-            if count > 0 then
-                bb.append bs
+        if conn.client.Client <> null then
+            ip <- conn.client.Client.RemoteEndPoint.ToString()
+            while conn.client.Available > 0 do
+                let bs = Array.zeroCreate conn.client.Available
+                let length = conn.client.Available
+                let count = conn.ns.Read(bs, 0, length)
+                if count > 0 then
+                    bb.append bs
     with
     | ex -> ()
 

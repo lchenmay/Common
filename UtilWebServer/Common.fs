@@ -32,7 +32,6 @@ let output:string -> unit =
 
 type Host<'Data> = {
 mutable data: 'Data
-mutable zmq: bool
 mutable port: int
 mutable conn: string
 mutable url: string

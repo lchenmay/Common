@@ -32,6 +32,26 @@ let checkoutFile mime f =
         handlero fileErLoggero (f,ex)
         None
 
+let ext__mime (ext:string) = 
+    match ext.ToLower() with
+    | ".jpg" as ext -> 
+        "image/jpeg"
+    | ".svg" | ".svgz" as ext -> 
+        "image/svg+xml"
+    | ".jpeg" | ".png" | ".gif" | ".ico" | ".webp" as ext -> 
+        "image/" + (ext.Substring 1)
+    | ".css" | ".html" | ".javascript" | ".txt" | ".xml" as ext ->
+        "text/" + (ext.Substring 1)
+    | ".js" ->
+        "text/javascript; charset=utf-8"
+    | ".mp3" ->
+        "audio/mpeg"
+    | ".mp4" ->
+        "video/mp4"
+    | _ -> ""
+
+
+
 let fileService fsDir vueDeployDir req = 
 
     let mutable file = 
@@ -54,21 +74,7 @@ let fileService fsDir vueDeployDir req =
             req.path[req.path.Length - 1]
             |> Path.GetExtension
 
-        let mime = 
-            match fileext.ToLower() with
-            | ".jpg" as ext -> 
-                "image/jpeg"
-            | ".svg" | ".svgz" as ext -> 
-                "image/svg+xml"
-            | ".jpeg" | ".png" | ".gif" | ".ico" | ".webp" as ext -> 
-                "image/" + (ext.Substring 1)
-            | ".css" | ".html" | ".javascript" | ".txt" | ".xml" as ext ->
-                "text/" + (ext.Substring 1)
-            | ".js" ->
-                "text/javascript; charset=utf-8"
-            | ".mp4" ->
-                "video/mp4"
-            | _ -> ""
+        let mime = ext__mime fileext
 
         file
         |> checkoutFile mime

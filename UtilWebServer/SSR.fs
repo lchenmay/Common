@@ -42,6 +42,10 @@ let vueIndexFile__hashes file =
 
     hash1,hash2
 
+let hashing host = 
+    host.vueDeployDir + "/index.html"
+    |> vueIndexFile__hashes
+
 let render 
     (hash1,hash2) plugin
     ssrPage = 
@@ -87,6 +91,7 @@ let render
         """ 
         |> Encoding.UTF8.GetBytes
 
+
 let hpattern (pattern:string) h x = 
     let req = x.req
     if req.pathline.StartsWith pattern then
@@ -122,4 +127,7 @@ let hHomepage render x =
             |> Some
         Suc x
     | _ -> Fail((),x)
+
+let homepage ssr host plugin =
+    hHomepage (fun _ -> ssr |> render (hashing host) plugin)
 

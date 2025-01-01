@@ -6,6 +6,7 @@ open System.Collections.Concurrent
 open System.Threading
 
 open Util.Cat
+open Util.ADT
 open Util.Perf
 open Util.Runtime
 open Util.Text
@@ -18,7 +19,7 @@ open Util.HttpServer
 open Util.Zmq
 
 open UtilWebServer.Json
-
+open UtilWebServer.Db
 open UtilWebServer.DbLogger
 
 type ApiReturn = (string * Json)[]
@@ -83,13 +84,62 @@ let tryLoadFromJsonIdWrapOK
     tryLoader 
     x = 
     match 
-        tryLoader
-        |> tryLoadFromJsonId x.json "id" with
+        tryFindNumByAtt "id" x.json
+        |> parse_int64
+        |> tryLoader with
     | Some v -> 
         v
         |> v__json
         |> wrapOk n
     | None -> er e
+
+let createUpdateDelete 
+    loc conn metadata dbLoggero e tryLoader v__rcd json__p 
+    pModifier postRemoveo preCreateo postCreateo
+    x =
+    match 
+        tryFindNumByAtt "id" x.json
+        |> parse_int64
+        |> tryLoader with
+    | Some v -> 
+        let rcd = v__rcd v
+        if tryFindStrByAtt "act" x.json = "remove" then
+            if  "WHERE ID=" + rcd.ID.ToString() |> delete loc conn metadata dbLoggero then
+                handlero postRemoveo v
+                [| ok |]
+            else
+                er e
+        else
+            match tryFindByAtt "p" x.json with
+            | Some(n,json) ->
+                match json |> json__p with
+                | Some pIncoming -> 
+                    if updateRcd loc conn metadata dbLoggero
+                        (fun p -> pModifier p pIncoming) rcd then
+                        [| ok |]
+                    else
+                        er e
+                | None -> er e
+            | None -> er e
+    | None ->
+        match tryFindByAtt "p" x.json with
+        | Some(n,json) ->
+            match json |> json__p with
+            | Some pIncoming -> 
+                let p = 
+                    match preCreateo with
+                    | Some h -> 
+                        let p = metadata.empty__p()
+                        h p pIncoming
+                        p
+                    | None -> pIncoming
+                match p__createRcd p metadata dbLoggero loc conn with
+                | Some rcd -> 
+                    handlero postCreateo rcd
+                    [| ok |]
+                | None -> er e
+            | None -> er e
+        | None -> er e
 
 let nullParam = 
     [|  ("Er",Json.Str "") |]

@@ -50,6 +50,7 @@ let tryFindExisting
         a = bizId && b = id)
 
 let tryCreateUser 
+    dbLoggero
     ap 
     (ecs: ConcurrentDictionary<int64,'complex>)
     bizId
@@ -70,7 +71,7 @@ let tryCreateUser
         |> populateCreateTx pretx ap.metadata
 
     if  pretx 
-        |> loggedPipeline 
+        |> loggedPipeline dbLoggero
             "UtilWebServer.Auth.tryCreateUser" ap.conn then
         Some rcd
     else

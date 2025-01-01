@@ -28,9 +28,6 @@ let empty__DbLog (loc,dte) = {
         | Some sql -> sql.text |> checkEscape
         | None -> "" }
 
-// Set during init, provided a DB log table or a file logger
-let mutable dbLoggero:(DbLog -> unit) option = None
-
 let createDbLogger metadata conn log__p log = 
     
     let p = log__p log

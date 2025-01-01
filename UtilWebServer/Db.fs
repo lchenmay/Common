@@ -15,7 +15,7 @@ open Util.Zmq
 
 open UtilWebServer.DbLogger
 
-let loggedPipeline (loc:string) conn pretx = 
+let loggedPipeline dbLoggero (loc:string) conn pretx = 
     if pretx.sqls.Count > 0 then
         match 
             pretx
@@ -55,7 +55,7 @@ let populateUpdateTx
     |> build_update_sql metadata
     |> pretx.sqls.Add
 
-let create param__p param metadata loc conn = 
+let create param__p param metadata dbLoggero loc conn = 
 
     let pretx = None |> opctx__pretx
 
@@ -64,14 +64,14 @@ let create param__p param metadata loc conn =
         |> param__p
         |> populateCreateTx pretx metadata
 
-    if pretx |> loggedPipeline loc conn then
+    if pretx |> loggedPipeline dbLoggero loc conn then
         Some rcd
     else
         None
 
 let p__createRcd p = create (fun _ -> p) ()
 
-let update loc conn metadata (id,p) = 
+let update loc conn metadata dbLoggero (id,p) = 
 
     let pretx = None |> opctx__pretx
 
@@ -79,27 +79,27 @@ let update loc conn metadata (id,p) =
     |> build_update_sql metadata
     |> pretx.sqls.Add
         
-    pretx |> loggedPipeline loc conn
+    pretx |> loggedPipeline dbLoggero loc conn
 
-let updateRcd loc conn metadata changer rcd = 
+let updateRcd loc conn metadata dbLoggero changer rcd = 
     
     let current = metadata.clone rcd.p
     changer rcd.p
 
-    if update loc conn metadata (rcd.ID,rcd.p) then
+    if update loc conn metadata dbLoggero (rcd.ID,rcd.p) then
         true
     else
         rcd.p <- current
         false
 
-let delete loc conn metadata where = 
+let delete loc conn metadata dbLoggero where = 
 
     let pretx = None |> opctx__pretx
 
     {
-        text = "DELETE FROM " + metadata.table + "] " + where
+        text = "DELETE FROM [" + metadata.table + "] " + where
         ps = [||] }
     |> pretx.sqls.Add
         
-    pretx |> loggedPipeline loc conn
+    pretx |> loggedPipeline dbLoggero loc conn
 

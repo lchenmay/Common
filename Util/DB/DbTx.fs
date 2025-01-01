@@ -75,15 +75,12 @@ let commitc (suc,fail) x =
                     conn.BeginTransaction() 
                     |> SqlTx.PostgreSql
 
-            let lines = 
-                x.sqls.ToArray()
-                |> Array.map(sql__sqlcmd conn)
-
             let affected = 
-                lines
+                x.sqls.ToArray()
                 |> Array.map(fun line ->
                     current <- Some line
-                    match line,tx with
+                    let sc = sql__sqlcmd conn line
+                    match sc,tx with
                     | SqlCmd.SqlServer sc,SqlTx.SqlServer tx ->
                         sc.Transaction <- tx
                         sc.ExecuteNonQuery()
@@ -109,12 +106,7 @@ let commitc (suc,fail) x =
         suc x
 
     with ex ->
-        let sqls = 
-            x.sqls.ToArray()
-            |> Array.map(fun i -> i.text)
-            |> String.concat ";\n"
-
-        exnSqlo__fail x ex None
+        exnSqlo__fail x ex current
 
 
 let tx connStr output (lines:Sql[]) =

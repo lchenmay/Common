@@ -14,7 +14,6 @@ open Util.CollectionModDict
 open Util.Console
 open Util.Json
 open Util.Http
-open Util.Zmq
 
 let since = DateTime.UtcNow
 
@@ -46,8 +45,6 @@ mutable DiscordRedirect: string
 mutable vueDeployDir: string
 mutable fsDir: string }
 
-let port__zweb port = create__ZWeb 2 port LogLevel.All false [||]
-
 type ConnState = 
 | Idle
 | Rcv
@@ -61,6 +58,19 @@ client: TcpClient
 ns: NetworkStream
 mutable idleSince: DateTime
 mutable state: ConnState }
+
+type Listener = {
+port: int
+socket: TcpListener
+mutable echo: HttpRequest -> byte[] option
+mutable h404o: (unit -> byte[]) option
+mutable wsHandler: Json -> Json option
+mutable fileService: HttpRequest -> byte[] option
+connId: ref<int64>
+queue: ModDict<int64,Conn>
+keeps: ModDict<int64,Conn>
+output: (string -> unit) }
+
 
 type SessionTemplate<'User,'Data> = { 
 since: DateTime
@@ -77,31 +87,7 @@ data: 'RuntimeData
 users: ConcurrentDictionary<int64,'User>
 sessions: ConcurrentDictionary<string,SessionTemplate<'User,'SessionData>>
 output: string -> unit
-mutable echo: HttpRequest -> byte[] option
-mutable h404o: (unit -> byte[]) option
-mutable wsHandler: Json -> Json option
-mutable listener: TcpListener
-connId: ref<int64>
-queue: ModDict<int64,Conn>
-keeps: ModDict<int64,Conn> }
+listener: Listener }
 
 type ReqRep = { req: HttpRequest; mutable rep: byte[] option }
 type CWQP = CtxWrapper<ReqRep,unit>
-
-let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
-    (host:Host<'HostData>)
-    (data:'RuntimeData) =
-
-    {
-        host = host
-        data = data 
-        users = new ConcurrentDictionary<int64,'User>()
-        sessions = new ConcurrentDictionary<string,SessionTemplate<'User,'SessionData>>()
-        output = output
-        echo = (fun _ -> None)
-        h404o = None
-        wsHandler = (fun _ -> None)
-        listener = new TcpListener(IPAddress.Any, 80)
-        connId = ref 0L
-        queue = createModDictInt64<Conn> 8
-        keeps = createModDictInt64<Conn> 8 }

@@ -26,6 +26,7 @@
     <Compile Include="Server\Monitor.fs" />
     <Compile Include="Server\Net.fs" />
     <Compile Include="Server\Service.fs" />
+    <Compile Include="Runtime.fs" />
   </ItemGroup>
 
   <ItemGroup>

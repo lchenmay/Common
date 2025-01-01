@@ -1,6 +1,8 @@
 ﻿module UtilWebServer.Server.Net
 
 open System
+open System.Net
+open System.Net.Sockets
 open System.Threading
 
 open Util.ADT
@@ -39,7 +41,8 @@ let tryReadToEnd conn =
     let bin = bb.bytes()
     ip,bin
 
-let rcv runtime conn = 
+
+let rcv (listener:Listener) conn = 
 
     async{
 
@@ -50,7 +53,7 @@ let rcv runtime conn =
             let ip,incoming = tryReadToEnd conn
 
             "[" + conn.id.ToString() + "] Incomining " + incoming.Length.ToString() + " bytes"
-            |> runtime.output
+            |> listener.output
 
             //incoming
             //|> hex
@@ -62,21 +65,22 @@ let rcv runtime conn =
                 match reqo with
                 | Some req ->
 
-                    req.pathline |> runtime.output
+                    req.pathline |> listener.output
 
                     let outgoing =
-
+                    
                         if req.method = "OPTIONS" then
                             [| |] |> bin__StandardResponse "text/html"
                         else
                             req
-                            |> runtime.echo
-                            |> oPipelineNone (fun _ -> 
-                                fileService 
-                                    runtime.host.fsDir
-                                    runtime.host.vueDeployDir
-                                    req)
-                            |> oPipelineNoneHandlero [||] runtime.h404o
+                            |> listener.echo
+                            |> oPipelineNone (fun _ -> listener.fileService req)
+                            //|> oPipelineNone (fun _ -> 
+                            //    fileService 
+                            //        runtime.host.fsDir
+                            //        runtime.host.vueDeployDir
+                            //        req)
+                            |> oPipelineNoneHandlero [||] listener.h404o
                             |> Option.get
 
                     try
@@ -88,66 +92,66 @@ let rcv runtime conn =
 
             | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
 
-                upgrade |> outputHex runtime.output "Upgrade"
+                upgrade |> outputHex listener.output "Upgrade"
 
                 conn.ns.Write(upgrade,0,upgrade.Length)
 
                 conn.state <- ConnState.Keep
-                runtime.keeps[conn.id] <- conn
+                listener.keeps[conn.id] <- conn
 
                 "Rcv -> Keep"
-                |> runtime.output
+                |> listener.output
 
             | _ -> ()
         
             if conn.state <> ConnState.Keep then
-                drop (Some runtime.queue) conn
+                drop (Some listener.queue) conn
         with
-        | ex -> drop (Some runtime.queue) conn
+        | ex -> drop (Some listener.queue) conn
     }
 
-let snd runtime (bin:byte[]) conn = 
+let snd listener (bin:byte[]) conn = 
     try
         bin |> conn.ns.Write
     with
-    | ex -> drop (Some runtime.keeps) conn
+    | ex -> drop (Some listener.keeps) conn
 
-let sndJson runtime json conn = 
+let sndJson (listener:Listener) json conn = 
     let raw = 
         json
         |> json__strFinal
         |> Text.Encoding.UTF8.GetBytes
     let encoded = raw |> wsEncode OpCode.Text
 
-    raw |> outputHex runtime.output "WS Outgoging Raw:"
-    encoded |> outputHex runtime.output "WS Outgoging Encoded:"
+    raw |> outputHex listener.output "WS Outgoging Raw:"
+    encoded |> outputHex listener.output "WS Outgoging Encoded:"
 
-    snd runtime encoded conn
+    snd listener encoded conn
 
-let cycleAccept runtime = fun () ->
-    "Accept" |> runtime.output
+let cycleAccept (listener:Listener) = fun () ->
+    "Accept" |> listener.output
 
-    let client = runtime.listener.AcceptTcpClient()
-    let id = Interlocked.Increment runtime.connId
+    let client = listener.socket.AcceptTcpClient()
+    let id = Interlocked.Increment listener.connId
 
     let conn = checkoutConn id client
-    runtime.queue[conn.id] <- conn
+    listener.queue[conn.id] <- conn
 
-    "Client accepted [" + id.ToString() + "], Queue = " + runtime.queue.count.ToString()
-    |> runtime.output
+    "Client accepted [" + id.ToString() + "], Queue = " + listener.queue.count.ToString()
+    |> listener.output
 
     //s.Close()
 
-let cycleRcv runtime = fun () ->
-    runtime.queue.Values
+let cycleRcv listener = fun () ->
+    listener.queue.Values
     |> Array.filter(fun conn -> 
         try
             conn.ns.DataAvailable
         with
         | ex -> 
-            drop (Some runtime.queue) conn
+            drop (Some listener.queue) conn
             false)
-    |> Array.iter(fun conn -> rcv runtime conn |> Async.Start)
+    |> Array.iter(fun conn -> rcv listener conn |> Async.Start)
 
 let cycleWs runtime = fun () ->
 

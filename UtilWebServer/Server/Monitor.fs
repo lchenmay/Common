@@ -36,9 +36,9 @@ let outputHex output caption hexData =
     |> output
 
 let apiMonitor runtime = 
-
+    let listener = runtime.listener
     [|  ok
-        ("connId", runtime.connId.Value.ToString() |> Json.Str)
-        ("queue", runtime.queue.count.ToString() |> Json.Str)
-        ("keeps", runtime.keeps.count.ToString() |> Json.Str) |]
+        ("connId", listener.connId.Value.ToString() |> Json.Str)
+        ("queue", listener.queue.count.ToString() |> Json.Str)
+        ("keeps", listener.keeps.count.ToString() |> Json.Str) |]
 

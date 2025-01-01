@@ -22,7 +22,7 @@ let PushAll runtime json =
     runtime.keeps.Values
     |> Array.Parallel.iter(sndJson runtime json)
 
-let startEngine runtime = 
+let startEngine listener = 
 
     let buffers = new ConcurrentStack<Buffer>()
     [| 0 .. 1000 - 1|]
@@ -32,40 +32,38 @@ let startEngine runtime =
             bin = Array.zeroCreate bufferLength }
         buffers.Push buffer)
 
-    runtime.listener <- new TcpListener(IPAddress.Any, runtime.host.port)
+    "Listening at: " + listener.port.ToString()
+    |> output
 
-    "Listening at: " + runtime.host.port.ToString()
-    |> runtime.output
-
-    runtime.listener.Start()
+    listener.socket.Start()
 
     let exHandler thread (ex:exn) =
-        ex.ToString() |> runtime.output
-        thread |> runtime.output
+        ex.ToString() |> output
+        thread |> output
 
-    threadCyclerIntervalTry ThreadPriority.Highest 30 (exHandler "Accept") (cycleAccept runtime)
-    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "Rcv") (cycleRcv runtime)
-    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "WS") (cycleWs runtime)
+    threadCyclerIntervalTry ThreadPriority.Highest 30 (exHandler "Accept") (cycleAccept listener)
+    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "Rcv") (cycleRcv listener)
+    threadCyclerIntervalTry ThreadPriority.AboveNormal 30 (exHandler "WS") (cycleWs listener)
 
-let startWebSocket runtime =
+let startWebSocket listener =
     
     let allSockets = new List<IWebSocketConnection>()
     let server = new WebSocketServer("ws://127.0.0.1:5045")
 
     server.Start(fun socket ->
         socket.OnOpen <- fun _ ->
-            ("Open") |> runtime.output
+            ("Open") |> listener.output
             allSockets.Add(socket)
 
         socket.OnClose <- fun _ ->
-            ("Close") |> runtime.output
+            ("Close") |> listener.output
             allSockets.Remove(socket) |>ignore
 
         socket.OnMessage <- fun message ->
-            message |> runtime.output
+            message |> listener.output
             allSockets.ToList().ForEach(fun s -> s.Send(message) |>ignore)
 
         socket.OnError <- fun error ->
-            error.Message |> runtime.output
+            error.Message |> listener.output
     )
 

@@ -43,63 +43,67 @@ let rcv runtime conn =
 
     async{
 
-        //"Conn [" + conn.id.ToString() + "] Receving ..." |> runtime.output
+        try
 
-        let ip,incoming = tryReadToEnd conn
+            //"Conn [" + conn.id.ToString() + "] Receving ..." |> runtime.output
 
-        "[" + conn.id.ToString() + "] Incomining " + incoming.Length.ToString() + " bytes"
-        |> runtime.output
+            let ip,incoming = tryReadToEnd conn
 
-        //incoming
-        //|> hex
-        //|> runtime.output
-
-        match incomingProcess (ip,incoming) with
-        | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
-
-            match reqo with
-            | Some req ->
-
-                req.pathline |> runtime.output
-
-                let outgoing =
-
-                    if req.method = "OPTIONS" then
-                        [| |] |> bin__StandardResponse "text/html"
-                    else
-                        req
-                        |> runtime.echo
-                        |> oPipelineNone (fun _ -> 
-                            fileService 
-                                runtime.host.fsDir
-                                runtime.host.vueDeployDir
-                                req)
-                        |> oPipelineNoneHandlero [||] runtime.h404o
-                        |> Option.get
-
-                try
-                    conn.ns.Write(outgoing,0,outgoing.Length)
-                with
-                | ex -> ()
-
-            | None -> ()
-
-        | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
-
-            upgrade |> outputHex runtime.output "Upgrade"
-
-            conn.ns.Write(upgrade,0,upgrade.Length)
-
-            conn.state <- ConnState.Keep
-            runtime.keeps[conn.id] <- conn
-
-            "Rcv -> Keep"
+            "[" + conn.id.ToString() + "] Incomining " + incoming.Length.ToString() + " bytes"
             |> runtime.output
 
-        | _ -> ()
+            //incoming
+            //|> hex
+            //|> runtime.output
+
+            match incomingProcess (ip,incoming) with
+            | HttpRequestWithWS.Echo (reqo,(headers,body)) ->
+
+                match reqo with
+                | Some req ->
+
+                    req.pathline |> runtime.output
+
+                    let outgoing =
+
+                        if req.method = "OPTIONS" then
+                            [| |] |> bin__StandardResponse "text/html"
+                        else
+                            req
+                            |> runtime.echo
+                            |> oPipelineNone (fun _ -> 
+                                fileService 
+                                    runtime.host.fsDir
+                                    runtime.host.vueDeployDir
+                                    req)
+                            |> oPipelineNoneHandlero [||] runtime.h404o
+                            |> Option.get
+
+                    try
+                        conn.ns.Write(outgoing,0,outgoing.Length)
+                    with
+                    | ex -> ()
+
+                | None -> ()
+
+            | HttpRequestWithWS.WebSocketUpgrade upgrade -> 
+
+                upgrade |> outputHex runtime.output "Upgrade"
+
+                conn.ns.Write(upgrade,0,upgrade.Length)
+
+                conn.state <- ConnState.Keep
+                runtime.keeps[conn.id] <- conn
+
+                "Rcv -> Keep"
+                |> runtime.output
+
+            | _ -> ()
         
-        if conn.state <> ConnState.Keep then
-            drop (Some runtime.queue) conn
+            if conn.state <> ConnState.Keep then
+                drop (Some runtime.queue) conn
+        with
+        | ex -> drop (Some runtime.queue) conn
     }
 
 let snd runtime (bin:byte[]) conn = 

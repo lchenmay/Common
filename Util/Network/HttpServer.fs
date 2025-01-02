@@ -221,6 +221,14 @@ let standardResponseHeader =
     |> String.concat crlf
     |> System.Text.Encoding.UTF8.GetBytes
 
+let response302 redirect = 
+    [|  "HTTP/1.1 302 Found"
+        "Location: " + redirect
+        "Content-Type: text/html; charset=UTF-8"
+        "Content-Length: 0" |]
+    |> String.concat crlf
+    |> System.Text.Encoding.UTF8.GetBytes
+
 let bin__StandardResponse mime body = 
     [|  standardResponseHeader 
         crlf + "Content-Type: " + mime + crlfcrlf |> System.Text.Encoding.UTF8.GetBytes        

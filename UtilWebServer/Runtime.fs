@@ -36,12 +36,12 @@ let createLisener output fileService port =
 
 let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
     (host:Host<'HostData>)
-    (data:'RuntimeData) =
+    (data:'RuntimeData):RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData> =
     {
         host = host
         data = data 
-        users = new ConcurrentDictionary<int64,'User>()
-        sessions = new ConcurrentDictionary<string,SessionTemplate<'User,'SessionData>>()
+        users = createModDictInt64 4
+        sessions = createModDictStr 4
         output = output
         listener = 
             createLisener output 

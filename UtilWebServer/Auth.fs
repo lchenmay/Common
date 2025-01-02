@@ -13,6 +13,7 @@ open Util.Perf
 open Util.Crypto
 open Util.DbQuery
 open Util.DbTx
+open Util.CollectionModDict
 open Util.Text
 open Util.Json
 open Util.Http
@@ -42,9 +43,9 @@ conn: string }
 
 let tryFindExisting 
     ap
-    (ecs: ConcurrentDictionary<int64,'complex>)
+    (userxs: ModDictInt64<'complex>)
     bizId id = 
-    ecs.Values
+    userxs.Values
     |> Seq.tryFind(fun ec -> 
         let a,b = ec |> ap.complex__ids
         a = bizId && b = id)
@@ -52,7 +53,7 @@ let tryFindExisting
 let tryCreateUser 
     dbLoggero
     ap 
-    (ecs: ConcurrentDictionary<int64,'complex>)
+    (userxs: ModDictInt64<'complex>)
     bizId
     (id,caption,avatar) = 
 
@@ -79,7 +80,7 @@ let tryCreateUser
     |> oPipelineSome
         (fun rcd -> 
             let ec = rcd |> ap.p__complex
-            ecs[rcd.ID] <- ec
+            userxs[rcd.ID] <- ec
             ec)
 
 let checkDiscordUser runtime checkoutEu (uid, username, avatar) = 

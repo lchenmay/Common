@@ -6,13 +6,17 @@ open System
 open System.Threading
 open System.Threading.Tasks
 
+open Util.Cat
 open Util.Text
 open Util.Concurrent
 open Util.Json
 open Util.HttpClient
+open Util.HttpServer
 
 open Discord
 open Discord.WebSocket
+
+open UtilWebServer.Common
 
 (*
 
@@ -28,7 +32,8 @@ e) generated_url from c) and d)
 
 2. End user visit:
 
-f) generated_url e) from browser an
+f) generated_url 
+e) from browser an
 g) Discord redirects the web page to the redirect_url c) with param code=xxx
 h) Obtain code=xxx
 
@@ -82,19 +87,19 @@ let requestUserInfo access_token =
         |> jsonstr__items
         |> checkfield
 
-    let uido = fields "id" |> try_parse_int64
+    let uid = fields "id"
     let username = fields "username"
     let mutable avatar = fields "avatar"
 
     // https://cdn.discordapp.com/avatars/614834018114076726/ffe7559e3fcfc1a729e9ddbcc779c6fd.png
-    match uido with 
-    | Some uid ->
+    if uid.Length > 0 then
         if avatar.StartsWith "https://cdn.discordapp.com/avatars/" = false then
             avatar <- "https://cdn.discordapp.com/avatars/" + uid.ToString() + "/" + avatar + ".png"
         
         (uid, username, avatar, json)
         |> Some
-    | None -> None
+    else
+        None
 
 let oauth2AuthCode(client_id,client_sceret,redirect_url) code = 
 
@@ -176,10 +181,36 @@ let checkDiscord (app,secret) (code,redirectUri) =
         oauth2AuthCode(app,secret,redirectUri) code
     oauth2UserInfo access_token
 
+
+let hDiscordAuth login (appId,secret,redirect) (x:ReqRep) =
+    if x.req.pathline.StartsWith "/redirect" then
+        let code = checkfield x.req.query "code"
+        let guild_id = checkfield x.req.query "guild_id"
+        let permission = checkfield x.req.query "permission"
+
+        let accessToken,json =
+            requestAccessToken
+                (appId,secret) redirect code
+
+        if accessToken.Length > 0 then
+            match requestUserInfo accessToken with
+            | Some(uid, username, avatar, json) ->
+                login(uid, username, avatar, json)
+            | None -> ()
+
+        x.rep <-
+            response302 "https://jbet.us"
+            |> Some
+        Suc x
+    else
+        Fail((),x)
+
+// DiscordSocketClient ================
+
 let token__client token = 
 
     let client = new DiscordSocketClient()
-
+    
     (fun msg -> 
         ())
     |> fun__Func<SocketMessage>

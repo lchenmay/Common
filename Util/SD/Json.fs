@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open System.Collections.Concurrent
 open System.Text
+open System.Web
 
 open Util.Text
 open Util.Time
@@ -127,7 +128,7 @@ let tryFindStrByAttWithDefault dft attName json =
             |> Array.tryFind(fun (n,_) -> n = attName) with
         | Some (n,v) -> 
             match v with
-            | Json.Str s -> s
+            | Json.Str s -> s |> HttpUtility.UrlDecode
             | _ -> dft
         | _ -> dft
     | _ -> dft
@@ -142,7 +143,7 @@ let tryFindNumByAtt attName json =
             |> Array.tryFind(fun (n,_) -> n = attName) with
         | Some (n,v) -> 
             match v with
-            | Json.Num s -> s
+            | Json.Num s -> s |> HttpUtility.UrlDecode
             | _ -> ""
         | _ -> ""
     | _ -> ""

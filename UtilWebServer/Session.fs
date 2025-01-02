@@ -10,6 +10,7 @@ open System.Collections.Concurrent
 open Util.Cat
 open Util.ADT
 open Util.Perf
+open Util.CollectionModDict
 open Util.Crypto
 open Util.DbQuery
 open Util.DbTx
@@ -28,7 +29,7 @@ open UtilWebServer.Api
 let keepSession = 7.0
 
 let user__session
-    (sessions: SessionsTemplate<'User,'Data>) 
+    (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
     user = 
 
     let key = 
@@ -48,7 +49,7 @@ let user__session
 
 let checkRuntimeSession 
     erUnauthorized 
-    (sessions: SessionsTemplate<'User,'Data>)
+    (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
     x = 
 
     x.sessiono <- 
@@ -76,7 +77,7 @@ let checkRuntimeSession
 
 let checkSessionUsero 
     erUnauthorized 
-    (sessions: SessionsTemplate<'User,'Data>)
+    (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
     x = 
 
     match

@@ -4,13 +4,29 @@ open System
 open System.Collections.Generic
 open System.Collections.Concurrent
 open System.Text
-open System.Web
 
 open Util.Text
 open Util.Time
 open Util.CollectionModDict
 open Util.Collection
 
+let decode(s:string) = 
+    let mutable r = (System.Web.HttpUtility.UrlDecode s)
+    r <- unescape_unicode r
+    r <- r.Replace("\\n", "\n")
+    r <- r.Replace("\\r", "\r")
+    r <- r.Replace("\\\"", "\"")
+    r <- r.Replace("\\\\", "\\")
+    r
+
+let encode(s:string) = 
+    let mutable r = (System.Web.HttpUtility.UrlDecode s)
+    r <- r.Replace("\\","\\\\")
+    r <- r.Replace("\"", "\\\"")
+    r <- r.Replace("\r", "\\r")
+    r <- r.Replace("\n", "\\n")
+    r <- escape_unicode r
+    r
 (*
 JSON有三类元素： 
 
@@ -54,8 +70,6 @@ JSON有三类元素：
 
 type Json = 
 | Str of string
-| Html of string
-| Clean of string
 | Num of string
 | True
 | False
@@ -74,11 +88,7 @@ type Token =
 
 let rec json__str (w:TextBlockWriter) json = 
     match json with
-    | Json.Str s ->
-        let encoded = System.Web.HttpUtility.JavaScriptStringEncode s
-        "\"" + encoded + "\"" |> w.newline
-    | Json.Html s -> "\"" + (System.Web.HttpUtility.JavaScriptStringEncode s) + "\"" |> w.newline
-    | Json.Clean s -> "\"" + s.Replace("\\u","%u").Replace("\r","").Replace("\n","").Replace("\t","").Replace("\"","'").Replace("\\n","").Replace("\\r","").Replace("\\","") + "\"" |> w.newline
+    | Json.Str s -> "\"" + (encode s) + "\"" |> w.newline
     | Json.Num s -> s |> w.newline
     | Json.True -> "true" |> w.newline
     | Json.False -> "false" |> w.newline
@@ -128,7 +138,7 @@ let tryFindStrByAttWithDefault dft attName json =
             |> Array.tryFind(fun (n,_) -> n = attName) with
         | Some (n,v) -> 
             match v with
-            | Json.Str s -> s |> HttpUtility.UrlDecode
+            | Json.Str s -> s
             | _ -> dft
         | _ -> dft
     | _ -> dft
@@ -143,7 +153,7 @@ let tryFindNumByAtt attName json =
             |> Array.tryFind(fun (n,_) -> n = attName) with
         | Some (n,v) -> 
             match v with
-            | Json.Num s -> s |> HttpUtility.UrlDecode
+            | Json.Num s -> s
             | _ -> ""
         | _ -> ""
     | _ -> ""
@@ -271,11 +281,13 @@ let str__tokens (s:string) =
                 sb.Clear() |> ignore
                 quoted <- true
             else
-                sb.ToString() 
-                |> unescape_unicode
+                let mutable s = sb.ToString() 
+                sb.Clear() |> ignore
+
+                s
+                |> decode
                 |> Token.StrQuoted 
                 |> tokens.Add
-                sb.Clear() |> ignore
                 quoted <- false
         else 
             if quoted then

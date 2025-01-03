@@ -9,6 +9,7 @@ open System.Text
 open Util.Cat
 open Util.Bin
 open Util.Text
+open Util.Json
 open Util.Db
 open Util.DbQuery
 open Util.DbTx
@@ -382,6 +383,10 @@ type MetadataTypes<'p> =
         empty__p: unit -> 'p
         rcd__bin: BytesBuilder -> Rcd<'p> -> unit
         bin__rcd: (byte[] * Ref<int>) -> Rcd<'p>
+        p__json: 'p -> Json
+        json__po: Json -> 'p option
+        rcd__json: Rcd<'p> -> Json
+        json__rcdo: Json -> Rcd<'p> option
         sql_update: unit -> string
         rcd_update: (string -> unit) -> Rcd<'p> -> unit
         table: string

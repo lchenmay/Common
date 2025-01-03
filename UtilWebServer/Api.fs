@@ -106,7 +106,7 @@ let createUpdateDelete
         if tryFindStrByAtt "act" x.json = "remove" then
             if  "WHERE ID=" + rcd.ID.ToString() |> delete loc conn metadata dbLoggero then
                 handlero postRemoveo v
-                [| ok |]
+                [|  ok |]
             else
                 er e
         else
@@ -116,7 +116,8 @@ let createUpdateDelete
                 | Some pIncoming -> 
                     if updateRcd loc conn metadata dbLoggero
                         (fun p -> pModifier p pIncoming) rcd then
-                        [| ok |]
+                        [|  ok
+                            ("rcd",rcd |> metadata.rcd__json) |]
                     else
                         er e
                 | None -> er e
@@ -136,7 +137,8 @@ let createUpdateDelete
                 match p__createRcd p metadata dbLoggero loc conn with
                 | Some rcd -> 
                     handlero postCreateo rcd
-                    [| ok |]
+                    [|  ok
+                        ("rcd",rcd |> metadata.rcd__json) |]
                 | None -> er e
             | None -> er e
         | None -> er e

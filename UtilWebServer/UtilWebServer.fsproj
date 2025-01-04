@@ -20,6 +20,7 @@
     <Compile Include="Auth.fs" />
     <Compile Include="OpenGraph.fs" />
     <Compile Include="SSR.fs" />
+    <Compile Include="PageLog.fs" />
     <Compile Include="Cache.fs" />
     <Compile Include="Server\Common.fs" />
     <Compile Include="Server\File.fs" />

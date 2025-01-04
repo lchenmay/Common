@@ -71,12 +71,17 @@ let updateDbStructure runtime conn =
     "Updating database structure ... " |> runtime.output
 
     let file = 
-        match rdbms with
-        | Rdbms.SqlServer -> "/sqlSQLServer.sql"
-        | Rdbms.PostgreSql -> "/sqlPostgreSQL.sql"
+        let file = 
+            match rdbms with
+            | Rdbms.SqlServer -> "sqlSQLServer.sql"
+            | Rdbms.PostgreSql -> "sqlPostgreSQL.sql"
+            
+        // C:\Dev\XXX\XXX.Server\bin\Debug\net8.0
+        Path.Combine(runtime.host.VsDirSolution,runtime.projectCode + ".Shared",file)
+
 
     match
-        Environment.CurrentDirectory + file
+        file
         |> File.ReadAllText
         |> txOne conn runtime.output with
     | Suc x -> 

@@ -11,7 +11,10 @@ open Util.CollectionModDict
 open Util.Collection
 
 let decode(s:string) = 
-    let mutable r = (System.Web.HttpUtility.UrlDecode s)
+    let mutable r = s
+    //if r.ToLower().Contains "%2b" then
+    //    ()
+    //r <- System.Web.HttpUtility.UrlDecode r
     r <- unescape_unicode r
     r <- r.Replace("\\n", "\n")
     r <- r.Replace("\\r", "\r")
@@ -20,7 +23,10 @@ let decode(s:string) =
     r
 
 let encode(s:string) = 
-    let mutable r = (System.Web.HttpUtility.UrlDecode s)
+    let mutable r = s
+    //if r.ToLower().Contains "+" then
+    //    ()
+    //r <- System.Web.HttpUtility.UrlEncode r
     r <- r.Replace("\\","\\\\")
     r <- r.Replace("\"", "\\\"")
     r <- r.Replace("\r", "\\r")

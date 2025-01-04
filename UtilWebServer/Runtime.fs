@@ -35,6 +35,7 @@ let createLisener output fileService port =
         output = output }
 
 let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
+    projectCode
     (host:Host<'HostData>)
     (data:'RuntimeData):RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData> =
     {
@@ -45,5 +46,6 @@ let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
         output = output
         listener = 
             createLisener output 
-                (fileService host.fsDir host.vueDeployDir) host.port }
+                (fileService host.fsDir host.vueDeployDir) host.port
+        projectCode = projectCode }
 

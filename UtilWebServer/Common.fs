@@ -42,6 +42,7 @@ mutable DiscordPubKey: string
 mutable DiscordSecret: string
 mutable DiscordRedirect: string
 
+mutable VsDirSolution: string
 mutable vueDeployDir: string
 mutable fsDir: string }
 
@@ -87,6 +88,7 @@ data: 'RuntimeData
 users: ModDictInt64<'User>
 sessions: ModDictStr<SessionTemplate<'User,'SessionData>>
 output: string -> unit
+projectCode: string
 listener: Listener }
 
 type ReqRep = { req: HttpRequest; mutable rep: byte[] option }

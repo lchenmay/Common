@@ -127,7 +127,7 @@ let hHomepage render x =
 let homepage ssr vueDeployDir plugin =
     hHomepage (fun _ -> ssr |> render (vueIndexFile__hashes(vueDeployDir + "/index.html")) plugin)
 
-let hSitemap x__items (x:ReqRep) =
+let hSEO x__items (x:ReqRep) =
     if x.req.pathline = "/sitemap.xml" then
         x.rep <-
             
@@ -152,6 +152,15 @@ let hSitemap x__items (x:ReqRep) =
             "</urlset>" |> w.newline
 
             w.text()
+            |> System.Text.Encoding.UTF8.GetBytes
+            |> bin__StandardResponse "text/xml"
+            |> Some
+        Suc x
+    else if x.req.pathline = "/robots.txt" then
+        x.rep <-
+            [|  "User-agent: *"
+                "Disallow:" |]
+            |> String.concat crlf
             |> System.Text.Encoding.UTF8.GetBytes
             |> bin__StandardResponse "text/xml"
             |> Some

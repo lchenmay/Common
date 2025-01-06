@@ -29,6 +29,10 @@ let output:string -> unit =
         Console.OutputEncoding <- Encoding.Unicode
         prompt since >> Console.WriteLine
 
+
+type ReqRep = { req: HttpRequest; mutable rep: byte[] option }
+type CWQP = CtxWrapper<ReqRep,unit>
+
 type Host<'Data> = {
 mutable data: 'Data
 mutable port: int
@@ -40,10 +44,9 @@ mutable updateDatabase: bool
 mutable DiscordAppId: string
 mutable DiscordPubKey: string
 mutable DiscordSecret: string
-mutable DiscordRedirect: string
 
 mutable VsDirSolution: string
-mutable vueDeployDir: string
+mutable req__vueDeployDir: HttpRequest -> string
 mutable fsDir: string }
 
 type ConnState = 
@@ -90,6 +93,3 @@ sessions: ModDictStr<SessionTemplate<'User,'SessionData>>
 output: string -> unit
 projectCode: string
 listener: Listener }
-
-type ReqRep = { req: HttpRequest; mutable rep: byte[] option }
-type CWQP = CtxWrapper<ReqRep,unit>

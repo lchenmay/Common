@@ -18,13 +18,14 @@ open Util.Http
 open Util.HttpServer
 open Util.Zmq
 
+open UtilWebServer.Common
 open UtilWebServer.Json
 open UtilWebServer.Db
 open UtilWebServer.DbLogger
 
 type ApiReturn = (string * Json)[]
 
-type ApiCtx<'Runtime,'Session, 'Error> = { 
+type ApiCtx<'Runtime,'Session,'Error> = { 
 since: DateTime
 service: string
 api: string
@@ -35,7 +36,10 @@ mutable sessiono: 'Session option
 mutable ero: 'Error option
 runtime: 'Runtime    }
 
-let incoming__x runtime service api ip json = 
+let incoming__x 
+    runtime
+    service 
+    api ip json = 
     {
         since = DateTime.UtcNow
         service = service
@@ -64,18 +68,16 @@ let echoApiHandler branch req =
     let service = req.path[1]
     let api = req.path[2]
 
-    let req = 
-        req.body
-        |> System.Text.Encoding.UTF8.GetString 
-        |> str__root 
+    let sReq = req.body |> System.Text.Encoding.UTF8.GetString 
+    let jsonReq = sReq |> str__root 
 
-    let rep = 
-        req
+    let jsonRep = 
+        jsonReq
         |> branch service api 
         |> Json.Braket
 
-    rep
-    |> json__strFinal
+    let sRep = jsonRep |> json__strFinal
+    sRep
     |> str__StandardResponse "application/json"
 
 let tryLoadFromJsonIdWrapOK 

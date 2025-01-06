@@ -52,22 +52,15 @@ let checkRuntimeSession
     (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
     x = 
 
-    x.sessiono <- 
-        let s = tryFindStrByAtt "session" x.json
-        if s.Length = 0 then
-            None
-        else
-            if sessions.ContainsKey s then
-                let session = sessions[s]
-                if DateTime.UtcNow.Ticks >= session.expiry.Ticks then
-                    sessions.Remove s
-                    |> ignore
+    x.sessiono <- None
 
-                    None
-                else
-                    Some session
-            else
-                None
+    let s = tryFindStrByAtt "session" x.json
+    if s.Length > 0 && sessions.ContainsKey s then
+        let session = sessions[s]
+        if DateTime.UtcNow.Ticks >= session.expiry.Ticks then
+            sessions.Remove s |> ignore
+        else
+            x.sessiono <- Some session
 
     match x.sessiono with
     | Some session -> Suc x

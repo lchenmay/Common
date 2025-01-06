@@ -114,18 +114,24 @@ let hapi echoApiHandler branch x =
 
 let hHomepage render x = 
     let req = x.req
-    match req.pathline with
-    | ""
-    | "/" ->
+
+    // pathline = /?session=E3500820E03FC50ED65E89C60132DBDADE30D94557BDB37C7A8BA6F675B95A35&id=1003
+    
+    if  req.pathline = ""
+        || req.pathline = "/"
+        || req.pathline.StartsWith "/?" then
         x.rep <-
             render()
             |> bin__StandardResponse "text/html"
             |> Some
         Suc x
-    | _ -> Fail((),x)
+    else
+        Fail((),x)
 
 let homepage ssr vueDeployDir plugin =
-    hHomepage (fun _ -> ssr |> render (vueIndexFile__hashes(vueDeployDir + "/index.html")) plugin)
+    hHomepage (fun _ -> 
+        ssr 
+        |> render (vueIndexFile__hashes(vueDeployDir + "/index.html")) plugin)
 
 let hSEO x__items (x:ReqRep) =
     if x.req.pathline = "/sitemap.xml" then

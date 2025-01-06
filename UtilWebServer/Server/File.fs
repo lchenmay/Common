@@ -60,7 +60,7 @@ let ext__mime (ext:string) =
 
 
 
-let fileService fsDir vueDeployDir req = 
+let fileService fsDir req__vueDeployDir req = 
 
     let mutable file = 
         [|  [| fsDir |]
@@ -70,7 +70,7 @@ let fileService fsDir vueDeployDir req =
 
     if File.Exists file = false then
         file <- 
-            [|  [| vueDeployDir |]
+            [|  [| req__vueDeployDir req |]
                 req.path |]
             |> Array.concat
             |> Path.Combine

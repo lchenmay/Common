@@ -182,24 +182,32 @@ let checkDiscord (app,secret) (code,redirectUri) =
     oauth2UserInfo access_token
 
 
-let hDiscordAuth login (appId,secret,redirect) (x:ReqRep) =
+let hDiscordAuth 
+    login (appId,secret) x__urls
+    (x:ReqRep) =
     if x.req.pathline.StartsWith "/redirect" then
         let code = checkfield x.req.query "code"
         let guild_id = checkfield x.req.query "guild_id"
         let permission = checkfield x.req.query "permission"
 
+        let redirect,final = x__urls x
+
         let accessToken,json =
             requestAccessToken
                 (appId,secret) redirect code
 
-        if accessToken.Length > 0 then
-            match requestUserInfo accessToken with
-            | Some(uid, username, avatar, json) ->
-                login(uid, username, avatar, json)
-            | None -> ()
+        let session,id = 
+            if accessToken.Length > 0 then
+                match requestUserInfo accessToken with
+                | Some(uid, username, avatar, json) ->
+                    login(uid, username, avatar)
+                | None -> "",0L
+            else
+                "",0L
 
         x.rep <-
-            response302 "https://jbet.us"
+            final + "?session=" + session + "&uid=" + id.ToString()
+            |> response302 
             |> Some
         Suc x
     else

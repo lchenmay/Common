@@ -11,28 +11,55 @@ open Util.CollectionModDict
 open Util.Collection
 
 let decode(s:string) = 
-    let mutable r = s
-    //if r.ToLower().Contains "%2b" then
-    //    ()
-    //r <- System.Web.HttpUtility.UrlDecode r
-    r <- unescape_unicode r
-    r <- r.Replace("\\n", "\n")
-    r <- r.Replace("\\r", "\r")
-    r <- r.Replace("\\\"", "\"")
-    r <- r.Replace("\\\\", "\\")
-    r
+
+    let cs = (unescape_unicode s).ToCharArray()
+    let buffer = new List<char>()
+    let mutable index = 0
+    while index < cs.Length do
+        let c = cs[index]
+        if c = '\\' then
+            let next = index + 1
+            if next < cs.Length then
+                match cs[next] with
+                | '\\' -> buffer.Add '\\'
+                | 'n' -> buffer.Add '\n'
+                | 'r' -> buffer.Add '\r'
+                | '"' -> buffer.Add '"'
+                | _ -> ()
+                index <- index + 2
+            else
+                buffer.Add c
+                index <- index + 1
+        else
+            buffer.Add c
+            index <- index + 1
+
+    new string(buffer.ToArray())
 
 let encode(s:string) = 
-    let mutable r = s
-    //if r.ToLower().Contains "+" then
-    //    ()
-    //r <- System.Web.HttpUtility.UrlEncode r
-    r <- r.Replace("\\","\\\\")
-    r <- r.Replace("\"", "\\\"")
-    r <- r.Replace("\r", "\\r")
-    r <- r.Replace("\n", "\\n")
-    r <- escape_unicode r
-    r
+
+    let cs = (unescape_unicode s).ToCharArray()
+    let buffer = new List<char>()
+    [| 0 .. cs.Length - 1 |]
+    |> Array.iter(fun i -> 
+        let c = cs[i]
+        match c with
+        | '\\' -> 
+            buffer.Add '\\'
+            buffer.Add '\\'
+        | '\n' -> 
+            buffer.Add '\\'
+            buffer.Add 'n'
+        | '\r' -> 
+            buffer.Add '\\'
+            buffer.Add 'r'
+        | '"' -> 
+            buffer.Add '\\'
+            buffer.Add '"'
+        | _ -> buffer.Add c)
+
+    new string(buffer.ToArray())
+
 (*
 JSON有三类元素： 
 

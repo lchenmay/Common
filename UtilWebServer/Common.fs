@@ -88,6 +88,7 @@ type SessionsTemplate<'User,'Data> = ConcurrentDictionary<string,SessionTemplate
 type RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData> = {
 host: Host<'HostData>
 data: 'RuntimeData
+mutable langs: string[]
 users: ModDictInt64<'User>
 sessions: ModDictStr<SessionTemplate<'User,'SessionData>>
 output: string -> unit

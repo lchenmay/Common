@@ -16,6 +16,7 @@ open Util.DbQuery
 open Util.DbTx
 open Util.Orm
 
+open UtilWebServer.Constants
 open UtilWebServer.Common
 open UtilWebServer.Server.Common
 open UtilWebServer.Server.Net
@@ -41,6 +42,7 @@ let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
     {
         host = host
         data = data 
+        langs = [| en |]
         users = createModDictInt64 4
         sessions = createModDictStr 4
         output = output

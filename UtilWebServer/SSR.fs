@@ -171,5 +171,14 @@ let hSEO x__items (x:ReqRep) =
             |> bin__StandardResponse "text/xml"
             |> Some
         Suc x
+    else if x.req.pathline = "/favicon.ico" then
+        x.rep <-
+            [|  "User-agent: *"
+                "Disallow:" |]
+            |> String.concat crlf
+            |> System.Text.Encoding.UTF8.GetBytes
+            |> bin__StandardResponse "text/xml"
+            |> Some
+        Suc x
     else
         Fail((),x)

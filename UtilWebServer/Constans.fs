@@ -5,9 +5,12 @@ open System.Text
 open System.IO
 open System.Diagnostics
 
+let en = "en"
+let zh = "zh"
+
 let freqLangCodes = 
-    [|  "en"
-        "zh"
+    [|  en
+        zh
         "fr"
         "de"
         "jp"

@@ -95,8 +95,8 @@ let tryLoadFromJsonIdWrapOK
         |> wrapOk n
     | None -> er e
 
-let createUpdateDelete 
-    loc conn metadata dbLoggero e tryLoader v__rcd json__p 
+let createUpdateDeleteAct
+    loc conn metadata dbLoggero e tryLoader hacto v__rcd json__p 
     pModifier postRemoveo preCreateo postCreateo
     x =
     match 
@@ -105,13 +105,8 @@ let createUpdateDelete
         |> tryLoader with
     | Some v -> 
         let rcd = v__rcd v
-        if tryFindStrByAtt "act" x.json = "remove" then
-            if  "WHERE ID=" + rcd.ID.ToString() |> delete loc conn metadata dbLoggero then
-                handlero postRemoveo v
-                [|  ok |]
-            else
-                er e
-        else
+        let act = tryFindStrByAtt "act" x.json
+        if act = "" then
             match tryFindByAtt "p" x.json with
             | Some(n,json) ->
                 match json |> json__p with
@@ -123,6 +118,16 @@ let createUpdateDelete
                     else
                         er e
                 | None -> er e
+            | None -> er e
+        else if act = "remove" then
+            if  "WHERE ID=" + rcd.ID.ToString() |> delete loc conn metadata dbLoggero then
+                handlero postRemoveo v
+                [|  ok |]
+            else
+                er e
+        else 
+            match hacto with
+            | Some h -> h act v
             | None -> er e
     | None ->
         match tryFindByAtt "p" x.json with

@@ -112,14 +112,22 @@ let hapi echoApiHandler branch x =
         Fail((),x)
 
 
-let hHomepage render x = 
+let hHomepage (langs:string[]) render x = 
     let req = x.req
 
     // pathline = /?session=E3500820E03FC50ED65E89C60132DBDADE30D94557BDB37C7A8BA6F675B95A35&id=1003
-    
-    if  req.pathline = ""
+
+    let mutable hit = 
+        req.pathline = ""
         || req.pathline = "/"
-        || req.pathline.StartsWith "/?" then
+        || req.pathline.StartsWith "/?"
+
+    if not hit then
+        hit <- 
+            (langs
+            |> Array.tryFind(fun i -> "/" + i + "/" |> req.pathline.StartsWith)).IsSome
+
+    if hit then
         x.rep <-
             render()
             |> bin__StandardResponse "text/html"
@@ -128,8 +136,8 @@ let hHomepage render x =
     else
         Fail((),x)
 
-let homepage ssr vueDeployDir plugin =
-    hHomepage (fun _ -> 
+let homepage langs ssr vueDeployDir plugin =
+    hHomepage langs (fun _ -> 
         ssr 
         |> render (vueIndexFile__hashes(vueDeployDir + "/index.html")) plugin)
 

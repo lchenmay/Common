@@ -7,6 +7,7 @@ open System.Diagnostics
 
 let en = "en"
 let zh = "zh"
+let jp = "jp"
 
 let freqLangCodes = 
     [|  en

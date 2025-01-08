@@ -112,7 +112,7 @@ let hapi echoApiHandler branch x =
         Fail((),x)
 
 
-let hHomepage (langs:string[]) render x = 
+let hHomepage (langs:string[]) (pages:string[]) render x = 
     let req = x.req
 
     // pathline = /?session=E3500820E03FC50ED65E89C60132DBDADE30D94557BDB37C7A8BA6F675B95A35&id=1003
@@ -121,6 +121,12 @@ let hHomepage (langs:string[]) render x =
         req.pathline = ""
         || req.pathline = "/"
         || req.pathline.StartsWith "/?"
+
+    if not hit then
+        hit <- 
+            (pages
+            |> Array.tryFind(fun i -> 
+                req.pathline.StartsWith i)).IsSome
 
     if not hit then
         hit <- 
@@ -136,10 +142,32 @@ let hHomepage (langs:string[]) render x =
     else
         Fail((),x)
 
-let homepage langs ssr vueDeployDir plugin =
-    hHomepage langs (fun _ -> 
+let homepage langs pages ssr vueDeployDir plugin =
+    hHomepage langs pages (fun _ -> 
         ssr 
         |> render (vueIndexFile__hashes(vueDeployDir + "/index.html")) plugin)
+
+
+let hSsrSinglePage paramName plugin vueDeployDir 
+    tryFinder v__SsrPage
+    (x:ReqRep) = 
+    let req = x.req
+    if req.path.Length = 2 then
+        if req.path[0] = paramName then
+            let id = req.path[1] |> parse_int64
+            match tryFinder id with
+            | Some v -> 
+                x.rep <-
+                    v__SsrPage v
+                    |> render (vueIndexFile__hashes(vueDeployDir + "/index.html")) plugin
+                    |> bin__StandardResponse "text/html"
+                    |> Some
+                Suc x
+            | None -> Fail((),x)
+        else
+            Fail((),x)
+    else
+        Fail((),x)
 
 let hSEO x__items (x:ReqRep) =
     if x.req.pathline = "/sitemap.xml" then

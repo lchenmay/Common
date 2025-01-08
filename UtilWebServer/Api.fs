@@ -26,6 +26,7 @@ open UtilWebServer.DbLogger
 type ApiReturn = (string * Json)[]
 
 type ApiCtx<'Runtime,'Session,'Error> = { 
+req: HttpRequest
 since: DateTime
 service: string
 api: string
@@ -37,10 +38,10 @@ mutable ero: 'Error option
 runtime: 'Runtime    }
 
 let incoming__x 
-    runtime
-    service 
-    api ip json = 
+    runtime req
+    service api ip json = 
     {
+        req = req
         since = DateTime.UtcNow
         service = service
         api = api

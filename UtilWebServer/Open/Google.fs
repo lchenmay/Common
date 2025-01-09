@@ -1,4 +1,4 @@
-﻿module Util.WebServer.Open.Google
+﻿module UtilWebServer.Open.Google
 
 open System
 
@@ -39,3 +39,49 @@ let requestAccessToken(client_id:string[],client_sceret,redirect_url) code =
     //    uid, email, avatar, fn, ln, name, lang, jwts,uid
     //else
     //    "","","","","","","","",""
+
+let translate apiKey src dst txt = 
+
+    let hc = empty__HttpClient()
+    
+    let url = 
+        [|  "https://translation.googleapis.com/language/translate/v2?key="
+            apiKey |]
+        |> String.Concat
+
+    let postdata = 
+        [|  "target=" + dst
+            "&q=" + Util.Json.encode(txt) |]
+        |> String.Concat
+
+    let html = hc.post(url,postdata).html
+
+    let mutable res = ""
+
+    let mutable json = html |> Util.Json.str__root
+    match tryFindByPath [| "data";"translations" |] json with
+    | Some (n,j) -> 
+        match j with
+        | Json.Ary items -> 
+            if items.Length = 1 then
+                res <- 
+                    tryFindStrByAtt "translatedText" items[0]
+                    |> Util.Json.decode
+        | _ -> ()
+    | None -> ()
+
+    (*
+{
+  "data": {
+    "translations": [
+      {
+        "translatedText": "Chinese translation test",
+        "detectedSourceLanguage": "zh-CN"
+      }
+    ]
+  }
+}
+    
+    *)
+
+    res

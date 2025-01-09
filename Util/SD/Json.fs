@@ -163,6 +163,18 @@ let tryFindByAtt attName json =
     | Json.Braket items -> items |> Array.tryFind(fun (n,_) -> n = attName)
     | _ -> None
 
+let tryFindByPath (path:string[]) json = 
+    let mutable o = Some("",json)
+
+    path
+    |> Array.iter(fun item -> 
+        match o with
+        | Some(n,j) -> 
+            o <- tryFindByAtt item j
+        | None -> ())
+
+    o
+
 let tryFindStrByAttWithDefault dft attName json = 
     match json with
     | Json.Braket items -> 

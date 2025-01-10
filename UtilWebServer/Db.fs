@@ -32,6 +32,16 @@ let loggedPipeline dbLoggero (loc:string) conn pretx =
     else
         true
 
+let p__create metadata pretx p = 
+    let tid = Interlocked.Increment metadata.id
+    let rcd = 
+        ((tid,pretx.dt,pretx.dt,tid),p)
+        |> metadata.wrapper
+    let tx = 
+        (tid,pretx.dt,pretx.dt,tid,p)
+        |> build_create_sql metadata
+    rcd,tx    
+
 let id__CreateTx tid pretx metadata p = 
 
     let rcd = 
@@ -84,12 +94,13 @@ let update loc conn metadata dbLoggero (id,p) =
 let updateRcd loc conn metadata dbLoggero changer rcd = 
     
     let current = metadata.clone rcd.p
-    changer rcd.p
-
-    if update loc conn metadata dbLoggero (rcd.ID,rcd.p) then
-        true
+    if changer rcd.p then
+        if update loc conn metadata dbLoggero (rcd.ID,rcd.p) then
+            true
+        else
+            rcd.p <- current
+            false
     else
-        rcd.p <- current
         false
 
 let delete loc conn metadata dbLoggero where = 

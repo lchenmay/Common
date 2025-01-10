@@ -96,6 +96,52 @@ let tryLoadFromJsonIdWrapOK
         |> wrapOk n
     | None -> er e
 
+let createUpdateDeleteActTx
+    loc conn metadata dbLoggero e tryLoader v__rcd json__p 
+    (p__UpdateTx, onUpdateSuc)
+    (p__ActTx, onActSuc)
+    (p__CreateTx, onCreateSuc)
+    x =
+
+    let pretx = None |> opctx__pretx
+
+    match 
+        tryFindNumByAtt "id" x.json
+        |> parse_int64
+        |> tryLoader with
+    | Some v -> 
+        let rcd = v__rcd v
+        let act = tryFindStrByAtt "act" x.json
+        if act = "" then
+            match tryFindByAtt "p" x.json with
+            | Some(n,json) ->
+                match json |> json__p with
+                | Some pIncoming -> 
+                    let p,tag,txs = p__UpdateTx pretx v rcd pIncoming
+                    txs |> pretx.sqls.AddRange
+                    if pretx |> loggedPipeline dbLoggero loc conn then
+                        rcd.p <- p
+                        onUpdateSuc v rcd tag
+                    else
+                        er e
+                | None -> er e
+            | None -> er e
+        else
+            p__ActTx act v rcd
+    | None ->
+        match tryFindByAtt "p" x.json with
+        | Some(n,json) ->
+            match json |> json__p with
+            | Some pIncoming -> 
+                let rcd,tag,txs = p__CreateTx pretx pIncoming 
+                txs |> pretx.sqls.AddRange
+                if pretx |> loggedPipeline dbLoggero loc conn then
+                    onCreateSuc rcd tag
+                else
+                    er e
+            | None -> er e
+        | None -> er e
+
 let createUpdateDeleteAct
     loc conn metadata dbLoggero e tryLoader hacto v__rcd json__p 
     pModifier postRemoveo preCreateo postCreateo
@@ -150,6 +196,7 @@ let createUpdateDeleteAct
                 | None -> er e
             | None -> er e
         | None -> er e
+
 
 let nullParam = 
     [|  ("Er",Json.Str "") |]

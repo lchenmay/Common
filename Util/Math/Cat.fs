@@ -7,6 +7,9 @@ open System.Collections.Generic
 type Hom<'X,'Y> = 'X -> 'Y
 type End<'X> = 'X -> 'X
 
+let id x = x
+let __unit x = ()
+
 type CtxWrapper<'ctx,'ex> =
 | Suc of 'ctx
 | Fail of 'ex * 'ctx

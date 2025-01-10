@@ -205,10 +205,17 @@ let hDiscordAuth
             else
                 "",0L
 
-        x.rep <-
-            final + "?session=" + session + "&uid=" + id.ToString()
-            |> response302 
+        let url = final + "?session=" + session + "&uid=" + id.ToString()
+        x.rep <- 
+            [|
+                """<script type="text/javascript">"""
+                "window.location.href = \"" + url + "\";"
+                "</script>" |]
+            |> String.Concat
+            |> System.Text.Encoding.ASCII.GetBytes
+            |> bin__StandardResponse "text/html"
             |> Some
+
         Suc x
     else
         Fail((),x)

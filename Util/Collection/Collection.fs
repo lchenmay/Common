@@ -19,6 +19,17 @@ let filter<'A,'B> matcher (data:'A[]) =
         | None -> ())
     res.ToArray()
 
+let arrayExcludeOne filter items item = 
+    items
+    |> Array.filter (filter item)
+
+let arrayExcludeMultiple filter items excluded = 
+    items
+    |> Array.filter (fun i -> 
+        (excluded
+        |> Array.filter(fun j -> filter i j)
+        |> Array.length = 0))
+
 let arrayKVP__dict array =
     let dict = new Dictionary<'K,'T>()
     array 

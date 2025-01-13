@@ -60,7 +60,8 @@ let try_read_lines filename =
         let lines = 
             shared_read_bin filename 
             |> System.Text.Encoding.UTF8.GetString
-            |> Util.Text.str__lines Util.Text.crlf
+            |> (fun s -> s.Replace(Util.Text.crlf,Util.Text.lf))
+            |> Util.Text.str__lines Util.Text.lf
 
         "", lines
     with

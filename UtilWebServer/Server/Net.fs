@@ -25,7 +25,7 @@ let tryReadToEnd conn =
     let bb = new BytesBuilder()
 
     let mutable ip = ""
-
+    
     try
         if conn.client.Client <> null then
             ip <- conn.client.Client.RemoteEndPoint.ToString()
@@ -36,7 +36,9 @@ let tryReadToEnd conn =
                 if count > 0 then
                     bb.append bs
     with
-    | ex -> ()
+    | :? System.NullReferenceException as ex ->
+        ()
+    | _ -> ()
 
     let bin = bb.bytes()
     ip,bin

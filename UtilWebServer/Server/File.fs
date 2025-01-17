@@ -3,9 +3,11 @@
 open System
 open System.IO
 open System.Threading
+open System.Collections.Generic
 
 open Util.Cat
 open Util.ADT
+open Util.Bin
 open Util.Db
 open Util.DbTx
 open Util.Collection
@@ -14,9 +16,11 @@ open Util.Orm
 open Util.Http
 open Util.HttpServer
 open Util.Text
+open Util.Json
 
 open UtilWebServer.Common
 open UtilWebServer.Db
+open UtilWebServer.Api
 
 let mutable fileErLoggero: (string * exn -> unit) option = None
 
@@ -112,66 +116,126 @@ let file__bin fsDir fid fsuffix =
 
 
 let echoUploadFile
+    (uploadBuffer: Dictionary<int64,BytesBuilder>)
+    (tryGet: int64 -> Rcd<'p> option)
+    rcd__suffix
     fsDir conn (metadata:MetadataTypes<'p>) dbLoggero
     setter postCreateo (x:ReqRep) =
+
+    let mutable res = Fail((),x)
+
     let req = x.req
     if req.path.Length = 1 then
         if req.path[0] = "upload" then
             
-            let id = Interlocked.Increment metadata.id
+            let sReq = req.body |> System.Text.Encoding.UTF8.GetString 
+            let json= sReq |> str__root 
 
-            let owner = 0L
-            let caption = 
-                if req.headers.ContainsKey "Filename" then
-                    req.headers["Filename"].Trim()
-                else
-                    ""
-            let suffix = 
-                let index = caption.LastIndexOf "."
-                if index > 0 then
-                    let s = caption.Substring (index + 1)
-                    if s.Length <= 4 then
-                        s.ToLower()
-                    else
-                        ""
-                else
-                    ""
-            let desc = 
-                if req.headers.ContainsKey "Desc" then
-                    req.headers["Desc"].Trim()
-                else
-                    ""
+            let id = tryFindNumByAtt "id" json |> parse_int64
+            let length = tryFindNumByAtt "length" json |> parse_int32
+            let block = tryFindNumByAtt "block" json |> parse_int32
+            let size = tryFindNumByAtt "size" json |> parse_int32
+            let caption = tryFindStrByAtt "filename" json
+            let desc = tryFindStrByAtt "desc" json
+            let body = req.body |> System.Text.Encoding.ASCII.GetString
 
-            let suc =
-                try
-                    let filename = buildfilename fsDir id suffix
-                    System.IO.File.WriteAllBytes(filename,req.body)
-                    if System.IO.File.Exists filename then
+            match tryGet id with
+            | Some rcd ->
+                if uploadBuffer.ContainsKey id then
+                    let buffer = uploadBuffer[id]
+                    let bin = Convert.FromBase64String body
+                    buffer.append bin
+                    
+                    if buffer.length() = length then
+                        let bin = buffer.bytes()
+                        
+                        let saved = 
+                            try
+                                let filename = buildfilename fsDir id (rcd |> rcd__suffix)
+                                System.IO.File.WriteAllBytes(filename,req.body)
+                                System.IO.File.Exists filename
+                            with
+                            | ex -> false
 
-                        let p = metadata.empty__p()
-                        setter p (owner,caption,suffix,desc,req.body.Length)
-    
-                        let pretx = None |> opctx__pretx
 
-                        let rcd = 
-                            p
-                            |> id__CreateTx id pretx metadata
 
-                        if pretx |> loggedPipeline dbLoggero "BizLogics.Db" conn then
-                            handlero postCreateo rcd
-                            true
+
+                        uploadBuffer.Remove id |> ignore
+
+            | None -> 
+
+                if block > 0 && size > 0 then
+
+                    let id = Interlocked.Increment metadata.id
+
+                    let owner = 0L
+                    let suffix = 
+                        let index = caption.LastIndexOf "."
+                        if index > 0 then
+                            let s = caption.Substring (index + 1)
+                            if s.Length <= 4 then
+                                s.ToLower()
+                            else
+                                ""
                         else
-                            false
-                    else
-                        false
-                with
-                | ex -> false
+                            ""
 
-            Suc x
-        else 
-            Fail((),x)
-    else
-        Fail((),x)
+                    let filename = buildfilename fsDir id suffix
+
+                    let p = metadata.empty__p()
+                    setter p (owner,caption,suffix,desc,req.body.Length)
+    
+                    let pretx = None |> opctx__pretx
+
+                    let rcd = 
+                        p
+                        |> id__CreateTx id pretx metadata
+
+                    if pretx |> loggedPipeline dbLoggero "BizLogics.Db" conn then
+                        handlero postCreateo rcd
+                    //    true
+                    //else
+                    //    false
+
+                    x.rep <- 
+                        [|  "{ \"Er\":\"OK\""
+                            ",\"id\":" + id.ToString() + " }" |]
+                        |> String.Concat
+                        |> str__StandardResponse "application/json"
+                        |> Some
+
+                    res <- Suc x
+
+            //let id = Interlocked.Increment metadata.id
+
+            //let suc =
+            //    try
+            //        let filename = buildfilename fsDir id suffix
+            //        System.IO.File.WriteAllBytes(filename,req.body)
+            //        if System.IO.File.Exists filename then
+
+            //            let p = metadata.empty__p()
+            //            setter p (owner,caption,suffix,desc,req.body.Length)
+    
+            //            let pretx = None |> opctx__pretx
+
+            //            let rcd = 
+            //                p
+            //                |> id__CreateTx id pretx metadata
+
+            //            if pretx |> loggedPipeline dbLoggero "BizLogics.Db" conn then
+            //                handlero postCreateo rcd
+            //                true
+            //            else
+            //                false
+            //        else
+            //            false
+            //    with
+            //    | ex -> false
+
+            res <- Suc x
+
+    res
 
 let echoDownloadFile 
     fsDir (metadata:MetadataTypes<'p>)

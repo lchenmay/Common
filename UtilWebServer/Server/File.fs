@@ -116,7 +116,7 @@ let file__bin fsDir fid fsuffix =
 
 
 let echoUploadFile
-    (uploadBuffer: Dictionary<int64,BytesBuilder>)
+    (uploadBuffer: Dictionary<int64,SortedDictionary<int,byte[]>>)
     (tryGet: int64 -> Rcd<'p> option)
     rcd__suffix
     fsDir conn (metadata:MetadataTypes<'p>) dbLoggero
@@ -134,6 +134,7 @@ let echoUploadFile
             let id = tryFindNumByAtt "id" json |> parse_int64
             let length = tryFindNumByAtt "length" json |> parse_int32
             let block = tryFindNumByAtt "block" json |> parse_int32
+            let index = tryFindNumByAtt "i" json |> parse_int32
             let size = tryFindNumByAtt "size" json |> parse_int32
             let caption = tryFindStrByAtt "filename" json
             let desc = tryFindStrByAtt "desc" json
@@ -144,24 +145,24 @@ let echoUploadFile
                 if uploadBuffer.ContainsKey id then
                     let buffer = uploadBuffer[id]
                     //let bin = Convert.FromBase64String body
-                    let bin = 
+                    buffer[index] <-
                         tryFindStrByAtt "data" json
                         |> Convert.FromHexString
-                    buffer.append bin
                     
-                    if buffer.length() = length then
-                        let bin = buffer.bytes()
+                    if buffer.Count = block then
+                        let bin = 
+                            buffer.Keys
+                            |> Seq.toArray
+                            |> Array.map(fun k -> buffer[k])
+                            |> Array.concat
                         
                         let saved = 
                             try
                                 let filename = buildfilename fsDir id (rcd |> rcd__suffix)
-                                System.IO.File.WriteAllBytes(filename,buffer.bytes())
+                                System.IO.File.WriteAllBytes(filename,bin)
                                 System.IO.File.Exists filename
                             with
                             | ex -> false
-
-
-
 
                         uploadBuffer.Remove id |> ignore
 
@@ -183,8 +184,6 @@ let echoUploadFile
                         else
                             ""
 
-                    let filename = buildfilename fsDir id suffix
-
                     let p = metadata.empty__p()
                     setter p (owner,caption,suffix,desc,length)
     
@@ -196,7 +195,7 @@ let echoUploadFile
 
                     if pretx |> loggedPipeline dbLoggero "BizLogics.Db" conn then
                         handlero postCreateo rcd
-                        uploadBuffer[rcd.ID] <- new BytesBuilder()
+                        uploadBuffer[rcd.ID] <- new SortedDictionary<int,byte[]>()
 
                     x.rep <- 
                         [|  "{ \"Er\":\"OK\""
@@ -206,33 +205,6 @@ let echoUploadFile
                         |> Some
 
                     res <- Suc x
-
-            //let id = Interlocked.Increment metadata.id
-
-            //let suc =
-            //    try
-            //        let filename = buildfilename fsDir id suffix
-            //        System.IO.File.WriteAllBytes(filename,req.body)
-            //        if System.IO.File.Exists filename then
-
-            //            let p = metadata.empty__p()
-            //            setter p (owner,caption,suffix,desc,req.body.Length)
-    
-            //            let pretx = None |> opctx__pretx
-
-            //            let rcd = 
-            //                p
-            //                |> id__CreateTx id pretx metadata
-
-            //            if pretx |> loggedPipeline dbLoggero "BizLogics.Db" conn then
-            //                handlero postCreateo rcd
-            //                true
-            //            else
-            //                false
-            //        else
-            //            false
-            //    with
-            //    | ex -> false
 
             res <- Suc x
 

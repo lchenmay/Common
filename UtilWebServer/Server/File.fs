@@ -143,7 +143,10 @@ let echoUploadFile
             | Some rcd ->
                 if uploadBuffer.ContainsKey id then
                     let buffer = uploadBuffer[id]
-                    let bin = Convert.FromBase64String body
+                    //let bin = Convert.FromBase64String body
+                    let bin = 
+                        tryFindStrByAtt "data" json
+                        |> Convert.FromHexString
                     buffer.append bin
                     
                     if buffer.length() = length then
@@ -152,7 +155,7 @@ let echoUploadFile
                         let saved = 
                             try
                                 let filename = buildfilename fsDir id (rcd |> rcd__suffix)
-                                System.IO.File.WriteAllBytes(filename,req.body)
+                                System.IO.File.WriteAllBytes(filename,buffer.bytes())
                                 System.IO.File.Exists filename
                             with
                             | ex -> false
@@ -183,7 +186,7 @@ let echoUploadFile
                     let filename = buildfilename fsDir id suffix
 
                     let p = metadata.empty__p()
-                    setter p (owner,caption,suffix,desc,req.body.Length)
+                    setter p (owner,caption,suffix,desc,length)
     
                     let pretx = None |> opctx__pretx
 
@@ -193,9 +196,7 @@ let echoUploadFile
 
                     if pretx |> loggedPipeline dbLoggero "BizLogics.Db" conn then
                         handlero postCreateo rcd
-                    //    true
-                    //else
-                    //    false
+                        uploadBuffer[rcd.ID] <- new BytesBuilder()
 
                     x.rep <- 
                         [|  "{ \"Er\":\"OK\""

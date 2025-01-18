@@ -122,93 +122,97 @@ let echoUploadFile
     fsDir conn (metadata:MetadataTypes<'p>) dbLoggero
     setter postCreateo (x:ReqRep) =
 
-    let mutable res = Fail((),x)
-
     let req = x.req
-    if req.path.Length = 1 then
-        if req.path[0] = "upload" then
-            
-            let sReq = req.body |> System.Text.Encoding.UTF8.GetString 
-            let json= sReq |> str__root 
 
-            let id = tryFindNumByAtt "id" json |> parse_int64
-            let length = tryFindNumByAtt "length" json |> parse_int32
-            let block = tryFindNumByAtt "block" json |> parse_int32
-            let index = tryFindNumByAtt "i" json |> parse_int32
-            let size = tryFindNumByAtt "size" json |> parse_int32
-            let caption = tryFindStrByAtt "filename" json
-            let desc = tryFindStrByAtt "desc" json
-            let body = req.body |> System.Text.Encoding.ASCII.GetString
+    let sReq = req.body |> System.Text.Encoding.UTF8.GetString 
+    let json= sReq |> str__root 
 
-            match tryGet id with
-            | Some rcd ->
-                if uploadBuffer.ContainsKey id then
-                    let buffer = uploadBuffer[id]
-                    //let bin = Convert.FromBase64String body
-                    buffer[index] <-
-                        tryFindStrByAtt "data" json
-                        |> Convert.FromHexString
+    let id = tryFindNumByAtt "id" json |> parse_int64
+    let length = tryFindNumByAtt "length" json |> parse_int32
+    let block = tryFindNumByAtt "block" json |> parse_int32
+    let index = tryFindNumByAtt "index" json |> parse_int32
+    let size = tryFindNumByAtt "size" json |> parse_int32
+    let caption = tryFindStrByAtt "filename" json
+    let desc = tryFindStrByAtt "desc" json
+    let body = req.body |> System.Text.Encoding.ASCII.GetString
+
+    let mutable rep = """{ "Er": "OK" }"""
+
+    match tryGet id with
+    | Some rcd ->
+        if uploadBuffer.ContainsKey id then
+            let buffer = uploadBuffer[id]
+            //let bin = Convert.FromBase64String body
+            buffer[index] <-
+                tryFindStrByAtt "data" json
+                |> Convert.FromHexString
                     
-                    if buffer.Count = block then
-                        let bin = 
-                            buffer.Keys
-                            |> Seq.toArray
-                            |> Array.map(fun k -> buffer[k])
-                            |> Array.concat
+            if buffer.Count = block then
+                let bin = 
+                    buffer.Keys
+                    |> Seq.toArray
+                    |> Array.map(fun k -> buffer[k])
+                    |> Array.concat
                         
-                        let saved = 
-                            try
-                                let filename = buildfilename fsDir id (rcd |> rcd__suffix)
-                                System.IO.File.WriteAllBytes(filename,bin)
-                                System.IO.File.Exists filename
-                            with
-                            | ex -> false
+                try
+                    let filename = buildfilename fsDir id (rcd |> rcd__suffix)
+                    System.IO.File.WriteAllBytes(filename,bin)
+                    System.IO.File.Exists filename
+                with
+                | ex -> false
+                |> ignore
 
-                        uploadBuffer.Remove id |> ignore
+                uploadBuffer.Remove id |> ignore
 
-            | None -> 
+            rep <- 
+                [|  "{\"Er\":\"OK\" "
+                    ",\"count\":" + buffer.Count.ToString() + " }" |]
+                |> String.Concat
 
-                if block > 0 && size > 0 then
+    | None -> 
 
-                    let id = Interlocked.Increment metadata.id
+        if block > 0 && size > 0 then
 
-                    let owner = 0L
-                    let suffix = 
-                        let index = caption.LastIndexOf "."
-                        if index > 0 then
-                            let s = caption.Substring (index + 1)
-                            if s.Length <= 4 then
-                                s.ToLower()
-                            else
-                                ""
-                        else
-                            ""
+            let id = Interlocked.Increment metadata.id
 
-                    let p = metadata.empty__p()
-                    setter p (owner,caption,suffix,desc,length)
+            let owner = 0L
+            let suffix = 
+                let index = caption.LastIndexOf "."
+                if index > 0 then
+                    let s = caption.Substring (index + 1)
+                    if s.Length <= 4 then
+                        s.ToLower()
+                    else
+                        ""
+                else
+                    ""
+
+            let p = metadata.empty__p()
+            setter p (owner,caption,suffix,desc,length)
     
-                    let pretx = None |> opctx__pretx
+            let pretx = None |> opctx__pretx
 
-                    let rcd = 
-                        p
-                        |> id__CreateTx id pretx metadata
+            let rcd = 
+                p
+                |> id__CreateTx id pretx metadata
 
-                    if pretx |> loggedPipeline dbLoggero "BizLogics.Db" conn then
-                        handlero postCreateo rcd
-                        uploadBuffer[rcd.ID] <- new SortedDictionary<int,byte[]>()
+            if pretx |> loggedPipeline dbLoggero "BizLogics.Db" conn then
+                handlero postCreateo rcd
+                uploadBuffer[rcd.ID] <- new SortedDictionary<int,byte[]>()
 
-                    x.rep <- 
-                        [|  "{ \"Er\":\"OK\""
-                            ",\"id\":" + id.ToString() + " }" |]
-                        |> String.Concat
-                        |> str__StandardResponse "application/json"
-                        |> Some
+                rep <- 
+                    [|  "{\"Er\":\"OK\" "
+                        ",\"id\":" + rcd.ID.ToString() + " }" |]
+                    |> String.Concat
 
-                    res <- Suc x
 
-            res <- Suc x
+    x.rep <- 
+        rep
+        |> System.Text.Encoding.ASCII.GetBytes
+        |> bin__StandardResponse "text/json"
+        |> Some
 
-    res
+    Suc x
 
 let echoDownloadFile 
     fsDir (metadata:MetadataTypes<'p>)

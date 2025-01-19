@@ -100,7 +100,7 @@ let hpattern (pattern:string) h x =
 
 let hapi echoApiHandler branch x = 
     let req = x.req
-    if req.path.Length = 3 then
+    if req.method = "POST" && req.path.Length = 3 then
         if req.path[0] = "api" then
             x.rep <-
                 echoApiHandler branch req

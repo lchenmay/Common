@@ -47,8 +47,7 @@ let user__session
 
     session
 
-let checkRuntimeSession 
-    erUnauthorized 
+let validateRuntimeSession 
     (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
     x = 
 
@@ -61,6 +60,13 @@ let checkRuntimeSession
             sessions.Remove s |> ignore
         else
             x.sessiono <- Some session
+
+let checkRuntimeSession 
+    erUnauthorized 
+    (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
+    x = 
+
+    validateRuntimeSession sessions x
 
     match x.sessiono with
     | Some session -> Suc x

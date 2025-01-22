@@ -74,16 +74,21 @@ let rcv (listener:Listener) conn =
                         if req.method = "OPTIONS" then
                             [| |] |> bin__StandardResponse "text/html"
                         else
-                            req
-                            |> listener.echo
-                            |> oPipelineNone (fun _ -> listener.fileService req)
-                            //|> oPipelineNone (fun _ -> 
-                            //    fileService 
-                            //        runtime.host.fsDir
-                            //        runtime.host.vueDeployDir
-                            //        req)
-                            |> oPipelineNoneHandlero [||] listener.h404o
-                            |> Option.get
+                            let mutable o = None
+                            if o.IsNone then
+                                o <- listener.echo req
+                            if o.IsNone then
+                                o <- listener.fileService req
+                            if o.IsNone then
+                                match listener.h404o with
+                                | Some h ->
+                                    o <- h() |> Some
+                                | None -> 
+                                    ()
+                            match o with
+                            | Some bin -> bin
+                            | None -> 
+                                [| |] |> bin__StandardResponse "text/html"
 
                     try
                         conn.ns.Write(outgoing,0,outgoing.Length)

@@ -142,32 +142,42 @@ let echoUploadFile
     | Some rcd ->
         if uploadBuffer.ContainsKey id then
             let buffer = uploadBuffer[id]
-            //let bin = Convert.FromBase64String body
-            buffer[index] <-
-                tryFindStrByAtt "data" json
-                |> Convert.FromHexString
+
+            let bino =
+                let hex = tryFindStrByAtt "hex" json
+                let hexLength = tryFindNumByAtt "hexLength" json |> parse_int32
+                if hex.Length = hexLength then
+                    hex |> Convert.FromHexString |> Some
+                else
+                    None
                     
-            if buffer.Count = block then
-                let bin = 
-                    buffer.Keys
-                    |> Seq.toArray
-                    |> Array.map(fun k -> buffer[k])
-                    |> Array.concat
+            match bino with
+            | Some bin ->
+                buffer[index] <- bin
+                    
+                if buffer.Count = block then
+                    let bin = 
+                        buffer.Keys
+                        |> Seq.toArray
+                        |> Array.map(fun k -> buffer[k])
+                        |> Array.concat
                         
-                try
-                    let filename = buildfilename fsDir id (rcd |> rcd__suffix)
-                    System.IO.File.WriteAllBytes(filename,bin)
-                    System.IO.File.Exists filename
-                with
-                | ex -> false
-                |> ignore
+                    try
+                        let filename = buildfilename fsDir id (rcd |> rcd__suffix)
+                        System.IO.File.WriteAllBytes(filename,bin)
+                        System.IO.File.Exists filename
+                    with
+                    | ex -> false
+                    |> ignore
 
-                uploadBuffer.Remove id |> ignore
+                    uploadBuffer.Remove id |> ignore
 
-            rep <- 
-                [|  "{\"Er\":\"OK\" "
-                    ",\"count\":" + buffer.Count.ToString() + " }" |]
-                |> String.Concat
+                rep <- 
+                    [|  "{\"Er\":\"OK\" "
+                        ",\"count\":" + buffer.Count.ToString() + " }" |]
+                    |> String.Concat
+
+            | None -> rep <- "{}"
 
     | None -> 
 

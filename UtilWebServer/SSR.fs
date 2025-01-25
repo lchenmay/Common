@@ -169,7 +169,7 @@ let hSsrSinglePage paramName plugin vueDeployDir
     else
         Fail((),x)
 
-let hSEO x__items (x:ReqRep) =
+let hSEO x__items (adsTxt:string) (x:ReqRep) =
     if x.req.pathline = "/sitemap.xml" then
         x.rep <-
             
@@ -203,6 +203,13 @@ let hSEO x__items (x:ReqRep) =
             [|  "User-agent: *"
                 "Disallow:" |]
             |> String.concat crlf
+            |> System.Text.Encoding.UTF8.GetBytes
+            |> bin__StandardResponse "text/xml"
+            |> Some
+        Suc x
+    else if x.req.pathline = "/Ads.txt" then
+        x.rep <-
+            adsTxt
             |> System.Text.Encoding.UTF8.GetBytes
             |> bin__StandardResponse "text/xml"
             |> Some

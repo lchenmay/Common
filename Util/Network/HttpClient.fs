@@ -744,6 +744,8 @@ let httpGeta (headers:Dictionary<string,string> option) (url:string) =
             return (url,ex.ToString()),""
         | e -> 
             return (url,e.ToString()),""
+        | _ -> 
+            return (url,""),""
     }
 
 let httpGet (headers:Dictionary<string,string> option) (url:string) = url |> httpGeta headers |> Async.RunSynchronously

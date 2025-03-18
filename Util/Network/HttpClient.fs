@@ -728,24 +728,28 @@ let post(hc:HttpClient,url:string)(postdata:string) = hc.post(url,postdata)
 
 let httpGeta (headers:Dictionary<string,string> option) (url:string) = 
     async{
-        try
-            use client = new System.Net.Http.HttpClient()
-            client.Timeout <- new TimeSpan(0, 0, 20)
-            let cts = new System.Threading.CancellationToken()
-            if headers.IsSome && headers.Value.Count > 0 then
-                for kv in headers.Value do
-                    client.DefaultRequestHeaders.Add(kv.Key,kv.Value)
-            let! response = client.GetAsync(url,cts) |> Async.AwaitTask
-            // response.EnsureSuccessStatusCode () |> ignore
-            let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            return (url,response.StatusCode.ToString()), content
-        with
-        | :? System.Threading.Tasks.TaskCanceledException as ex ->
-            return (url,ex.ToString()),""
-        | e -> 
-            return (url,e.ToString()),""
-        | _ -> 
+        let domainname = url__domainame url
+        if domainname.Length = 0 then
             return (url,""),""
+        else
+            try
+                use client = new System.Net.Http.HttpClient()
+                client.Timeout <- new TimeSpan(0, 0, 20)
+                let cts = new System.Threading.CancellationToken()
+                if headers.IsSome && headers.Value.Count > 0 then
+                    for kv in headers.Value do
+                        client.DefaultRequestHeaders.Add(kv.Key,kv.Value)
+                let! response = client.GetAsync(url,cts) |> Async.AwaitTask
+                // response.EnsureSuccessStatusCode () |> ignore
+                let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+                return (url,response.StatusCode.ToString()), content
+            with
+            | :? System.Threading.Tasks.TaskCanceledException as ex ->
+                return (url,ex.ToString()),""
+            | e -> 
+                return (url,e.ToString()),""
+            | _ -> 
+                return (url,""),""
     }
 
 let httpGet (headers:Dictionary<string,string> option) (url:string) = url |> httpGeta headers |> Async.RunSynchronously

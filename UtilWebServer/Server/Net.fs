@@ -26,8 +26,8 @@ let tryReadToEnd conn =
 
     let mutable ip = ""
     
-    try
-        if conn.client.Client <> null then
+    try 
+        if conn.client.Client |> isNull |> not then
             ip <- conn.client.Client.RemoteEndPoint.ToString()
             while conn.client.Available > 0 do
                 let bs = Array.zeroCreate conn.client.Available

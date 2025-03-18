@@ -48,6 +48,7 @@
 	  <Compile Include="Network\Zmq.fs" />
 	  <Compile Include="Network\WebSocket.fs" />
 	  <Compile Include="Network\IA.fs" />
+	  <Compile Include="DB\Raven.fs" />
 	  <Compile Include="DB\Db.fs" />
     <Compile Include="DB\DbQuery.fs" />
     <Compile Include="DB\DbTx.fs" />
@@ -72,6 +73,7 @@
     <PackageReference Include="NetMQ" Version="4.0.1.13" />
     <PackageReference Include="Npgsql" Version="8.0.3" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
+    <PackageReference Include="RavenDB.Client" Version="7.0.0" />
     <PackageReference Include="SHA3.Net" Version="2.0.0" />
     <PackageReference Include="SharpDX" Version="4.2.0" />
     <PackageReference Include="SharpDX.Direct2D1" Version="4.2.0" />

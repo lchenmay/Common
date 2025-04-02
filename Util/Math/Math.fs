@@ -74,6 +74,41 @@ let maWithBias win src =
         |> Array.map(fun i -> src.[i] - ma.[i])
     ma,bias
 
+let win__expws a win = 
+    let mutable w = 1.0 / a
+    [| 0 .. win - 1 |]
+    |> Array.map(fun i -> 
+        w <- w * a
+        w)
+
+let sumWithWeights (ws:float[]) (data:float[]) = 
+    [| 0 .. ws.Length - 1 |]
+    |> Array.sumBy(fun i -> data[data.Length - 1 - i] * ws[i])
+
+let ema win (src:float[]) = 
+
+    let ws = win__expws (1.0 - 1.0 / 32.0) win
+
+    [| 0 .. src.Length - 1 |]
+    |> Array.map(fun i -> 
+
+        let ws = 
+            if i + 1 < win then
+                Array.sub ws 0 (i + 1)
+            else
+                ws
+
+        let sum = ws |> Array.sum
+        [| 0 .. ws.Length - 1 |]
+        |> Array.sumBy(fun j -> src[i - j] * ws[j] / sum))
+
+let emaWithBias win src = 
+    let ema = ema win src
+    let bias = 
+        [| 0 .. src.Length - 1 |]
+        |> Array.map(fun i -> src.[i] - ema.[i])
+    ema,bias
+
 let subtract (a:float[],b:float[]) = 
     [| 0 .. a.Length - 1 |]
     |> Array.map(fun i -> a[i] - b[i])

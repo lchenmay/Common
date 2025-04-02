@@ -63,7 +63,6 @@ let sample__histogram (sample:float[]) =
                 res[index] <- res[index] + 1)
 
             res
-        
 
 let sample__stat (sample:float[]) = 
     let mean,var,middle,min,max = meanVarMiddleRange sample

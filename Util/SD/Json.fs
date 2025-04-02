@@ -1155,10 +1155,11 @@ let Dictionary__json
             |> Seq.toArray
             |> Array.map(fun key -> 
                 let k = 
-                    match key__json key with
+                    let j = key__json key
+                    match j with
                     | Json.Str s -> s
                     | Json.Num s -> "\"" + s + "\""
-                    | _ -> ""
+                    | _ -> (j |> json__strFinal).Replace("\"","")
 
                 let v = val__json dict[key]
                 (k,v))

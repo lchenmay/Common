@@ -64,7 +64,7 @@ let sample__histogram (sample:float[]) =
 
             res
 
-let sample__stat recordHistogram (sample:float[]) = 
+let sample__stat (sample:float[]) = 
     let mean,var,middle,min,max = meanVarMiddleRange sample
     let median,a,b,c,d = median3 sample
 
@@ -78,16 +78,12 @@ let sample__stat recordHistogram (sample:float[]) =
         md = d
         min = min
         max = max
-        histogram = 
-            if recordHistogram then
-                sample__histogram sample
-            else
-                [| |]
+        histogram = sample__histogram sample
         count = sample.Length }
 
-let spot__SpotInStat recordHistogram (digit,unit) spot samples = 
+let spot__SpotInStat (digit,unit) spot samples = 
 
-    let stat = sample__stat recordHistogram samples
+    let stat = sample__stat samples
 
     if stat.count > 0 && stat.max > stat.min then
 
@@ -108,7 +104,20 @@ let spot__SpotInStat recordHistogram (digit,unit) spot samples =
             stat = stat }
 
 
-
+let Stat__clone stat = 
+    {
+        mean = stat.mean
+        middle = stat.middle
+        var = stat.var
+        median = stat.median
+        ma = stat.ma
+        mb = stat.mb
+        mc = stat.mc
+        md = stat.md
+        min = stat.min
+        max = stat.max
+        histogram = stat.histogram
+        count = stat.count }
 
 // [Stat] Structure
 

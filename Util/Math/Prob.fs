@@ -7,6 +7,21 @@ open System.Security.Cryptography
 
 // Random =============================================================
 
+let rand__Gaussian (rand:Random) mean stddev = 
+    let u1 = 1.0 - rand.NextDouble()
+    let u2 = 1.0 - rand.NextDouble()
+    let randStdNormal = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2)
+    mean + stddev * randStdNormal
+
+let generateBrownSeries mean stddev n = 
+    let rand  = new Random()
+
+    let mutable current = 0.0
+    [| 0 .. n - 1 |]
+    |> Array.map(fun i -> 
+        current <- current + (rand__Gaussian rand mean stddev)
+        current)
+
 // [0,exclusive)
 let rand__int32 exclusive = RandomNumberGenerator.GetInt32 exclusive
 

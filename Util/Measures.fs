@@ -4,7 +4,7 @@ open LanguagePrimitives
 
 
 [<Measure>]
-type quanta
+type quantum
 
 [<Measure>]
 type pctg // Percentage

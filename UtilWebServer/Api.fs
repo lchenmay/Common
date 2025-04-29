@@ -251,6 +251,9 @@ let apiMonitorPerf x =
             let measurespan = (v.last - v.start) |> TimeSpan.FromTicks
             (float v.count) / measurespan.TotalSeconds
 
+        k,v,total,mean,rps)
+    |> Array.sortByDescending(fun (k,v,total,mean,rps) -> total)
+    |> Array.map(fun (k,v,total,mean,rps) ->
         [|  ("key", k |> Json.Str)
             ("count", v.count.ToString() |> Json.Num)
             ("totalMil", total.TotalMilliseconds.ToString("0.000") |> Json.Num)

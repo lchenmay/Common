@@ -73,7 +73,7 @@ mutable fileService: HttpRequest -> byte[] option
 connId: ref<int64>
 queue: ModDict<int64,Conn>
 keeps: ModDict<int64,Conn>
-output: (string -> unit) }
+mutable output: (string -> unit) }
 
 
 type SessionTemplate<'User,'Data> = { 

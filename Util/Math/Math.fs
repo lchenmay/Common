@@ -187,25 +187,27 @@ let median (data:float[]) =
     else
         0.0
 
+// Median and quater-sense range
 let median2 (data:float[]) = 
     if data.Length > 0 then
         let sorted = data |> Array.sort
-        let a = sorted[data.Length / 4]
-        let b = sorted[data.Length * 3 / 4]
+        let inf = sorted[data.Length / 4]
+        let sup = sorted[data.Length * 3 / 4]
         let median = sorted[data.Length / 2]
-        median, a, b
+        median, inf, sup
     else
-        0.0,0.0,0.0
+        0.0,0.0,0.0 
 
+// Median, quater-sense and oct-sense ranges
 let median3 (data:float[]) = 
     if data.Length > 0 then
         let sorted = data |> Array.sort
-        let a = sorted[data.Length / 4]
-        let c = sorted[data.Length / 8]
-        let b = sorted[data.Length * 3 / 4]
-        let d = sorted[data.Length * 7 / 8]
+        let qinf = sorted[data.Length / 4]
+        let qsup = sorted[data.Length * 3 / 4]
+        let oinf = sorted[data.Length / 8]
+        let osup = sorted[data.Length * 7 / 8]
         let median = sorted[data.Length / 2]
-        median, a, b, c, d
+        median, qinf, qsup, oinf, osup
     else
         0.0,0.0,0.0,0.0,0.0
 

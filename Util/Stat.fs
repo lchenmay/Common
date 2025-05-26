@@ -12,12 +12,12 @@ mean: float
 middle: float
 var: float
 median: float
-ma: float
-mb: float
-mc: float
-md: float
-min: float
-max: float
+qinf: float
+qsup: float
+oinf: float
+osup: float
+inf: float
+sup: float
 mutable histogram: int[]
 count: int }
 
@@ -66,18 +66,18 @@ let sample__histogram (sample:float[]) =
 
 let sample__stat (sample:float[]) = 
     let mean,var,middle,min,max = meanVarMiddleRange sample
-    let median,a,b,c,d = median3 sample
+    let median, qinf, qsup, oinf, osup = median3 sample
 
     {   mean = mean
         var = var
         middle = middle
         median = median
-        ma = a
-        mb = b
-        mc = c
-        md = d
-        min = min
-        max = max
+        qinf = qinf
+        qsup = qsup
+        oinf = oinf
+        osup = osup
+        inf = min
+        sup = max
         histogram = sample__histogram sample
         count = sample.Length }
 
@@ -85,7 +85,7 @@ let spot__SpotInStat (digit,unit) spot samples =
 
     let stat = sample__stat samples
 
-    if stat.count > 0 && stat.max > stat.min then
+    if stat.count > 0 && stat.sup > stat.inf then
 
         let index = sortIndex samples spot
 
@@ -110,12 +110,12 @@ let Stat__clone stat =
         middle = stat.middle
         var = stat.var
         median = stat.median
-        ma = stat.ma
-        mb = stat.mb
-        mc = stat.mc
-        md = stat.md
-        min = stat.min
-        max = stat.max
+        qinf = stat.qinf
+        qsup = stat.qsup
+        oinf = stat.oinf
+        osup = stat.osup
+        inf = stat.inf
+        sup = stat.sup
         histogram = stat.histogram
         count = stat.count }
 
@@ -127,12 +127,12 @@ let Stat_empty(): Stat =
         middle = 0.0
         var = 0.0
         median = 0.0
-        ma = 0.0
-        mb = 0.0
-        mc = 0.0
-        md = 0.0
-        min = 0.0
-        max = 0.0
+        qinf = 0.0
+        qsup = 0.0
+        oinf = 0.0
+        osup = 0.0
+        inf = 0.0
+        sup = 0.0
         histogram = [| |]
         count = 0
     }
@@ -143,12 +143,12 @@ let Stat__bin (bb:BytesBuilder) (v:Stat) =
     float__bin bb v.middle
     float__bin bb v.var
     float__bin bb v.median
-    float__bin bb v.ma
-    float__bin bb v.mb
-    float__bin bb v.mc
-    float__bin bb v.md
-    float__bin bb v.min
-    float__bin bb v.max
+    float__bin bb v.qinf
+    float__bin bb v.qsup
+    float__bin bb v.oinf
+    float__bin bb v.osup
+    float__bin bb v.inf
+    float__bin bb v.sup
     int32__bin bb v.count
 
 let bin__Stat (bi:BinIndexed):Stat =
@@ -167,22 +167,22 @@ let bin__Stat (bi:BinIndexed):Stat =
         median =
             bi
             |> bin__float
-        ma =
+        qinf =
             bi
             |> bin__float
-        mb =
+        qsup =
             bi
             |> bin__float
-        mc =
+        oinf =
             bi
             |> bin__float
-        md =
+        osup =
             bi
             |> bin__float
-        min =
+        inf =
             bi
             |> bin__float
-        max =
+        sup =
             bi
             |> bin__float
         histogram = 
@@ -199,12 +199,12 @@ let Stat__json (v:Stat) =
         ("middle",float__json v.middle)
         ("var",float__json v.var)
         ("median",float__json v.median)
-        ("ma",float__json v.ma)
-        ("mb",float__json v.mb)
-        ("mc",float__json v.mc)
-        ("md",float__json v.md)
-        ("min",float__json v.min)
-        ("max",float__json v.max)
+        ("ma",float__json v.qinf)
+        ("mb",float__json v.qsup)
+        ("mc",float__json v.oinf)
+        ("md",float__json v.osup)
+        ("min",float__json v.inf)
+        ("max",float__json v.sup)
         ("histogram",array__json int32__json v.histogram)
         ("count",int32__json v.count)
          |]
@@ -372,12 +372,12 @@ let json__Stato (json:Json):Stat option =
             middle = middleo.Value
             var = varo.Value
             median = mediano.Value
-            ma = mao.Value
-            mb = mbo.Value
-            mc = mco.Value
-            md = mdo.Value
-            min = mino.Value
-            max = maxo.Value
+            qinf = mao.Value
+            qsup = mbo.Value
+            oinf = mco.Value
+            osup = mdo.Value
+            inf = mino.Value
+            sup = maxo.Value
             histogram = histogramo.Value
             count = counto.Value} |> Some
     else

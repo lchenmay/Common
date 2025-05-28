@@ -1,5 +1,7 @@
 ﻿module Util.ADT // Algebraic Data Type
 
+open System.Collections.Generic
+
 let oPipelineProcessSomeWithDefault defaultval hSome o =
     match o with
     | Some v -> v |> hSome
@@ -40,3 +42,14 @@ let oPipelineNoneHandlero defaultRes ho o =
         | Some h -> h()
         | None -> defaultRes
         |> Some)
+
+
+type Event<'Param>() = 
+
+    let handlers = new List<'Param -> unit>()
+
+    member this.AddEventHandler h = handlers.Add h
+
+    member this.Invoke (p:'Param) = 
+        handlers.ToArray()
+        |> Array.iter(fun h -> h p)

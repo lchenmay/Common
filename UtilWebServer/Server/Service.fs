@@ -18,9 +18,9 @@ open UtilWebServer.Server.Net
 open Fleck
 
     
-let PushAll runtime json = 
-    runtime.keeps.Values
-    |> Array.Parallel.iter(sndJson runtime json)
+let PushAll listener json = 
+    listener.keeps.Values
+    |> Array.Parallel.iter(sndJson listener json)
 
 let startEngine listener = 
 

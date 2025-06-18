@@ -1197,7 +1197,8 @@ let SortedDictionary__json
                 let k = 
                     match key__json key with
                     | Json.Str s -> s
-                    | Json.Num s -> "\"" + s + "\""
+                    | Json.Num s -> s
+                    //| Json.Num s -> "\"" + s + "\""
                     | _ -> ""
 
                 let v = val__json dict[key]

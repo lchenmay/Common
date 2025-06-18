@@ -54,6 +54,7 @@
     <Compile Include="DB\DbTx.fs" />
     <Compile Include="DB\DbBackup.fs" />
     <Compile Include="DB\Orm.fs" />
+    <Compile Include="Media\Geo.fs" />
     <Compile Include="Media\SixLaborsImageSharp.fs" />
     <Compile Include="Media\DirectX.fs" />
     <Compile Include="Media\Graphics.fs" />

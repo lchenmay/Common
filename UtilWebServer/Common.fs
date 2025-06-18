@@ -91,6 +91,6 @@ data: 'RuntimeData
 mutable langs: string[]
 users: ModDictInt64<'User>
 sessions: ModDictStr<SessionTemplate<'User,'SessionData>>
-output: string -> unit
+mutable output: string -> unit
 projectCode: string
 listener: Listener }

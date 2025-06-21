@@ -1,10 +1,24 @@
 ﻿module Util.GraphicsGeo
 
+open System
+
 type Coord = {
 mutable pinf: float
 mutable psup: float
 mutable dinf: float32
 mutable dsup: float32 }
+
+let coord__str (formatter:string) coord = 
+    [|  "d = ["
+        coord.dinf.ToString formatter
+        " : "
+        coord.dsup.ToString formatter
+        "], p = ["
+        coord.pinf.ToString formatter
+        " : "
+        coord.psup.ToString formatter
+        "]" |]
+    |> String.Concat
 
 let p__d coord p = 
     coord.dinf + (coord.dsup - coord.dinf) * float32(p - coord.pinf) / float32(coord.psup - coord.pinf)

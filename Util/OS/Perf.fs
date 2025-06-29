@@ -36,7 +36,7 @@ let stats filtero =
             | Some f -> f k
             | None -> true) then
 
-            let v = cws.[k]
+            let v = cws[k]
             let elapse = (TimeSpan.FromTicks v.sum).TotalMilliseconds
             let max = (TimeSpan.FromTicks v.max).TotalMilliseconds
             let mil = (TimeSpan.FromTicks v.sum).TotalMilliseconds / (float v.count)

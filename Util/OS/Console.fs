@@ -61,3 +61,11 @@ let prompt (since:DateTime) s =
         elapse.Milliseconds.ToString("000") + "> "
         s |]
     |> String.Concat
+
+let promptShort (since:DateTime) s =
+    let elapse = DateTime.UtcNow.Subtract since
+    [|  elapse.Hours.ToString("00") + ":"
+        elapse.Minutes.ToString("00") + ":"
+        elapse.Seconds.ToString("00") + "> "
+        s |]
+    |> String.Concat

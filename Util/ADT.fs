@@ -46,10 +46,15 @@ let oPipelineNoneHandlero defaultRes ho o =
 
 type Event<'Param>() = 
 
-    let handlers = new List<'Param -> unit>()
+    let handlers = new List<int * ('Param -> unit)>()
 
-    member this.AddEventHandler h = handlers.Add h
+    member this.AddEventHandler priority h = handlers.Add(priority,h)
 
     member this.Invoke (p:'Param) = 
-        handlers.ToArray()
+        let hs = 
+            handlers.ToArray()
+            |> Array.sortBy fst
+            |> Array.map snd
+
+        hs
         |> Array.iter(fun h -> h p)

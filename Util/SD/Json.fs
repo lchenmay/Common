@@ -447,6 +447,10 @@ and parseArray (index:int ref, tokens: Token []) =
             | ']' -> 
                 finished <- true
                 index.Value <- index.Value + 1
+            | '[' -> 
+                index.Value <- index.Value + 1
+                let v = parseArray(index,tokens)
+                v |> items.Add
             | '{' -> 
                 let v = parseBraket(index,tokens)
                 v |> items.Add

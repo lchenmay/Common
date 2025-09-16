@@ -263,23 +263,25 @@ let loadMessages
     try
         let guild = client.GetGuild guildId
         let channel = guild.GetTextChannel channelId
-
-        output "Loading ..."
+        if isNull channel = false then
+            output "Loading ..."
         
-        let res = new System.Collections.Generic.List<IMessage>()
-        async{
-            let collection = channel.GetMessagesAsync() 
-            let e = collection.GetAsyncEnumerator()
-            while e.MoveNextAsync().AsTask() |> Async.AwaitTask |> Async.RunSynchronously do 
-                e.Current
-                |> Seq.toArray
-                |> res.AddRange
-        } |> Async.RunSynchronously
+            let res = new System.Collections.Generic.List<IMessage>()
+            async{
+                let collection = channel.GetMessagesAsync() 
+                let e = collection.GetAsyncEnumerator()
+                while e.MoveNextAsync().AsTask() |> Async.AwaitTask |> Async.RunSynchronously do 
+                    e.Current
+                    |> Seq.toArray
+                    |> res.AddRange
+            } |> Async.RunSynchronously
 
-        "Finished."
-        |> output
+            "Finished."
+            |> output
 
-        res.ToArray()
+            res.ToArray()
+        else
+            [| |]
     with
     | ex -> 
         ex.ToString() |> output

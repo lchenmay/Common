@@ -9,6 +9,7 @@ open System.Text
 open System.Numerics
 
 open Util.Perf
+open Util.Text
 open Util.Collection
 open Util.CollectionModDict
 open Util.Json
@@ -607,3 +608,99 @@ let bits =
         i |> uint8 |> byte
         )
 
+/////////////////////////////////////////////////////////////
+
+open Util.Math
+
+let IncrementalMA__bin (bb:BytesBuilder) (v:IncrementalMA) =
+
+    int32__bin bb v.win
+    
+    List__bin (float__bin) bb v.src
+    
+    List__bin (float__bin) bb v.ma
+    ()
+
+let bin__IncrementalMA (bi:BinIndexed):IncrementalMA =
+    let bin,index = bi
+
+    {
+        win = 
+            bi
+            |> bin__int32
+        src = 
+            bi
+            |> bin__List (bin__float)
+        ma = 
+            bi
+            |> bin__List (bin__float)
+    }
+
+let IncrementalMA__json (v:IncrementalMA) =
+
+    [|  ("win",int32__json v.win)
+        ("src",List__json (float__json) v.src)
+        ("ma",List__json (float__json) v.ma)
+         |]
+    |> Json.Braket
+
+let IncrementalMA__jsonTbw (w:TextBlockWriter) (v:IncrementalMA) =
+    json__str w (IncrementalMA__json v)
+
+let IncrementalMA__jsonStr (v:IncrementalMA) =
+    (IncrementalMA__json v) |> json__strFinal
+
+
+let json__IncrementalMAo (json:Json):IncrementalMA option =
+    let fields = json |> json__items
+
+    let mutable passOptions = true
+
+    let wino =
+        match json__tryFindByName json "win" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__int32o with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
+    let srco =
+        match json__tryFindByName json "src" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__Listo (json__floato) with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
+    let mao =
+        match json__tryFindByName json "ma" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__Listo (json__floato) with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
+    if passOptions then
+        ({
+            win = wino.Value
+            src = srco.Value
+            ma = mao.Value }:IncrementalMA) |> Some
+    else
+        None
+
+let IncrementalMA_clone src =
+    let bb = new BytesBuilder()
+    IncrementalMA__bin bb src
+    bin__IncrementalMA (bb.bytes(),ref 0)

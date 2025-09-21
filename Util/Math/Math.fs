@@ -58,9 +58,14 @@ let equalBigIntPoint p q = p.x = q.x && p.y = q.y
 // Time series =============================================================
 
 type IncrementalMA = {
-win: int
+mutable win: int
 src: List<float>
 ma: List<float> }
+
+let IncrementalMA_empty() = {
+    win = 0
+    src = new List<float>()
+    ma = new List<float>() }
 
 let create__IncrementalMA win = {
     win = win
@@ -82,8 +87,7 @@ let IncrementalMA_StepIn incma v =
     incma.ma.Add ma
     ma
 
-let ma win (src:float[]) = 
-    let incma = create__IncrementalMA win
+let ma incma (src:float[]) = 
     src
     |> Array.map(IncrementalMA_StepIn incma)
 

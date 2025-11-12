@@ -149,46 +149,49 @@ let Stat__bin (bb:BytesBuilder) (v:Stat) =
     float__bin bb v.osup
     float__bin bb v.inf
     float__bin bb v.sup
+    
+    array__bin (int32__bin) bb v.histogram
     int32__bin bb v.count
+    ()
 
 let bin__Stat (bi:BinIndexed):Stat =
     let bin,index = bi
 
     {
-        mean =
+        mean = 
             bi
             |> bin__float
-        middle =
+        middle = 
             bi
             |> bin__float
-        var =
+        var = 
             bi
             |> bin__float
-        median =
+        median = 
             bi
             |> bin__float
-        qinf =
+        qinf = 
             bi
             |> bin__float
-        qsup =
+        qsup = 
             bi
             |> bin__float
-        oinf =
+        oinf = 
             bi
             |> bin__float
-        osup =
+        osup = 
             bi
             |> bin__float
-        inf =
+        inf = 
             bi
             |> bin__float
-        sup =
+        sup = 
             bi
             |> bin__float
         histogram = 
             bi
-            |> bin__array bin__int32
-        count =
+            |> bin__array (bin__int32)
+        count = 
             bi
             |> bin__int32
     }

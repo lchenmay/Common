@@ -18,7 +18,6 @@ oinf: float
 osup: float
 inf: float
 sup: float
-mutable histogram: int[]
 count: int }
 
 type SpotInStat = {
@@ -29,42 +28,56 @@ digit: int
 unit: string
 stat: Stat }
 
-let sample__histogram (sample:float[]) =
+type Histogram = {
+inf:float
+sup:float
+mutable max:int
+grid:int }
 
-    if sample.Length = 0 then
-        [| |]
+let HisogramIndexing histogram v =
+    let i = (float histogram.grid) * (v - histogram.inf) / (histogram.sup - histogram.inf) |> int
+    if i = histogram.grid then
+        histogram.grid - 1
     else
-        let inf = sample |> Array.min
-        let sup =  sample |> Array.max
-        let range = sup - inf
-        if range = 0.0 then
-            [| sample.Length |]
-        else if sample.Length < 30 then
-            [| sample.Length |]
-        else
-            let n = 
-                if sample.Length < 100 then
-                    30
-                else if sample.Length > 300 then
-                    100
-                else
-                    50
+        i
 
-            let res = Array.zeroCreate n
+let samples__histBarNum samples = 
+    let dict = new Dictionary<float,bool>()
+    samples
+    |> Array.iter(fun v -> dict[v] <- true)
 
-            sample
-            |> Array.iter(fun v -> 
-                let index = 
-                    let i = (float n) * (v - inf) / range |> int
-                    if i = n then
-                        n - 1
-                    else
-                        i
-                res[index] <- res[index] + 1)
+    let num = dict.Count
+    if num < 30 then
+        num
+    else if num > 300 then
+        100
+    else
+        50
 
-            res
+let sample__histogram (samples:float[]) =
+    let inf = samples |> Array.min
+    let sup =  samples |> Array.max
 
-let sample__stat (sample:float[]) = 
+    let histogram = {
+        inf = inf
+        sup = sup
+        max = 0
+        grid = samples__histBarNum samples  }
+
+    let bars = 
+        let res = Array.zeroCreate histogram.grid
+        samples
+        |> Array.iter(fun v -> 
+            let index = HisogramIndexing histogram v
+            res[index] <- res[index] + 1)
+        res
+
+    histogram.max <- bars |> Array.max
+
+    histogram
+
+
+let samples__stat (sample:float[]) = 
     let mean,var,middle,min,max = meanVarMiddleRange sample
     let median, qinf, qsup, oinf, osup = median3 sample
 
@@ -78,12 +91,11 @@ let sample__stat (sample:float[]) =
         osup = osup
         inf = min
         sup = max
-        histogram = sample__histogram sample
         count = sample.Length }
 
 let spot__SpotInStat (digit,unit) spot samples = 
 
-    let stat = sample__stat samples
+    let stat = samples__stat samples
 
     if stat.count > 0 && stat.sup > stat.inf then
 
@@ -116,7 +128,6 @@ let Stat__clone stat =
         osup = stat.osup
         inf = stat.inf
         sup = stat.sup
-        histogram = stat.histogram
         count = stat.count }
 
 // [Stat] Structure
@@ -133,7 +144,6 @@ let Stat_empty(): Stat =
         osup = 0.0
         inf = 0.0
         sup = 0.0
-        histogram = [| |]
         count = 0
     }
 
@@ -150,7 +160,6 @@ let Stat__bin (bb:BytesBuilder) (v:Stat) =
     float__bin bb v.inf
     float__bin bb v.sup
     
-    array__bin (int32__bin) bb v.histogram
     int32__bin bb v.count
     ()
 
@@ -188,9 +197,6 @@ let bin__Stat (bi:BinIndexed):Stat =
         sup = 
             bi
             |> bin__float
-        histogram = 
-            bi
-            |> bin__array (bin__int32)
         count = 
             bi
             |> bin__int32
@@ -208,7 +214,6 @@ let Stat__json (v:Stat) =
         ("osup",float__json v.osup)
         ("inf",float__json v.inf)
         ("sup",float__json v.sup)
-        ("histogram",array__json int32__json v.histogram)
         ("count",int32__json v.count)
          |]
     |> Json.Braket
@@ -381,7 +386,6 @@ let json__Stato (json:Json):Stat option =
             osup = mdo.Value
             inf = mino.Value
             sup = maxo.Value
-            histogram = histogramo.Value
             count = counto.Value} |> Some
     else
         None

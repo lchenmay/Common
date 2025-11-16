@@ -7,6 +7,12 @@ open Util.Bin
 open Util.Json
 open Util.Text
 
+type Histogram = {
+inf:float
+sup:float
+mutable max:int
+grid:int }
+
 type Stat = {
 mean: float
 middle: float
@@ -18,7 +24,9 @@ oinf: float
 osup: float
 inf: float
 sup: float
-count: int }
+count: int
+histogram: Histogram 
+histogramData: int[] }
 
 type SpotInStat = {
 deviation: float
@@ -27,12 +35,6 @@ anchor: float
 digit: int
 unit: string
 stat: Stat }
-
-type Histogram = {
-inf:float
-sup:float
-mutable max:int
-grid:int }
 
 let HisogramIndexing histogram v =
     let i = (float histogram.grid) * (v - histogram.inf) / (histogram.sup - histogram.inf) |> int
@@ -74,12 +76,14 @@ let sample__histogram (samples:float[]) =
 
     histogram.max <- bars |> Array.max
 
-    histogram
+    histogram,bars
 
 
-let samples__stat (sample:float[]) = 
-    let mean,var,middle,min,max = meanVarMiddleRange sample
-    let median, qinf, qsup, oinf, osup = median3 sample
+let samples__stat (samples:float[]) = 
+    let mean,var,middle,min,max = meanVarMiddleRange samples
+    let median, qinf, qsup, oinf, osup = median3 samples
+
+    let histogram,bars = sample__histogram samples
 
     {   mean = mean
         var = var
@@ -91,7 +95,10 @@ let samples__stat (sample:float[]) =
         osup = osup
         inf = min
         sup = max
-        count = sample.Length }
+        count = samples.Length
+        histogram = histogram 
+        histogramData = bars }
+
 
 let spot__SpotInStat (digit,unit) spot samples = 
 
@@ -128,7 +135,133 @@ let Stat__clone stat =
         osup = stat.osup
         inf = stat.inf
         sup = stat.sup
-        count = stat.count }
+        count = stat.count
+        histogram = {
+            inf = stat.histogram.inf
+            sup = stat.histogram.sup
+            max = stat.histogram.max
+            grid = stat.histogram.grid }
+        histogramData = stat.histogramData |> Array.map(fun bar -> bar) }
+
+
+// [Histogram] Structure
+
+let Histogram_empty(): Histogram =
+    {
+        inf = 0.0
+        sup = 0.0
+        max = 0
+        grid = 0
+    }
+
+let Histogram__bin (bb:BytesBuilder) (v:Histogram) =
+
+    float__bin bb v.inf
+    float__bin bb v.sup
+    int32__bin bb v.max
+    int32__bin bb v.grid
+    ()
+
+let bin__Histogram (bi:BinIndexed):Histogram =
+    let bin,index = bi
+
+    {
+        inf = 
+            bi
+            |> bin__float
+        sup = 
+            bi
+            |> bin__float
+        max = 
+            bi
+            |> bin__int32
+        grid = 
+            bi
+            |> bin__int32
+    }
+
+let Histogram__json (v:Histogram) =
+
+    [|  ("inf",float__json v.inf)
+        ("sup",float__json v.sup)
+        ("max",int32__json v.max)
+        ("grid",int32__json v.grid)
+         |]
+    |> Json.Braket
+
+let Histogram__jsonTbw (w:TextBlockWriter) (v:Histogram) =
+    json__str w (Histogram__json v)
+
+let Histogram__jsonStr (v:Histogram) =
+    (Histogram__json v) |> json__strFinal
+
+
+let json__Histogramo (json:Json):Histogram option =
+    let fields = json |> json__items
+
+    let mutable passOptions = true
+
+    let info =
+        match json__tryFindByName json "inf" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__floato with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
+    let supo =
+        match json__tryFindByName json "sup" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__floato with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
+    let maxo =
+        match json__tryFindByName json "max" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__int32o with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
+    let grido =
+        match json__tryFindByName json "grid" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__int32o with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
+    if passOptions then
+        ({
+            inf = info.Value
+            sup = supo.Value
+            max = maxo.Value
+            grid = grido.Value }:Histogram) |> Some
+    else
+        None
+
+let Histogram_clone src =
+    let bb = new BytesBuilder()
+    Histogram__bin bb src
+    bin__Histogram (bb.bytes(),ref 0)
 
 // [Stat] Structure
 
@@ -145,6 +278,8 @@ let Stat_empty(): Stat =
         inf = 0.0
         sup = 0.0
         count = 0
+        histogram = Histogram_empty()
+        histogramData = [| |]
     }
 
 let Stat__bin (bb:BytesBuilder) (v:Stat) =
@@ -159,8 +294,10 @@ let Stat__bin (bb:BytesBuilder) (v:Stat) =
     float__bin bb v.osup
     float__bin bb v.inf
     float__bin bb v.sup
-    
     int32__bin bb v.count
+    Histogram__bin bb v.histogram
+    
+    array__bin (int32__bin) bb v.histogramData
     ()
 
 let bin__Stat (bi:BinIndexed):Stat =
@@ -200,6 +337,12 @@ let bin__Stat (bi:BinIndexed):Stat =
         count = 
             bi
             |> bin__int32
+        histogram = 
+            bi
+            |> bin__Histogram
+        histogramData = 
+            bi
+            |> bin__array (bin__int32)
     }
 
 let Stat__json (v:Stat) =
@@ -215,6 +358,8 @@ let Stat__json (v:Stat) =
         ("inf",float__json v.inf)
         ("sup",float__json v.sup)
         ("count",int32__json v.count)
+        ("histogram",Histogram__json v.histogram)
+        ("histogramData",array__json (int32__json) v.histogramData)
          |]
     |> Json.Braket
 
@@ -278,8 +423,8 @@ let json__Stato (json:Json):Stat option =
                 passOptions <- false
                 None
 
-    let mao =
-        match json__tryFindByName json "ma" with
+    let qinfo =
+        match json__tryFindByName json "qinf" with
         | None ->
             passOptions <- false
             None
@@ -290,8 +435,8 @@ let json__Stato (json:Json):Stat option =
                 passOptions <- false
                 None
 
-    let mbo =
-        match json__tryFindByName json "mb" with
+    let qsupo =
+        match json__tryFindByName json "qsup" with
         | None ->
             passOptions <- false
             None
@@ -302,8 +447,8 @@ let json__Stato (json:Json):Stat option =
                 passOptions <- false
                 None
 
-    let mco =
-        match json__tryFindByName json "mc" with
+    let oinfo =
+        match json__tryFindByName json "oinf" with
         | None ->
             passOptions <- false
             None
@@ -314,8 +459,8 @@ let json__Stato (json:Json):Stat option =
                 passOptions <- false
                 None
 
-    let mdo =
-        match json__tryFindByName json "md" with
+    let osupo =
+        match json__tryFindByName json "osup" with
         | None ->
             passOptions <- false
             None
@@ -326,8 +471,8 @@ let json__Stato (json:Json):Stat option =
                 passOptions <- false
                 None
 
-    let mino =
-        match json__tryFindByName json "min" with
+    let info =
+        match json__tryFindByName json "inf" with
         | None ->
             passOptions <- false
             None
@@ -338,25 +483,13 @@ let json__Stato (json:Json):Stat option =
                 passOptions <- false
                 None
 
-    let maxo =
-        match json__tryFindByName json "max" with
+    let supo =
+        match json__tryFindByName json "sup" with
         | None ->
             passOptions <- false
             None
         | Some v -> 
             match v |> json__floato with
-            | Some res -> Some res
-            | None ->
-                passOptions <- false
-                None
-
-    let histogramo =
-        match json__tryFindByName json "histogram" with
-        | None ->
-            passOptions <- false
-            None
-        | Some v -> 
-            match v |> json__arrayo json__int32o with
             | Some res -> Some res
             | None ->
                 passOptions <- false
@@ -374,21 +507,52 @@ let json__Stato (json:Json):Stat option =
                 passOptions <- false
                 None
 
+    let histogramo =
+        match json__tryFindByName json "histogram" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__Histogramo with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
+    let histogramDatao =
+        match json__tryFindByName json "histogramData" with
+        | None ->
+            passOptions <- false
+            None
+        | Some v -> 
+            match v |> json__arrayo (json__int32o) with
+            | Some res -> Some res
+            | None ->
+                passOptions <- false
+                None
+
     if passOptions then
-        {
+        ({
             mean = meano.Value
             middle = middleo.Value
             var = varo.Value
             median = mediano.Value
-            qinf = mao.Value
-            qsup = mbo.Value
-            oinf = mco.Value
-            osup = mdo.Value
-            inf = mino.Value
-            sup = maxo.Value
-            count = counto.Value} |> Some
+            qinf = qinfo.Value
+            qsup = qsupo.Value
+            oinf = oinfo.Value
+            osup = osupo.Value
+            inf = info.Value
+            sup = supo.Value
+            count = counto.Value
+            histogram = histogramo.Value
+            histogramData = histogramDatao.Value }:Stat) |> Some
     else
         None
+
+let Stat_clone src =
+    let bb = new BytesBuilder()
+    Stat__bin bb src
+    bin__Stat (bb.bytes(),ref 0)
 
 // [SpotInStat] Structure
 
@@ -410,27 +574,28 @@ let SpotInStat__bin (bb:BytesBuilder) (v:SpotInStat) =
     int32__bin bb v.digit
     str__bin bb v.unit
     Stat__bin bb v.stat
+    ()
 
 let bin__SpotInStat (bi:BinIndexed):SpotInStat =
     let bin,index = bi
 
     {
-        deviation =
+        deviation = 
             bi
             |> bin__float
-        spot =
+        spot = 
             bi
             |> bin__float
-        anchor =
+        anchor = 
             bi
             |> bin__float
-        digit =
+        digit = 
             bi
             |> bin__int32
-        unit =
+        unit = 
             bi
             |> bin__str
-        stat =
+        stat = 
             bi
             |> bin__Stat
     }
@@ -531,14 +696,19 @@ let json__SpotInStato (json:Json):SpotInStat option =
                 None
 
     if passOptions then
-        {
+        ({
             deviation = deviationo.Value
             spot = spoto.Value
             anchor = anchoro.Value
             digit = digito.Value
             unit = unito.Value
-            stat = stato.Value} |> Some
+            stat = stato.Value }:SpotInStat) |> Some
     else
         None
+
+let SpotInStat_clone src =
+    let bb = new BytesBuilder()
+    SpotInStat__bin bb src
+    bin__SpotInStat (bb.bytes(),ref 0)
 
 

@@ -47,12 +47,10 @@ let samples__histBarNum samples =
     |> Array.iter(fun v -> dict[v] <- true)
 
     let num = dict.Count
-    if num < 30 then
-        num
-    else if num > 300 then
-        100
+    if num < 300 then
+        1 + num / 10
     else
-        50
+        100
 
 let sample__histogram (samples:float[]) =
     let inf = samples |> Array.min

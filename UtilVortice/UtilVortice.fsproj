@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0-windows7.0</TargetFramework>
+		<UseWindowsForms>true</UseWindowsForms>
+	</PropertyGroup>
+
+	<ItemGroup>
+    <Compile Include="Common.fs" />
+    <Compile Include="Graphics.fs" />
+    <Compile Include="BiLayer.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.6.2" />
+    <PackageReference Include="Vortice.Direct2D1" Version="3.6.2" />
+    <PackageReference Include="Vortice.DirectX" Version="3.6.2" />
+    <PackageReference Include="Vortice.DXGI" Version="3.6.2" />
+    <PackageReference Include="Vortice.Mathematics" Version="1.9.3" />
+    <PackageReference Include="Vortice.SpirvCross" Version="1.5.3" />
+    <PackageReference Include="Vortice.Win32" Version="2.3.0" />
+    <PackageReference Include="Vortice.Win32.Graphics.Direct3D12" Version="2.3.0" />
+    <PackageReference Include="Vortice.Win32.Graphics.Imaging" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Util\Util.fsproj" />
+  </ItemGroup>
+
+</Project>

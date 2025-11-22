@@ -33,20 +33,70 @@ let drawTextOnChart
     (rt:ID2D1RenderTarget) 
     padding
     (fontsize,back:Color4,fore:Color4)
-    (s,chart,corner) = 
+    (l,t,r,b)
+    (s,corner) = 
 
     let factory = Vortice.DirectWrite.DWrite.DWriteCreateFactory()
     let format = factory.CreateTextFormat("Courier",fontsize)
 
     let metrics = factory.CreateTextLayout(s,format, 1000.f, 1000.f).Metrics
     let rect = 
-        let l,t,r,b = chart.l,chart.t,chart.l + chart.w,chart.t + chart.h
         let w,h = metrics.Width + padding * 2f,metrics.Height + padding * 2f
         match corner with
         | ChartCorner.LeftTop -> RawRectF(l,t,l + w,t + h)
         | ChartCorner.LeftBottom -> RawRectF(l,b - h,l + w,b)
         | ChartCorner.RightTop -> RawRectF(r - w,t,r,t + h)
         | ChartCorner.RightBottom -> RawRectF(r - w,b - h,r,b)
+    rt.FillRectangle(rect,rt.CreateSolidColorBrush back)
+
+    let r = RawRectF(rect.Left + padding,rect.Top + padding,rect.Right - padding,rect.Bottom - padding)
+    rt.DrawText(s,format,r,rt.CreateSolidColorBrush fore)
+
+let drawTextVerOnChart 
+    (rt:ID2D1RenderTarget) 
+    padding
+    (fontsize,back:Color4,fore:Color4)
+    (l,t,r,b)
+    (s,y,align) = 
+
+    let factory = Vortice.DirectWrite.DWrite.DWriteCreateFactory()
+    let format = factory.CreateTextFormat("Courier",fontsize)
+
+    let metrics = factory.CreateTextLayout(s,format, 1000.f, 1000.f).Metrics
+    let rect = 
+        let w,h = metrics.Width + padding * 2f,metrics.Height + padding * 2f
+        match align with
+        | VerAlign.LeftAbove -> RawRectF(l,y - h,l + w,y)
+        | VerAlign.LeftCenter -> RawRectF(l,y - 0.5f * h,l + w,y + 0.5f * h)
+        | VerAlign.LeftBelow -> RawRectF(l,y,l + w,y + h)
+        | VerAlign.RightAbove -> RawRectF(r - w,y - h,r,y)
+        | VerAlign.RightCenter -> RawRectF(r - w,y - 0.5f * h,r,y + 0.5f * h)
+        | VerAlign.RightBelow -> RawRectF(r - w,y,r,y + h)
+    rt.FillRectangle(rect,rt.CreateSolidColorBrush back)
+
+    let r = RawRectF(rect.Left + padding,rect.Top + padding,rect.Right - padding,rect.Bottom - padding)
+    rt.DrawText(s,format,r,rt.CreateSolidColorBrush fore)
+
+let drawTextHorOnChart 
+    (rt:ID2D1RenderTarget) 
+    padding
+    (fontsize,back:Color4,fore:Color4)
+    (l,t,r,b)
+    (s,x,align) = 
+
+    let factory = Vortice.DirectWrite.DWrite.DWriteCreateFactory()
+    let format = factory.CreateTextFormat("Courier",fontsize)
+
+    let metrics = factory.CreateTextLayout(s,format, 1000.f, 1000.f).Metrics
+    let rect = 
+        let w,h = metrics.Width + padding * 2f,metrics.Height + padding * 2f
+        match align with
+        | HorAlign.TopLeft -> RawRectF(x - w,t,x,t + h)
+        | HorAlign.TopCenter -> RawRectF(x - 0.5f * w,t,x + 0.5f * w,t + h)
+        | HorAlign.TopRight -> RawRectF(x,t,x + w,t + h)
+        | HorAlign.BottomLeft -> RawRectF(x - w,b - h,x,b)
+        | HorAlign.BottomCenter -> RawRectF(x - 0.5f * w,b - h,x + 0.5f * w,b)
+        | HorAlign.BottomRight -> RawRectF(x,b - h,x + w,b)
     rt.FillRectangle(rect,rt.CreateSolidColorBrush back)
 
     let r = RawRectF(rect.Left + padding,rect.Top + padding,rect.Right - padding,rect.Bottom - padding)

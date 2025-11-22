@@ -6,17 +6,18 @@ type Coord = {
 mutable pinf: float
 mutable psup: float
 mutable dinf: float32
-mutable dsup: float32 }
+mutable dsup: float32
+mutable formatter: string }
 
-let coord__str (formatter:string) coord = 
+let coord__str coord = 
     [|  "d = ["
-        coord.dinf.ToString formatter
+        coord.dinf.ToString coord.formatter
         " : "
-        coord.dsup.ToString formatter
+        coord.dsup.ToString coord.formatter
         "], p = ["
-        coord.pinf.ToString formatter
+        coord.pinf.ToString coord.formatter
         " : "
-        coord.psup.ToString formatter
+        coord.psup.ToString coord.formatter
         "]" |]
     |> String.Concat
 
@@ -39,6 +40,12 @@ let stretch coord rate =
 type CoordXY = {
 mutable x: Coord
 mutable y: Coord }
+
+let dWithin coord d = 
+    (coord.dinf - d) * (coord.dsup - d) <= 0f
+
+let pWithin coord p = 
+    (coord.pinf - p) * (coord.psup - p) <= 0.0
 
 let pp__dd cxy (px,py) = 
     p__d cxy.x px,p__d cxy.y py
@@ -63,15 +70,34 @@ let rect__chart (l,t,w,h) = {
             pinf = 0.0
             psup = 0.0
             dinf = l
-            dsup = l + w }
+            dsup = l + w
+            formatter = "" }
         y = {
             pinf = 0.0
             psup = 0.0
             dinf = t + h
-            dsup = t }}}
+            dsup = t
+            formatter = "" }}}
 
 type ChartCorner = 
 | LeftTop
 | LeftBottom
 | RightTop
 | RightBottom
+
+type VerAlign = 
+| LeftAbove
+| LeftCenter
+| LeftBelow
+| RightAbove
+| RightCenter
+| RightBelow
+
+type HorAlign = 
+| TopLeft
+| TopCenter
+| TopRight
+| BottomLeft
+| BottomCenter
+| BottomRight
+

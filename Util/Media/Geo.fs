@@ -60,7 +60,7 @@ w: float32
 h: float32
 mutable cxy: CoordXY }
 
-let rect__chart (l,t,w,h) = {
+let rect__chart (l,t,w,h) formatter = {
     l = l
     t = t
     w = w
@@ -77,7 +77,7 @@ let rect__chart (l,t,w,h) = {
             psup = 0.0
             dinf = t + h
             dsup = t
-            formatter = "" }}}
+            formatter = formatter }}}
 
 type ChartCorner = 
 | LeftTop

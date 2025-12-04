@@ -18,13 +18,13 @@ open Util.GraphicsGeo
 let drawText 
     (rt:ID2D1RenderTarget) 
     (fontsize,back:Color4,fore:Color4)
-    (s,x,y) = 
+    s (vct2:Vector2) = 
 
     let factory = Vortice.DirectWrite.DWrite.DWriteCreateFactory()
     let format = factory.CreateTextFormat("Callibri",fontsize)
 
     let metrics = factory.CreateTextLayout(s,format, 1000.f, 1000.f).Metrics
-    let rect = RawRectF(x,y,x + metrics.Width,y + metrics.Height)
+    let rect = RawRectF(vct2.X,vct2.Y,vct2.X + metrics.Width,vct2.Y + metrics.Height)
 
     rt.FillRectangle(rect,rt.CreateSolidColorBrush back)
     rt.DrawText(s,format,rect,rt.CreateSolidColorBrush fore)

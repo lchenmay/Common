@@ -92,58 +92,6 @@ let WICBitmap__GdiBmp (wicbmp:IWICBitmap) =
 
     gdibmp
 
-let drawToImg_ (filename:string) (w,h) drawer = 
-     
-    use cw = new CodeWrapper("Workstation.Graphics.drawToImg")
-    
-    use wicbmp = drawToWICBitmap (w,h) drawer
-    let gdibmp = wicbmp |> WICBitmap__GdiBmp
-
-    if filename.Length > 0 then
-        gdibmp.Save filename
-
-    gdibmp
-
-let drawToImg (filename:string) (w,h) drawer = 
-
-    use cw = new CodeWrapper("Workstation.Graphics.drawToImg")
-    
-    use background = drawToWICBitmap (w,h) drawer
-    use foreground = drawToWICBitmap (uint 200,uint 200) (fun ctx ->
-        let rt = ctx.rt
-        rt.BeginDraw()
-        rt.Clear(Color4(0.4f,0f,0f))
-        rt.DrawLine(
-            Vector2(0f,0f),Vector2(100f,100f),
-            ctx.rt.CreateSolidColorBrush(Color4(0.7f, 0f, 0f)))
-        rt.EndDraw() |> ignore)
-    use final = drawToWICBitmap (w,h) (fun ctx ->
-
-        let rt = ctx.rt
-        rt.BeginDraw()
-        rt.Clear(Color4(0.1f, 0.1f, 0.1f, 1.0f))
-
-        background
-        |> rt.CreateBitmapFromWicBitmap 
-        |> rt.DrawBitmap
-
-        foreground
-        |> rt.CreateBitmapFromWicBitmap 
-        |> rt.DrawBitmap
-
-        rt.EndDraw() |> ignore)
-
-    
-    let gdibmp = final |> WICBitmap__GdiBmp
-
-    if filename.Length > 0 then
-        gdibmp.Save filename
-        (WICBitmap__GdiBmp background).Save ("background-" + filename)
-        (WICBitmap__GdiBmp foreground).Save ("foreground-" + filename)
-        (WICBitmap__GdiBmp final).Save ("final-" + filename)
-
-    gdibmp
-
 
 type LayerContainer = {
 ctx: Ctx

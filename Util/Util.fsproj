@@ -36,6 +36,7 @@
 	  <Compile Include="OS\Log.fs" />
 	  <Compile Include="Measures.fs" />
 	  <Compile Include="OS\OS.fs" />
+	  <Compile Include="OS\Reflection.fs" />
 	  <Compile Include="Network\Diff.fs" />
 	  <Compile Include="Network\HtmlFilter.fs" />
 	  <Compile Include="Network\Tcp.fs" />

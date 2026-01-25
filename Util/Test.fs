@@ -7,6 +7,8 @@ open Util.Concurrent
 open Util.Http
 open Util.HttpClient
 
+let testStr = "Project [Util] loaded"
+
 let sampleScript = """
 {
     "url": "http://localhost:1234",

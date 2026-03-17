@@ -36,6 +36,7 @@ type CWQP = CtxWrapper<ReqRep,unit>
 type Host<'Data> = {
 mutable data: 'Data
 mutable port: int
+mutable rdbms: Util.Db.Rdbms
 mutable conn: string
 mutable url: string
 

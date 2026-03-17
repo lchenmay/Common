@@ -76,7 +76,7 @@ let try_write_lines filename lines =
     with
     | ex -> filename + " => " + ex.ToString()
 
-let try_write_text filename text =
+let try_write_text filename (text:string) =
     try
         File.WriteAllText(filename,text)
         ""

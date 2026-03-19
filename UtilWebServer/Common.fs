@@ -39,6 +39,8 @@ mutable port: int
 mutable rdbms: Util.Db.Rdbms
 mutable conn: string
 mutable url: string
+mutable cert: string
+mutable certpwd: string
 
 mutable updateDatabase: bool
 

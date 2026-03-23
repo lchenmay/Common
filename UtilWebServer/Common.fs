@@ -49,7 +49,7 @@ mutable DiscordPubKey: string
 mutable DiscordSecret: string
 
 mutable VsDirSolution: string
-mutable req__vueDeployDir: HttpRequest -> string
+mutable req__vueDeployDir: string
 mutable fsDir: string }
 
 type ConnState = 
@@ -95,5 +95,5 @@ mutable langs: string[]
 users: ModDictInt64<'User>
 sessions: ModDictStr<SessionTemplate<'User,'SessionData>>
 mutable output: string -> unit
-projectCode: string
-listener: Listener }
+//listener: Listener 
+projectCode: string }

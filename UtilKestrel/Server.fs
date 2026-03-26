@@ -27,6 +27,14 @@ let runServer
 
     let builder = WebApplication.CreateBuilder(args)
 
+    // CORS
+    builder.Services.AddCors(fun options ->
+        options.AddDefaultPolicy(fun policy ->
+            policy.AllowAnyOrigin()      // 允许所有来源（开发+正式）
+                  .AllowAnyHeader()      // 允许 Authorization Header
+                  .AllowAnyMethod() |> ignore
+        )) |> ignore
+
     // 1. 高性能 Kestrel 配置
     builder.WebHost.ConfigureKestrel(fun options ->
         options.Limits.MaxRequestBodySize <- Nullable(10L * 1024L * 1024L * 1024L) 
@@ -45,33 +53,75 @@ let runServer
 
     let app = builder.Build()
 
+    // 必须第一步
+    app.UseCors() |> ignore 
+
+    // 处理 OPTIONS 预检请求的兜底
+    app.Use(fun (context: HttpContext) (next: RequestDelegate) ->
+        if context.Request.Method = "OPTIONS" then
+            context.Response.StatusCode <- 204
+            Task.CompletedTask
+        else 
+            next.Invoke(context)) |> ignore    
+
     // 启用 WebSocket 支持
     app.UseWebSockets() |> ignore
 
     // --- 路由与功能实现区 ---
 
-    let apiEcho (httpx,scheme,api) = 
-        let x = EchoCtx(runtime,httpx,scheme,api)
-        
-        apiEngine x
-        
-        if x.Struct.contentType.Length > 0 then
-            httpx.Response.ContentType <- x.Struct.contentType
+    let getClerkIdentity (httpx: HttpContext) =
+        let authHeader = httpx.Request.Headers.["Authorization"].ToString()
+        if authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) then
+            let token = authHeader.Substring(7).Trim()
+            // 调用我们之前定义的 Auth.validateClerkToken
+            //UtilKestrel.Auth.validateClerkToken token 
+            Some token
         else
-            httpx.Response.ContentType <- "application/json; charset=utf-8"
-        x
+            None
 
     // 1.2 GET 型 API 分发
     app.MapGet("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
-            let x = apiEcho (httpx,scheme,api)
+            let x = EchoCtx(runtime,httpx,scheme,api)
+            
+            apiEngine x
+
+            if x.Struct.contentType.Length > 0 then
+                httpx.Response.ContentType <- x.Struct.contentType
+            else
+                httpx.Response.ContentType <- "application/json; charset=utf-8"
+
+            httpx.Response.Headers.["Content-Security-Policy"] <- ""
+
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
     })) |> ignore
 
     // 1.2 POST 型 API 分发
     app.MapPost("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
-            let x = apiEcho (httpx,scheme,api)
+            
+            printfn "[Debug] 收到请求: %s/%s, Content-Length: %A" scheme api httpx.Request.ContentLength
+
+            let clerkUserId = getClerkIdentity httpx
+            let x = EchoCtx(runtime,httpx,scheme,api)
+            match clerkUserId with
+            | Some uid -> 
+                // 假设你根据 ClerkID 查找或创建本地用户
+                // x.Struct.identity <- Some localUser 
+                printfn "已截获有效 Clerk 请求，用户 ID: %s" uid
+            | None -> 
+                // 如果没有 Token，可以记录日志或保持匿名状态
+                printfn "匿名请求或无效 Token: %s/%s" scheme api
+
+            apiEngine x
+
+            if x.Struct.contentType.Length > 0 then
+                httpx.Response.ContentType <- x.Struct.contentType
+            else
+                httpx.Response.ContentType <- "application/json; charset=utf-8"
+
+            httpx.Response.Headers.["Content-Security-Policy"] <- ""
+
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
     })) |> ignore
 

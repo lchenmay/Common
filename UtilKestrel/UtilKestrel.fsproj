@@ -16,6 +16,7 @@
     <Compile Include="DbLogger.fs" />
     <Compile Include="Db.fs" />
     <Compile Include="Common.fs" />
+    <Compile Include="Open\Clerk.fs" />
     <Compile Include="Open\Google.fs" />
     <Compile Include="Open\Discord.fs" />
     <Compile Include="Init.fs" />

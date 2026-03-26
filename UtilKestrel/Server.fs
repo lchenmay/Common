@@ -91,56 +91,31 @@ let runServer
 
     // --- 路由与功能实现区 ---
 
-    let getClerkIdentity (httpx: HttpContext) =
-        let authHeader = httpx.Request.Headers.["Authorization"].ToString()
-        if authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) then
-            let token = authHeader.Substring(7).Trim()
-            // 调用我们之前定义的 Auth.validateClerkToken
-            //UtilKestrel.Auth.validateClerkToken token 
-            Some token
+    let runApiEngine (runtime,httpx,scheme,api) = 
+        let x = EchoCtx(runtime,httpx,scheme,api)
+            
+        apiEngine x
+
+        if x.Struct.contentType.Length > 0 then
+            httpx.Response.ContentType <- x.Struct.contentType
         else
-            None
+            httpx.Response.ContentType <- "application/json; charset=utf-8"
+
+        httpx.Response.Headers.["Content-Security-Policy"] <- ""
+        
+        x
 
     // 1.2 GET 型 API 分发
     app.MapGet("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
-            let x = EchoCtx(runtime,httpx,scheme,api)
-            
-            apiEngine x
-
-            if x.Struct.contentType.Length > 0 then
-                httpx.Response.ContentType <- x.Struct.contentType
-            else
-                httpx.Response.ContentType <- "application/json; charset=utf-8"
-
-            httpx.Response.Headers.["Content-Security-Policy"] <- ""
-
+            let x = runApiEngine (runtime,httpx,scheme,api)
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
     })) |> ignore
 
     // 1.2 POST 型 API 分发
     app.MapPost("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
-            let clerkUserId = getClerkIdentity httpx
-            let x = EchoCtx(runtime,httpx,scheme,api)
-            match clerkUserId with
-            | Some uid -> 
-                // 假设你根据 ClerkID 查找或创建本地用户
-                // x.Struct.identity <- Some localUser 
-                printfn "已截获有效 Clerk 请求，用户 ID: %s" uid
-            | None -> 
-                // 如果没有 Token，可以记录日志或保持匿名状态
-                printfn "匿名请求或无效 Token: %s/%s" scheme api
-
-            apiEngine x
-
-            if x.Struct.contentType.Length > 0 then
-                httpx.Response.ContentType <- x.Struct.contentType
-            else
-                httpx.Response.ContentType <- "application/json; charset=utf-8"
-
-            httpx.Response.Headers.["Content-Security-Policy"] <- ""
-
+            let x = runApiEngine (runtime,httpx,scheme,api)
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
     })) |> ignore
 

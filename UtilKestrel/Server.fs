@@ -155,6 +155,10 @@ let runServer
     })) |> ignore
 
     app.MapFallback(Func<HttpContext, Task>(fun context -> task {
+
+        "FALLBACK" |> output
+        showHttpX context
+
         if HttpMethods.IsGet(context.Request.Method) && 
            not (context.Request.Path.Value.StartsWith("/api", StringComparison.OrdinalIgnoreCase)) then
             let indexPath = Path.Combine(vueDistPath, "index.html")

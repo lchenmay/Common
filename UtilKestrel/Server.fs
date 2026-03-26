@@ -25,6 +25,16 @@ let runServer
     output
     (args: string[]) =
 
+    let showHttpX (httpx:HttpContext) = 
+        " <= " + httpx.Request.Method + " " + httpx.Request.Path.Value
+        |> output
+
+        httpx.Request.Headers
+        |> Seq.iter(fun h ->
+            h.Value
+            |> Seq.iter(fun v ->
+                h.Key + ": " + v |> output))
+
     let builder = WebApplication.CreateBuilder(args)
 
     // CORS
@@ -56,13 +66,25 @@ let runServer
     // 必须第一步
     app.UseCors() |> ignore 
 
-    // 处理 OPTIONS 预检请求的兜底
-    app.Use(fun (context: HttpContext) (next: RequestDelegate) ->
-        if context.Request.Method = "OPTIONS" then
-            context.Response.StatusCode <- 204
+    // 强力拦截：在进入任何路由前，打印并清理非正常请求
+    app.Use(fun (httpx: HttpContext) (next: RequestDelegate) ->
+
+        if httpx.Request.Method = "CONNECT" then
+            httpx.Response.StatusCode <- 405 // 直接拒绝 CONNECT
+            Task.CompletedTask
+        elif HttpMethods.IsOptions httpx.Request.Method then
+            // 显式处理 CORS 预检请求，直接返回 204
+            httpx.Response.StatusCode <- 204
             Task.CompletedTask
         else 
-            next.Invoke(context)) |> ignore    
+            showHttpX httpx
+            next.Invoke(httpx)) |> ignore
+
+    // Vue 静态文件托管
+    if Directory.Exists(vueDistPath) then
+        let fileServerOptions = StaticFileOptions()
+        fileServerOptions.FileProvider <- new PhysicalFileProvider(vueDistPath)
+        app.UseStaticFiles(fileServerOptions) |> ignore
 
     // 启用 WebSocket 支持
     app.UseWebSockets() |> ignore
@@ -99,9 +121,6 @@ let runServer
     // 1.2 POST 型 API 分发
     app.MapPost("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
-            
-            printfn "[Debug] 收到请求: %s/%s, Content-Length: %A" scheme api httpx.Request.ContentLength
-
             let clerkUserId = getClerkIdentity httpx
             let x = EchoCtx(runtime,httpx,scheme,api)
             match clerkUserId with
@@ -135,24 +154,15 @@ let runServer
             return Results.NotFound()
     })) |> ignore
 
-    // 3. Vue 静态文件托管
-    if Directory.Exists(vueDistPath) then
-        let fileServerOptions = StaticFileOptions()
-        fileServerOptions.FileProvider <- new PhysicalFileProvider(vueDistPath)
-        app.UseStaticFiles(fileServerOptions) |> ignore
-
-        // 4. 兜底处理：SPA 路由支持 (过滤非 GET 请求以修复 CONNECT 异常)
-        app.MapFallback(Func<HttpContext, Task>(fun context -> task {
-            if HttpMethods.IsGet(context.Request.Method) then
-                let indexPath = Path.Combine(vueDistPath, "index.html")
-                if File.Exists(indexPath) then
-                    context.Response.ContentType <- "text/html"
-                    do! context.Response.SendFileAsync(indexPath)
-                else
-                    context.Response.StatusCode <- 404
-            else
-                // 对于非 GET 请求（如 CONNECT），只返回状态码而不写入 Body
-                context.Response.StatusCode <- 200
-        })) |> ignore
+    app.MapFallback(Func<HttpContext, Task>(fun context -> task {
+        if HttpMethods.IsGet(context.Request.Method) && 
+           not (context.Request.Path.Value.StartsWith("/api", StringComparison.OrdinalIgnoreCase)) then
+            let indexPath = Path.Combine(vueDistPath, "index.html")
+            if File.Exists(indexPath) then
+                context.Response.ContentType <- "text/html"
+                do! context.Response.SendFileAsync(indexPath)
+        else
+            context.Response.StatusCode <- 404
+    })) |> ignore
 
     app.Run()

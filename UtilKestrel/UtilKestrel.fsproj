@@ -7,6 +7,8 @@
 
   <ItemGroup>
 	  <FrameworkReference Include="Microsoft.AspNetCore.App" />
+	  <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+	  <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.0" />	  
 	  <Compile Include="Types.fs" />
 	  <Compile Include="Ctx.fs" />
 	  <Compile Include="Constans.fs" />

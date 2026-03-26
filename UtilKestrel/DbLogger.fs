@@ -1,4 +1,4 @@
-﻿module UtilWebServer.DbLogger
+﻿module UtilKestrel.DbLogger
 
 open LanguagePrimitives
 

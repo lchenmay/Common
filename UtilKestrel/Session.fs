@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Session
+﻿module UtilKestrel.Session
 
 open System
 open System.Text
@@ -19,12 +19,12 @@ open Util.Json
 open Util.Http
 open Util.Orm
 open Util.Db
-open Util.Zmq
 
-open UtilWebServer.Db
-open UtilWebServer.Common
-open UtilWebServer.Open
-open UtilWebServer.Api
+open UtilKestrel.Types
+open UtilKestrel.Ctx
+open UtilKestrel.Common
+open UtilKestrel.Open
+open UtilKestrel.Api
 
 let keepSession = 7.0
 
@@ -49,29 +49,29 @@ let user__session
 
 let validateRuntimeSession 
     (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
-    x = 
+    (x:EchoCtx<'Runtime,'Session,'Error>) = 
 
-    x.sessiono <- None
+    x.Struct.sessiono <- None
 
-    let s = tryFindStrByAtt "session" x.json
+    let s = tryFindStrByAtt "session" x.Json
     if s.Length > 0 && sessions.ContainsKey s then
         let session = sessions[s]
         if DateTime.UtcNow.Ticks >= session.expiry.Ticks then
             sessions.Remove s |> ignore
         else
-            x.sessiono <- Some session
+            x.Struct.sessiono <- Some session
 
 let checkRuntimeSession 
     erUnauthorized 
     (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
-    x = 
+    (x:EchoCtx<'Runtime,'Session,'Error>) = 
 
     validateRuntimeSession sessions x
 
-    match x.sessiono with
+    match x.Struct.sessiono with
     | Some session -> Suc x
     | None -> 
-        x.ero <- Some erUnauthorized
+        x.Struct.ero <- Some erUnauthorized
         Fail(erUnauthorized,x)
 
 let checkSessionUsero 
@@ -85,6 +85,6 @@ let checkSessionUsero
             sessions
             x with
     | Suc x -> 
-        let session = x.sessiono.Value
+        let session = x.Struct.sessiono.Value
         Some session,session.identity
     | _ -> None,None

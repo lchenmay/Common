@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Auth
+﻿module UtilKestrel.Auth
 
 
 open System
@@ -21,13 +21,13 @@ open Util.Json
 open Util.Http
 open Util.Orm
 open Util.Db
-open Util.Zmq
 
-open UtilWebServer.Db
-open UtilWebServer.Common
-open UtilWebServer.Open
-open UtilWebServer.Api
-open UtilWebServer.Session
+open UtilKestrel.Types
+open UtilKestrel.Ctx
+open UtilKestrel.Db
+open UtilKestrel.Open
+open UtilKestrel.Api
+open UtilKestrel.Session
 
 type AuthParams<'p,'complex> = {
 getSocialAuthBiz: 'p -> int64
@@ -75,7 +75,7 @@ let tryCreateUser
 
     if  pretx 
         |> loggedPipeline dbLoggero
-            "UtilWebServer.Auth.tryCreateUser" ap.conn then
+            "UtilKestrel.Auth.tryCreateUser" ap.conn then
         Some rcd
     else
         None
@@ -102,7 +102,7 @@ let socialAuth
     runtime
     checkoutEu
     v__json
-    x =
+    (x:EchoCtx<'Runtime,'Session,'Error>) =
 
     match 
         checkSessionUsero 
@@ -111,7 +111,7 @@ let socialAuth
             x with
     | None,_ -> 
 
-        let json = x.json
+        let json = x.Json
         let biz = tryFindStrByAtt "biz" json
         let code = tryFindStrByAtt "code" json
         let redirectUrl = tryFindStrByAtt "redirecturl" json

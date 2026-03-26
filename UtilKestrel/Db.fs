@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Db
+﻿module UtilKestrel.Db
 
 open System
 open System.Text
@@ -11,9 +11,8 @@ open Util.Db
 open Util.DbQuery
 open Util.DbTx
 open Util.Orm
-open Util.Zmq
 
-open UtilWebServer.DbLogger
+open UtilKestrel.DbLogger
 
 let loggedPipeline dbLoggero (loc:string) conn pretx = 
     if pretx.sqls.Count > 0 then

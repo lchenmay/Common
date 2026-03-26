@@ -1,4 +1,4 @@
-﻿module UtilWebServer.FileSys
+﻿module UtilKestrel.FileSys
 
 open System
 open System.Text

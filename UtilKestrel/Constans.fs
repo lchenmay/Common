@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Constants
+﻿module UtilKestrel.Constants
 
 open System
 open System.Text
@@ -46,6 +46,4 @@ let freqBizCodes =
         "BLOCKCHAIN.NEWS"
         "DISCORD"
         "DECRYPT.CO"
-        "GAB"
-        "GETTR"
-        "GNEWS" |]
+        "GAB" |]

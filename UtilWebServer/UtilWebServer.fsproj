@@ -7,7 +7,6 @@
 
   <ItemGroup>
 	  <FrameworkReference Include="Microsoft.AspNetCore.App" />
-	  <Compile Include="Kestrel.fs" />
 	  <Compile Include="Constans.fs" />
     <Compile Include="FileSys.fs" />
     <Compile Include="DbLogger.fs" />
@@ -18,6 +17,7 @@
     <Compile Include="Init.fs" />
     <Compile Include="Json.fs" />
     <Compile Include="Api.fs" />
+    <Compile Include="Kestrel.fs" />
     <Compile Include="Session.fs" />
     <Compile Include="Auth.fs" />
     <Compile Include="OpenGraph.fs" />

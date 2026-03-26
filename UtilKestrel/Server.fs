@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Kestrel
+﻿module UtilKestrel.Server
 
 open System
 open System.IO
@@ -14,21 +14,13 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.FileProviders
 open System.Net.WebSockets
 
-open UtilWebServer.Api
-
-type KestrelCtx = {
-scheme: string
-api: string
-httpx: HttpContext
-req: byte[]
-mutable proco: (KestrelCtx -> ApiReturn) option
-mutable rep: byte[]
-mutable contentType: string }
+open UtilKestrel.Ctx
 
 let runServer 
+    runtime
     (devRoot, fsRoot, vueDistPath)
     (cert,certpwd)
-    (echo)
+    (apiEngine)
     (port80, port443)
     output
     (args: string[]) =
@@ -58,62 +50,29 @@ let runServer
 
     // --- 路由与功能实现区 ---
 
-    let read (context:HttpContext) = 
-
-        if context.Request.ContentLength.HasValue then
-            let length = int context.Request.ContentLength.Value
-            let buffer = Array.zeroCreate<byte> length
-            let! _ = context.Request.Body.ReadAsync(buffer, 0, length)
-            task { return buffer }
+    let apiEcho (httpx,scheme,api) = 
+        let x = EchoCtx(runtime,httpx,scheme,api)
+        
+        apiEngine x
+        
+        if x.Struct.contentType.Length > 0 then
+            httpx.Response.ContentType <- x.Struct.contentType
         else
-            task {
-                use ms = new MemoryStream()
-                do! context.Request.Body.CopyToAsync(ms)
-                return ms.ToArray()
-            }
-
-    let req__kestrelx (scheme,api,httpx,req) = 
-        {   scheme = scheme
-            api = api
-            httpx = httpx
-            req = req
-            rep = [| |]
-            proco = None
-            contentType = "" }
+            httpx.Response.ContentType <- "application/json; charset=utf-8"
+        x
 
     // 1.2 GET 型 API 分发
     app.MapGet("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
-            let! reqBodyBin = read httpx
-            let kestrelx = 
-                (scheme,api,httpx,reqBodyBin)
-                |> req__kestrelx
-
-            echo kestrelx
-        
-            if kestrelx.contentType.Length > 0 then
-                httpx.Response.ContentType <- kestrelx.contentType
-            else
-                httpx.Response.ContentType <- "application/json; charset=utf-8"
-            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(kestrelx.rep))
+            let x = apiEcho (httpx,scheme,api)
+            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
     })) |> ignore
-
 
     // 1.2 POST 型 API 分发
     app.MapPost("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
-            let! reqBodyBin = read httpx
-            let kestrelx = 
-                (scheme,api,httpx,reqBodyBin)
-                |> req__kestrelx
-
-            echo kestrelx
-        
-            if kestrelx.contentType.Length > 0 then
-                httpx.Response.ContentType <- kestrelx.contentType
-            else
-                httpx.Response.ContentType <- "application/json; charset=utf-8"
-            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(kestrelx.rep))
+            let x = apiEcho (httpx,scheme,api)
+            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
     })) |> ignore
 
     // 2. 文件服务：/file/{id} 映射到动态计算的 fsRoot

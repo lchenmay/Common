@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Open.Google
+﻿module UtilKestrel.Open.Google
 
 open System
 

@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Runtime
+﻿module UtilKestrel.Runtime
 
 open System
 open System.Text
@@ -16,24 +16,10 @@ open Util.DbQuery
 open Util.DbTx
 open Util.Orm
 
-open UtilWebServer.Constants
-open UtilWebServer.Common
-open UtilWebServer.Server.Common
-open UtilWebServer.Server.Net
-open UtilWebServer.Server.File
-
-let createLisener output fileService port = 
-    {
-        port = port
-        socket = new TcpListener(IPAddress.Any,port)
-        echo = (fun _ -> None)
-        h404o = None
-        wsHandler = (fun _ -> None)
-        fileService = fileService
-        connId = ref 0L
-        queue = createModDictInt64<Conn> 8
-        keeps = createModDictInt64<Conn> 8 
-        output = output }
+open UtilKestrel.Types
+open UtilKestrel.Common
+open UtilKestrel.Constants
+open UtilKestrel.File
 
 let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
     projectCode

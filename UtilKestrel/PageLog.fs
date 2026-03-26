@@ -1,4 +1,4 @@
-﻿module UtilWebServer.PageLog
+﻿module UtilKestrel.PageLog
 
 open System
 open System.Text
@@ -15,7 +15,6 @@ open Util.DbTx
 open Util.Orm
 open Util.Http
 open Util.HttpServer
-open Util.Zmq
 
 (*
 

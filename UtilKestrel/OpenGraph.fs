@@ -1,4 +1,4 @@
-﻿module UtilWebServer.OpenGraph
+﻿module UtilKestrel.OpenGraph
 
 open System
 open System.Text
@@ -14,9 +14,8 @@ open Util.DbTx
 open Util.Orm
 open Util.Http
 open Util.HttpClient
-open Util.Zmq
 
-open UtilWebServer.DbLogger
+open UtilKestrel.DbLogger
 
 let r1 = str__regex "<meta .*?>"
 

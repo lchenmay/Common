@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Init
+﻿module UtilKestrel.Init
 
 open System
 open System.IO
@@ -13,10 +13,8 @@ open Util.Db
 open Util.DbQuery
 open Util.DbTx
 open Util.Orm
-open Util.Zmq
 
-open UtilWebServer.DbLogger
-open UtilWebServer.Common
+open UtilKestrel.Types
 
 let loadAll output conn metadata h = 
 
@@ -61,7 +59,7 @@ let loadAllBulk<'p> output conn metadata =
         |> multiline_handle(conn,h) with
     | Suc x -> ()
     | Fail(exn,ctx) -> 
-        Util.Runtime.halt output ("UtilWebServer.Init.loadAllBulk [" + metadata.table + "]") ""
+        Util.Runtime.halt output ("UtilKestrel.Init.loadAllBulk [" + metadata.table + "]") ""
 
     res.ToArray()
 

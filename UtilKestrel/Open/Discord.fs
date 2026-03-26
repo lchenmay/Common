@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Open.Discord
+﻿module UtilKestrel.Open.Discord
 
 open FSharp.Control
 
@@ -16,7 +16,7 @@ open Util.HttpServer
 open Discord
 open Discord.WebSocket
 
-open UtilWebServer.Common
+open UtilKestrel.Types
 
 (*
 
@@ -42,13 +42,13 @@ Call sample:
 let code = "m02dtmoYgEe6UNuB9P3CZ9IqfyfBoA"
 
 let accessToken =
-    UtilWebServer.Open.Discord.requestAccessToken
+    UtilKestrel.Open.Discord.requestAccessToken
         (runtime.host.DiscordAppId,runtime.host.DiscordSecret)
         runtime.host.DiscordRedirect
         code
 
 let res = 
-    UtilWebServer.Open.Discord.requestUserInfo accessToken
+    UtilKestrel.Open.Discord.requestUserInfo accessToken
 
 *)
 
@@ -182,43 +182,43 @@ let checkDiscord (app,secret) (code,redirectUri) =
     oauth2UserInfo access_token
 
 
-let hDiscordAuth 
-    login (appId,secret) x__urls
-    (x:ReqRep) =
-    if x.req.pathline.StartsWith "/redirect" then
-        let code = checkfield x.req.query "code"
-        let guild_id = checkfield x.req.query "guild_id"
-        let permission = checkfield x.req.query "permission"
+//let hDiscordAuth 
+//    login (appId,secret) x__urls
+//    (x:ReqRep) =
+//    if x.req.pathline.StartsWith "/redirect" then
+//        let code = checkfield x.req.query "code"
+//        let guild_id = checkfield x.req.query "guild_id"
+//        let permission = checkfield x.req.query "permission"
 
-        let redirect,final = x__urls x
+//        let redirect,final = x__urls x
 
-        let accessToken,json =
-            requestAccessToken
-                (appId,secret) redirect code
+//        let accessToken,json =
+//            requestAccessToken
+//                (appId,secret) redirect code
 
-        let session,id = 
-            if accessToken.Length > 0 then
-                match requestUserInfo accessToken with
-                | Some(uid, username, avatar, json) ->
-                    login(uid, username, avatar)
-                | None -> "",0L
-            else
-                "",0L
+//        let session,id = 
+//            if accessToken.Length > 0 then
+//                match requestUserInfo accessToken with
+//                | Some(uid, username, avatar, json) ->
+//                    login(uid, username, avatar)
+//                | None -> "",0L
+//            else
+//                "",0L
 
-        let url = final + "?session=" + session + "&uid=" + id.ToString()
-        x.rep <- 
-            [|
-                """<script type="text/javascript">"""
-                "window.location.href = \"" + url + "\";"
-                "</script>" |]
-            |> String.Concat
-            |> System.Text.Encoding.ASCII.GetBytes
-            |> bin__StandardResponse "text/html"
-            |> Some
+//        let url = final + "?session=" + session + "&uid=" + id.ToString()
+//        x.rep <- 
+//            [|
+//                """<script type="text/javascript">"""
+//                "window.location.href = \"" + url + "\";"
+//                "</script>" |]
+//            |> String.Concat
+//            |> System.Text.Encoding.ASCII.GetBytes
+//            |> bin__StandardResponse "text/html"
+//            |> Some
 
-        Suc x
-    else
-        Fail((),x)
+//        Suc x
+//    else
+//        Fail((),x)
 
 // DiscordSocketClient ================
 

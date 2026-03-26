@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Cache
+﻿module UtilKestrel.Cache
 
 open System
 open System.Text
@@ -15,10 +15,9 @@ open Util.DbTx
 open Util.Orm
 open Util.Http
 open Util.HttpServer
-open Util.Zmq
 
-open UtilWebServer.DbLogger
-open UtilWebServer.Common
+open UtilKestrel.Types
+open UtilKestrel.DbLogger
 
 type CachedWithExpiry = {
 mutable timestamp: DateTime

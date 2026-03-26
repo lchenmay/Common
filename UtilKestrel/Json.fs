@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Json
+﻿module UtilKestrel.Json
 
 open System
 open System.Collections.Generic
@@ -11,9 +11,8 @@ open Util.Json
 open Util.Db
 open Util.DbTx
 open Util.Orm
-open Util.Zmq
 
-open UtilWebServer.DbLogger
+open UtilKestrel.DbLogger
 
 let tryLoadFromJsonId json name tryLoader = 
     let idStr = tryFindStrByAtt name json

@@ -1,4 +1,4 @@
-﻿module UtilWebServer.SSR
+﻿module UtilKestrel.SSR
 
 open System
 open System.Text
@@ -15,11 +15,11 @@ open Util.DbTx
 open Util.Orm
 open Util.Http
 open Util.HttpServer
-open Util.Zmq
 
-open UtilWebServer.DbLogger
-open UtilWebServer.Common
-open UtilWebServer.Kestrel
+open UtilKestrel.Types
+open UtilKestrel.Ctx
+open UtilKestrel.Common
+open UtilKestrel.Server
 
 let r1 = str__regex @"(?<=src=\x22/js/index\.)[\w-]+(?=\.js\x22)"
 let r2 = str__regex @"(?<=href=\x22/as/index\.)[\w-]+(?=\.css\x22)"
@@ -89,9 +89,9 @@ let render
         |> Encoding.UTF8.GetBytes
 
 
-let hHomepage (langs:string[]) (pages:string[]) render (x:KestrelCtx) = 
+let hHomepage (langs:string[]) (pages:string[]) render (x:EchoCtx<'Runtime,'Session,'Error>) = 
     // pathline = /?session=E3500820E03FC50ED65E89C60132DBDADE30D94557BDB37C7A8BA6F675B95A35&id=1003
-    let path = x.httpx.Request.Path.ToString()
+    let path = x.Struct.httpx.Request.Path.ToString()
 
     let mutable hit = 
         path = ""
@@ -110,8 +110,8 @@ let hHomepage (langs:string[]) (pages:string[]) render (x:KestrelCtx) =
             |> Array.tryFind(fun i -> "/" + i + "/" |> path.StartsWith)).IsSome
 
     if hit then
-        x.contentType <- "text/html"
-        x.rep <- 
+        x.Struct.contentType <- "text/html"
+        x.Struct.rep <- 
             render()
             |> bin__StandardResponse "text/html"
         Suc x
@@ -126,18 +126,17 @@ let homepage langs pages ssr vueDeployDir plugin =
 
 let hSsrSinglePage paramName plugin vueDeployDir 
     tryFinder v__SsrPage
-    (x:ReqRep) = 
-    let req = x.req
-    if req.path.Length = 2 then
-        if req.path[0] = paramName then
-            let id = req.path[1] |> parse_int64
+    (x:EchoCtx<'Runtime,'Session,'Error>) = 
+    let path = x.PathSegments
+    if path.Length = 2 then
+        if path[0] = paramName then
+            let id = path[1] |> parse_int64
             match tryFinder id with
             | Some v -> 
-                x.rep <-
+                x.Struct.rep <-
                     v__SsrPage v
                     |> render (vueIndexFile__hashes(vueDeployDir + "/index.html")) plugin
                     |> bin__StandardResponse "text/html"
-                    |> Some
                 Suc x
             | None -> Fail((),x)
         else
@@ -145,9 +144,9 @@ let hSsrSinglePage paramName plugin vueDeployDir
     else
         Fail((),x)
 
-let hSEO x__items (adsTxt:string) (x:ReqRep) =
-    if x.req.pathline = "/sitemap.xml" then
-        x.rep <-
+let hSEO x__items (adsTxt:string) (x:EchoCtx<'Runtime,'Session,'Error>) =
+    if x.Struct.httpx.Request.Path.ToString() = "/sitemap.xml" then
+        x.Struct.rep <-
             
             let w = empty__TextBlockWriter()
 
@@ -172,32 +171,28 @@ let hSEO x__items (adsTxt:string) (x:ReqRep) =
             w.text()
             |> System.Text.Encoding.UTF8.GetBytes
             |> bin__StandardResponse "text/xml"
-            |> Some
         Suc x
-    else if x.req.pathline = "/robots.txt" then
-        x.rep <-
+    else if x.Struct.httpx.Request.Path.ToString() = "/robots.txt" then
+        x.Struct.rep <-
             [|  "User-agent: *"
                 "Disallow:" |]
             |> String.concat crlf
             |> System.Text.Encoding.UTF8.GetBytes
             |> bin__StandardResponse "text/xml"
-            |> Some
         Suc x
-    else if x.req.pathline = "/Ads.txt" then
-        x.rep <-
+    else if x.Struct.httpx.Request.Path.ToString() = "/Ads.txt" then
+        x.Struct.rep <-
             adsTxt
             |> System.Text.Encoding.UTF8.GetBytes
             |> bin__StandardResponse "text/xml"
-            |> Some
         Suc x
-    else if x.req.pathline = "/favicon.ico" then
-        x.rep <-
+    else if x.Struct.httpx.Request.Path.ToString() = "/favicon.ico" then
+        x.Struct.rep <-
             [|  "User-agent: *"
                 "Disallow:" |]
             |> String.concat crlf
             |> System.Text.Encoding.UTF8.GetBytes
             |> bin__StandardResponse "text/xml"
-            |> Some
         Suc x
     else
         Fail((),x)

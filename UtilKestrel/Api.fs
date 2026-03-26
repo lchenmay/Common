@@ -1,4 +1,4 @@
-﻿module UtilWebServer.Api
+﻿module UtilKestrel.Api
 
 open System
 open System.Collections.Generic
@@ -16,43 +16,12 @@ open Util.DbTx
 open Util.Orm
 open Util.Http
 open Util.HttpServer
-open Util.Zmq
 
-open UtilWebServer.Common
-open UtilWebServer.Json
-open UtilWebServer.Db
-open UtilWebServer.DbLogger
-
-type ApiReturn = (string * Json)[]
-
-type ApiCtx<'Runtime,'Session,'Error> = { 
-req: HttpRequest
-since: DateTime
-service: string
-api: string
-ip: string
-json: Json
-mutable proco: (ApiCtx<'Runtime,'Session, 'Error> -> ApiReturn) option
-mutable sessiono: 'Session option  
-mutable ero: 'Error option
-runtime: 'Runtime    }
-
-let incoming__x 
-    runtime req
-    service api ip json = 
-    {
-        req = req
-        since = DateTime.UtcNow
-        service = service
-        api = api
-        ip = ip
-        json = json
-        proco = None
-        sessiono = None
-        ero = None
-        runtime = runtime }
-    |> Suc
-
+open UtilKestrel.Types
+open UtilKestrel.Ctx
+open UtilKestrel.Json
+open UtilKestrel.Db
+open UtilKestrel.DbLogger
 
 let ok = "Er",Json.Str "OK"
 let er er = [|  "Er",(er.ToString() |> Json.Str) |]
@@ -85,9 +54,9 @@ let tryLoadFromJsonIdWrapOK
     v__json
     (n,e) 
     tryLoader 
-    x = 
+    (x:EchoCtx<'Runtime,'Session,'Error>) = 
     match 
-        tryFindNumByAtt "id" x.json
+        tryFindNumByAtt "id" x.Json
         |> parse_int64
         |> tryLoader with
     | Some v -> 
@@ -101,19 +70,21 @@ let createUpdateDeleteActTx
     (p__UpdateTx, onUpdateSuc)
     (p__ActTx, onActSuc)
     (p__CreateTx, onCreateSuc)
-    x =
+    (x:EchoCtx<'Runtime,'Session,'Error>) =
+
+    let json = x.Json
 
     let pretx = None |> opctx__pretx
 
     match 
-        tryFindNumByAtt "id" x.json
+        tryFindNumByAtt "id" json
         |> parse_int64
         |> tryLoader with
     | Some v -> 
         let rcd = v__rcd v
-        let act = tryFindStrByAtt "act" x.json
+        let act = tryFindStrByAtt "act" json
         if act = "" then
-            match tryFindByAtt "p" x.json with
+            match tryFindByAtt "p" json with
             | Some(n,json) ->
                 match json |> json__p with
                 | Some pIncoming -> 
@@ -129,7 +100,7 @@ let createUpdateDeleteActTx
         else
             p__ActTx act v rcd
     | None ->
-        match tryFindByAtt "p" x.json with
+        match tryFindByAtt "p" json with
         | Some(n,json) ->
             match json |> json__p with
             | Some pIncoming -> 
@@ -145,16 +116,19 @@ let createUpdateDeleteActTx
 let createUpdateDeleteAct
     loc conn metadata dbLoggero e tryLoader hacto v__rcd json__p 
     pModifier postRemoveo preCreateo postCreateo
-    x =
+    (x:EchoCtx<'Runtime,'Session,'Error>) =
+
+    let json = x.Json
+
     match 
-        tryFindNumByAtt "id" x.json
+        tryFindNumByAtt "id" json
         |> parse_int64
         |> tryLoader with
     | Some v -> 
         let rcd = v__rcd v
-        let act = tryFindStrByAtt "act" x.json
+        let act = tryFindStrByAtt "act" json
         if act = "" then
-            match tryFindByAtt "p" x.json with
+            match tryFindByAtt "p" json with
             | Some(n,json) ->
                 match json |> json__p with
                 | Some pIncoming -> 
@@ -177,7 +151,7 @@ let createUpdateDeleteAct
             | Some h -> h act v
             | None -> er e
     | None ->
-        match tryFindByAtt "p" x.json with
+        match tryFindByAtt "p" json with
         | Some(n,json) ->
             match json |> json__p with
             | Some pIncoming -> 
@@ -201,33 +175,30 @@ let createUpdateDeleteAct
 let nullParam = 
     [|  ("Er",Json.Str "") |]
 
-let runApi branching x =
+let runApi branching 
+    (x:EchoCtx<'Runtime,'Session,'Error>) =
 
     match
         x
+        |> Suc
         |> bind branching with
-    | Suc x -> 
+    | Suc s -> 
         use cw = new CodeWrapper("branch.exe")
 
-        match x.json with
-        | Json.Null -> nullParam
-        | _ -> 
-            match x.proco with
-            | Some p ->
-                use cw = new CodeWrapper("Api." + x.api)
-                p x
-            | None -> [| ok |]
+        match x.Struct.proco with
+        | Some p ->
+            use cw = new CodeWrapper("Api." + x.Struct.api)
+            p x
+        | None -> [| ok |]
     | Fail(e,x) -> er e
 
-let apiCreate bin__p x = 
-    let fields = x.json |> json__items
+let apiCreate bin__p json = 
+    let fields = json |> json__items
     let o = tryDeserialize bin__p "p" fields
     fields,o
 
-let apiUpdate bin__rcd x = 
-    x.json 
-    |> json__items
-    |> tryDeserialize bin__rcd "rcd"
+let apiUpdate bin__rcd = 
+    json__items >> tryDeserialize bin__rcd "rcd"
 
 let apiList item__json = 
     Seq.toArray >> Array.map item__json >> wrapOkAry

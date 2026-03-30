@@ -13,7 +13,6 @@ open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.FileProviders
 open System.Net.WebSockets
-
 open UtilKestrel.Ctx
 
 let runServer 
@@ -37,15 +36,22 @@ let runServer
 
     let builder = WebApplication.CreateBuilder(args)
 
-    // CORS
+    // --- 保持原有功能，新增大文件表单配置 ---
+    builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>
+        (fun (options:Microsoft.AspNetCore.Http.Features.FormOptions) ->
+            options.MultipartBodyLengthLimit <- 10L * 1024L * 1024L * 1024L // 10GB
+            options.ValueLengthLimit <- Int32.MaxValue
+            options.MemoryBufferThreshold <- 1024 * 1024) |> ignore
+
+    // CORS 保持不变
     builder.Services.AddCors(fun options ->
         options.AddDefaultPolicy(fun policy ->
-            policy.AllowAnyOrigin()      // 允许所有来源（开发+正式）
-                  .AllowAnyHeader()      // 允许 Authorization Header
+            policy.AllowAnyOrigin()      
+                  .AllowAnyHeader()      
                   .AllowAnyMethod() |> ignore
         )) |> ignore
 
-    // 1. 高性能 Kestrel 配置
+    // 1. 高性能 Kestrel 配置 (保持你的 10GB 限制)
     builder.WebHost.ConfigureKestrel(fun options ->
         options.Limits.MaxRequestBodySize <- Nullable(10L * 1024L * 1024L * 1024L) 
         options.Limits.MinRequestBodyDataRate <- null 
@@ -58,7 +64,6 @@ let runServer
             else
                 "Warning: SSL certificate not found at " + cert + ". HTTPS may not work." |> output
         )
-
     ) |> ignore
 
     let app = builder.Build()
@@ -66,14 +71,12 @@ let runServer
     // 必须第一步
     app.UseCors() |> ignore 
 
-    // 强力拦截：在进入任何路由前，打印并清理非正常请求
+    // 强力拦截：保持原有逻辑
     app.Use(fun (httpx: HttpContext) (next: RequestDelegate) ->
-
         if httpx.Request.Method = "CONNECT" then
-            httpx.Response.StatusCode <- 405 // 直接拒绝 CONNECT
+            httpx.Response.StatusCode <- 405 
             Task.CompletedTask
         elif HttpMethods.IsOptions httpx.Request.Method then
-            // 显式处理 CORS 预检请求，直接返回 204
             httpx.Response.StatusCode <- 204
             Task.CompletedTask
         else 
@@ -90,10 +93,40 @@ let runServer
     app.UseWebSockets() |> ignore
 
     // --- 路由与功能实现区 ---
+    
+    // 新增：处理 /api/public/upload 路由 (在通用分发前拦截)
+    app.MapPost("/api/public/upload", Func<HttpContext, Task>(fun httpx -> task {
+        try
+            if not httpx.Request.HasFormContentType then
+                httpx.Response.StatusCode <- 415
+                return ()
+
+            let session = httpx.Request.Form.["session"] |> string
+            let files = httpx.Request.Form.Files
+            let uploadDir = Path.Combine(fsRoot, "uploads", session)
+            
+            if not (Directory.Exists(uploadDir)) then 
+                Directory.CreateDirectory(uploadDir) |> ignore
+
+            let mutable totalSize = 0L
+            for file in files do
+                let filePath = Path.Combine(uploadDir, file.FileName)
+                use stream = new FileStream(filePath, FileMode.Create)
+                do! file.CopyToAsync(stream)
+                totalSize <- totalSize + file.Length
+                "[Upload] Saved: " + file.FileName + " for " + session |> output
+
+            let res = {| Er = "OK"; Size = totalSize |}
+            httpx.Response.ContentType <- "application/json; charset=utf-8"
+            do! httpx.Response.WriteAsJsonAsync(res)
+        with ex ->
+            "[Upload Error] " + ex.Message |> output
+            httpx.Response.StatusCode <- 500
+            do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message; Size = 0L |})
+    })) |> ignore
 
     let runApiEngine (runtime,httpx,scheme,api) = 
         let x = EchoCtx(runtime,httpx,scheme,api)
-            
         apiEngine x
 
         if x.Struct.contentType.Length > 0 then
@@ -102,7 +135,6 @@ let runServer
             httpx.Response.ContentType <- "application/json; charset=utf-8"
 
         httpx.Response.Headers.["Content-Security-Policy"] <- ""
-        
         x
 
     // 1.2 GET 型 API 分发
@@ -119,16 +151,16 @@ let runServer
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
     })) |> ignore
 
-    // 2. 文件服务：/file/{id} 映射到动态计算的 fsRoot
+    // 2. 文件服务：/file/{id} 
     app.MapGet("/file/{id}", Func<string, HttpContext, Task<IResult>>(fun id context -> task {
         let fullPath = Path.Combine(fsRoot, id) 
         if File.Exists(fullPath) then
-            // 支持大文件断点续传
             return Results.File(fullPath, enableRangeProcessing = true)
         else 
             return Results.NotFound()
     })) |> ignore
 
+    // 保持原有的 FALLBACK 逻辑
     app.MapFallback(Func<HttpContext, Task>(fun context -> task {
 
         "FALLBACK" |> output

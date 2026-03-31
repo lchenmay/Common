@@ -1,6 +1,8 @@
 ﻿module UtilKestrel.Open.Google
 
 open System
+open System.Net.Http
+open System.Text
 
 open Util.Text
 open Util.Json
@@ -85,3 +87,43 @@ let translate apiKey src dst txt =
     *)
 
     res
+
+
+let client = new System.Net.Http.HttpClient()
+
+// 定义符合 Gemini API 格式的类型结构
+type Part = { text: string }
+type Content = { parts: Part list }
+type GeminiRequest = { contents: Content list }
+
+let Gemini (logger: string -> unit) apiKey msg = 
+
+    let content = 
+        let requestObj = { contents = [ { parts = [ { text = msg } ] } ] }
+        let jsonPayload = System.Text.Json.JsonSerializer.Serialize(requestObj)
+        new StringContent(jsonPayload, Encoding.UTF8, "application/json")
+
+    async {
+        try
+            let url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}"
+
+            logger "正在连接 Gemini API..."
+            
+            // 2. 将 .NET Task 转换为 F# Async
+            let! response = client.PostAsync(url, content) |> Async.AwaitTask
+            let! responseBody = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            
+            if response.IsSuccessStatusCode then
+                logger "✅ 连接成功！"
+                logger $"Gemini 应答: {responseBody}"
+            else
+                // 注意：logger 如果是简单 string -> unit，不支持 printf 占位符，需用插值字符串
+                logger $"❌ 连接失败。状态码: {response.StatusCode}"
+                logger $"错误详情: {responseBody}"
+
+            return responseBody
+        with
+        | ex -> 
+            logger $"⚠️ 发生异常: {ex.Message}"
+            return ""
+    }

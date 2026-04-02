@@ -105,7 +105,7 @@ let Gemini (logger: string -> unit) apiKey msg =
 
     async {
         try
-            let url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}"
+            let url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={apiKey}"
 
             logger "正在连接 Gemini API..."
             

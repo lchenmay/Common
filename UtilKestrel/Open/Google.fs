@@ -108,7 +108,9 @@ let GeminiListModels output apiKey =
 // 在调用 Gemini 之前先跑一下这个：
 // listModels "你的API_KEY" |> Async.RunSynchronously |> ignore
 
-let GeminiChat output apiKey model msg = 
+let GeminiChat 
+    output apiKey model 
+    msg = 
 
     let content = 
         let requestObj = { contents = [ { parts = [ { text = msg } ] } ] }
@@ -146,3 +148,71 @@ let GeminiChat output apiKey model msg =
             return ""
     }
 
+// 扩展原有类型以支持多模态数据
+type InlineData = { mime_type: string; data: string }
+type PartMulti = { text: string option; inline_data: InlineData option }
+type ContentMulti = { parts: PartMulti list }
+type GeminiMultiRequest = { contents: ContentMulti list }
+
+/// Gemini 多模态调用函数：支持文本 + (图片/PDF) 混合输入
+/// filePath: 本地文件路径
+/// mimeType: 例如 "image/jpeg" 或 "application/pdf"
+let GeminiMultimodal 
+    output apiKey model 
+    msg filePath mimeType = 
+    async {
+        try
+            // 1. 读取并转换媒体文件为 Base64
+            let base64Data = System.Convert.ToBase64String(System.IO.File.ReadAllBytes(filePath))
+            
+            // 2. 构造多模态请求对象
+            let requestObj = { 
+                contents = [ 
+                    { 
+                        parts = [ 
+                            { text = Some msg; inline_data = None }
+                            { text = None; inline_data = Some { mime_type = mimeType; data = base64Data } }
+                        ] 
+                    } 
+                ] 
+            }
+            
+            // 3. 序列化 (使用 System.Text.Json)
+            // 注意：F# 序列化 Option 类型需要特殊处理或简单的匿名对象
+            // 这里为了确保兼容性，建议使用匿名对象进行序列化，避免 Option 标签干扰 JSON 结构
+            let serializableObj = {|
+                contents = [|
+                    {| 
+                        parts = [|
+                            box {| text = msg |}
+                            box {| inline_data = {| mime_type = mimeType; data = base64Data |} |}
+                        |] 
+                    |}
+                |]
+            |}
+            
+            let jsonPayload = System.Text.Json.JsonSerializer.Serialize(serializableObj)
+            let content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
+            
+            // 4. 定义 URL (使用你已测通的 2.5-flash)
+            let url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}"
+            
+            output "正在连接 Gemini API 并上传媒体数据..."
+            
+            // 5. 发送请求
+            let! response = client.PostAsync(url, content) |> Async.AwaitTask
+            let! responseBody = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            
+            if response.IsSuccessStatusCode then
+                output "✅ 媒体分析成功！"
+                // 这里可以根据需要决定是否记录 responseBody
+            else
+                output $"❌ 媒体分析失败。状态码: {response.StatusCode}"
+                output $"错误详情: {responseBody}"
+                
+            return responseBody
+            
+        with | ex -> 
+            output $"⚠️ 媒体处理发生异常: {ex.Message}"
+            return ""
+    }

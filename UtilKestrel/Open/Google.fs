@@ -96,7 +96,19 @@ type Part = { text: string }
 type Content = { parts: Part list }
 type GeminiRequest = { contents: Content list }
 
-let Gemini (logger: string -> unit) apiKey msg = 
+let GeminiListModels output apiKey =
+    let url = $"https://generativelanguage.googleapis.com/v1beta/models?key={apiKey}"
+    use client = new System.Net.Http.HttpClient()
+    try
+        let response = client.GetStringAsync(url).Result
+        "你可用的模型列表: " + response |> output
+    with ex -> 
+        "无法获取列表: " + ex.Message.ToString() |> output
+
+// 在调用 Gemini 之前先跑一下这个：
+// listModels "你的API_KEY" |> Async.RunSynchronously |> ignore
+
+let GeminiChat output apiKey model msg = 
 
     let content = 
         let requestObj = { contents = [ { parts = [ { text = msg } ] } ] }
@@ -105,25 +117,32 @@ let Gemini (logger: string -> unit) apiKey msg =
 
     async {
         try
-            let url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={apiKey}"
-
-            logger "正在连接 Gemini API..."
+            let url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}"
+            output "正在连接 Gemini API..."
             
             // 2. 将 .NET Task 转换为 F# Async
             let! response = client.PostAsync(url, content) |> Async.AwaitTask
             let! responseBody = response.Content.ReadAsStringAsync() |> Async.AwaitTask
             
             if response.IsSuccessStatusCode then
-                logger "✅ 连接成功！"
-                logger $"Gemini 应答: {responseBody}"
+                output "✅ 连接成功！"
+                output $"Gemini 应答: {responseBody}"
             else
                 // 注意：logger 如果是简单 string -> unit，不支持 printf 占位符，需用插值字符串
-                logger $"❌ 连接失败。状态码: {response.StatusCode}"
-                logger $"错误详情: {responseBody}"
+                output $"❌ 连接失败。状态码: {response.StatusCode}"
+                output $"错误详情: {responseBody}"
 
-            return responseBody
+            let root = responseBody |> Util.Json.str__root
+            match tryFindByPath [| "candidates" |] root with
+            | Some (_, Json.Ary items) when items.Length > 0 ->
+                match tryFindByPath [| "content"; "parts" |] items[0] with
+                | Some (_, Json.Ary parts) when parts.Length > 0 ->
+                    return tryFindStrByAtt "text" parts[0]
+                | _ -> return ""
+            | _ -> return ""
         with
         | ex -> 
-            logger $"⚠️ 发生异常: {ex.Message}"
+            output $"⚠️ 发生异常: {ex.Message}"
             return ""
     }
+

@@ -105,6 +105,18 @@ let GeminiListModels output apiKey =
     with ex -> 
         "无法获取列表: " + ex.Message.ToString() |> output
 
+
+let loadTextFromRep responseBody = 
+    let root = responseBody |> Util.Json.str__root
+    match tryFindByPath [| "candidates" |] root with
+    | Some (_, Json.Ary items) when items.Length > 0 ->
+        match tryFindByPath [| "content"; "parts" |] items[0] with
+        | Some (_, Json.Ary parts) when parts.Length > 0 ->
+            tryFindStrByAtt "text" parts[0]
+        | _ -> ""
+    | _ -> ""
+
+
 // 在调用 Gemini 之前先跑一下这个：
 // listModels "你的API_KEY" |> Async.RunSynchronously |> ignore
 
@@ -134,14 +146,7 @@ let GeminiChat
                 output $"❌ 连接失败。状态码: {response.StatusCode}"
                 output $"错误详情: {responseBody}"
 
-            let root = responseBody |> Util.Json.str__root
-            match tryFindByPath [| "candidates" |] root with
-            | Some (_, Json.Ary items) when items.Length > 0 ->
-                match tryFindByPath [| "content"; "parts" |] items[0] with
-                | Some (_, Json.Ary parts) when parts.Length > 0 ->
-                    return tryFindStrByAtt "text" parts[0]
-                | _ -> return ""
-            | _ -> return ""
+            return loadTextFromRep responseBody
         with
         | ex -> 
             output $"⚠️ 发生异常: {ex.Message}"
@@ -160,7 +165,7 @@ type GeminiMultiRequest = { contents: ContentMulti list }
 /// msg: 提示词文本
 let GeminiMultimodal 
     output apiKey model 
-    msg (files: string list) = 
+    msg (files: string[]) = 
     async {
         try
             // 1. 构建基础的文本 Part
@@ -169,20 +174,24 @@ let GeminiMultimodal
             // 2. 遍历并构建所有媒体文件的 Parts
             let mediaParts = 
                 files 
-                |> List.map (fun path ->
+                |> Array.map (fun path ->
+
+                    let mime = path |> Util.FileSys.filename__mime 
                     output $"正在读取并转换文件: {System.IO.Path.GetFileName(path)} ({mime})..."
                     let bytes = System.IO.File.ReadAllBytes(path)
                     let base64Data = System.Convert.ToBase64String(bytes)
                     box {| 
                         inline_data = {| 
-                            mime_type = path |> Util.FileSys.filename__mime 
+                            mime_type = mime
                             data = base64Data 
                         |} 
                     |}
                 )
 
             // 3. 合并所有 Parts (文本在首位)
-            let allParts = textPart :: mediaParts |> List.toArray
+            let allParts = 
+                [|  [|  textPart |]
+                    mediaParts |] |> Array.concat
 
             // 4. 构造完整的请求对象
             let serializableObj = {|
@@ -209,7 +218,7 @@ let GeminiMultimodal
                 output $"❌ 接口返回错误。状态码: {int response.StatusCode}"
                 output $"详情: {responseBody}"
                 
-            return responseBody
+            return loadTextFromRep responseBody
             
         with | ex -> 
             output $"⚠️ GeminiMultimodal 发生异常: {ex.Message}"

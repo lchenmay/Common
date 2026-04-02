@@ -302,3 +302,36 @@ let try_write_text_add path (text:string[]) =
     with
     | ex -> ex.ToString() 
 
+
+open System.IO
+
+/// 自动识别 MIME 类型：优先根据文件头，其次根据后缀名
+let filename__mime (filePath: string) =
+    let getByExtension path =
+        match System.IO.Path.GetExtension(filePath).ToLower() with
+        | ".pdf"  -> "application/pdf"
+        | ".jpg" | ".jpeg" -> "image/jpeg"
+        | ".png"  -> "image/png"
+        | ".webp" -> "image/webp"
+        | ".heic" -> "image/heic"
+        | ".heif" -> "image/heif"
+        | ".txt"  -> "text/plain"
+        | _       -> "application/octet-stream"
+
+    try
+        if not (File.Exists(filePath)) then getByExtension filePath
+        else
+            // 读取前 8 个字节足以识别绝大多数多模态格式
+            using (new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) (fun fs ->
+                let buffer = Array.zeroCreate 8
+                let read = fs.Read(buffer, 0, 8)
+                let hex = buffer |> Array.take read |> Array.map (fun b -> b.ToString("X2")) |> String.concat ""
+                
+                if hex.StartsWith("25504446") then "application/pdf"          // %PDF
+                elif hex.StartsWith("FFD8FF") then "image/jpeg"               // JPEG
+                elif hex.StartsWith("89504E47") then "image/png"              // PNG
+                elif hex.StartsWith("52494646") then "image/webp"             // WebP
+                elif hex.StartsWith("000000") && hex.Contains("66747970") then "image/heic" // HEIC (ftyp)
+                else getByExtension filePath // 无法从二进制识别则回退
+            )
+    with _ -> getByExtension filePath

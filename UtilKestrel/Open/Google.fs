@@ -154,65 +154,64 @@ type PartMulti = { text: string option; inline_data: InlineData option }
 type ContentMulti = { parts: PartMulti list }
 type GeminiMultiRequest = { contents: ContentMulti list }
 
-/// Gemini 多模态调用函数：支持文本 + (图片/PDF) 混合输入
-/// filePath: 本地文件路径
-/// mimeType: 例如 "image/jpeg" 或 "application/pdf"
+/// Gemini 多模态调用函数：支持文本 + 多个媒体文件 (图片/PDF) 混合输入
+/// output: 日志输出函数 (string -> unit)
+/// model: 模型名称，如 "gemini-2.5-flash"
+/// msg: 提示词文本
 let GeminiMultimodal 
     output apiKey model 
-    msg filePath mimeType = 
+    msg (files: string list) = 
     async {
         try
-            // 1. 读取并转换媒体文件为 Base64
-            let base64Data = System.Convert.ToBase64String(System.IO.File.ReadAllBytes(filePath))
+            // 1. 构建基础的文本 Part
+            let textPart = box {| text = msg |}
             
-            // 2. 构造多模态请求对象
-            let requestObj = { 
-                contents = [ 
-                    { 
-                        parts = [ 
-                            { text = Some msg; inline_data = None }
-                            { text = None; inline_data = Some { mime_type = mimeType; data = base64Data } }
-                        ] 
-                    } 
-                ] 
-            }
-            
-            // 3. 序列化 (使用 System.Text.Json)
-            // 注意：F# 序列化 Option 类型需要特殊处理或简单的匿名对象
-            // 这里为了确保兼容性，建议使用匿名对象进行序列化，避免 Option 标签干扰 JSON 结构
+            // 2. 遍历并构建所有媒体文件的 Parts
+            let mediaParts = 
+                files 
+                |> List.map (fun path ->
+                    output $"正在读取并转换文件: {System.IO.Path.GetFileName(path)} ({mime})..."
+                    let bytes = System.IO.File.ReadAllBytes(path)
+                    let base64Data = System.Convert.ToBase64String(bytes)
+                    box {| 
+                        inline_data = {| 
+                            mime_type = path |> Util.FileSys.filename__mime 
+                            data = base64Data 
+                        |} 
+                    |}
+                )
+
+            // 3. 合并所有 Parts (文本在首位)
+            let allParts = textPart :: mediaParts |> List.toArray
+
+            // 4. 构造完整的请求对象
             let serializableObj = {|
                 contents = [|
-                    {| 
-                        parts = [|
-                            box {| text = msg |}
-                            box {| inline_data = {| mime_type = mimeType; data = base64Data |} |}
-                        |] 
-                    |}
+                    {| parts = allParts |}
                 |]
             |}
             
             let jsonPayload = System.Text.Json.JsonSerializer.Serialize(serializableObj)
-            let content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
+            let content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json")
             
-            // 4. 定义 URL (使用你已测通的 2.5-flash)
+            // 5. 构建 URL
             let url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}"
             
-            output "正在连接 Gemini API 并上传媒体数据..."
+            output $"正在向 {model} 发送多模态请求 (共 {files.Length} 个附件)..."
             
-            // 5. 发送请求
+            // 6. 发送并获取响应
             let! response = client.PostAsync(url, content) |> Async.AwaitTask
             let! responseBody = response.Content.ReadAsStringAsync() |> Async.AwaitTask
             
             if response.IsSuccessStatusCode then
-                output "✅ 媒体分析成功！"
-                // 这里可以根据需要决定是否记录 responseBody
+                output "✅ 多文件分析成功。"
             else
-                output $"❌ 媒体分析失败。状态码: {response.StatusCode}"
-                output $"错误详情: {responseBody}"
+                output $"❌ 接口返回错误。状态码: {int response.StatusCode}"
+                output $"详情: {responseBody}"
                 
             return responseBody
             
         with | ex -> 
-            output $"⚠️ 媒体处理发生异常: {ex.Message}"
+            output $"⚠️ GeminiMultimodal 发生异常: {ex.Message}"
             return ""
     }

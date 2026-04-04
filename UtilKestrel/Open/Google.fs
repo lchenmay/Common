@@ -214,13 +214,14 @@ let GeminiMultimodal
             
             if response.IsSuccessStatusCode then
                 output "✅ 多文件分析成功。"
+                return ("",loadTextFromRep responseBody)
             else
                 output $"❌ 接口返回错误。状态码: {int response.StatusCode}"
                 output $"详情: {responseBody}"
                 
-            return loadTextFromRep responseBody
+                return (responseBody,"")
             
         with | ex -> 
             output $"⚠️ GeminiMultimodal 发生异常: {ex.Message}"
-            return ""
+            return (ex.Message,"")
     }

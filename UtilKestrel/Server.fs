@@ -13,6 +13,9 @@ open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.FileProviders
 open System.Net.WebSockets
+
+open Util.Json
+
 open UtilKestrel.Ctx
 
 let runServer 
@@ -102,17 +105,30 @@ let runServer
                 httpx.Response.StatusCode <- 415
                 return ()
 
-            let mutable totalSize = 0L
-            let files = httpx.Request.Form.Files
-            for formfile in files do
-                let! res = incomingFile formfile
+            let files = 
+                httpx.Request.Form.Files
+                |> Seq.toArray
+            
+            // 1. 定义一个处理单个文件的函数 (确保它返回 Async)
+            // incomingFile f 应该返回 Async<string> (Gemini 的 JSON 结果)
 
-                totalSize <- totalSize + formfile.Length
-                "[Upload] Saved: " + formfile.FileName |> output
+            let! ss = 
+                files 
+                |> Array.map (fun f -> incomingFile f)
+                |> Async.Parallel                     
 
-            let res = {| Er = "OK"; Size = totalSize |}
+            let rep = 
+                ss
+                |> Util.Json.Ary
+                |> Util.Json.json__strFinal
+
+            let bin = 
+                rep
+                |> System.Text.Encoding.UTF8.GetBytes
+
             httpx.Response.ContentType <- "application/json; charset=utf-8"
-            do! httpx.Response.WriteAsJsonAsync(res)
+            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(bin))
+
         with ex ->
             "[Upload Error] " + ex.Message |> output
             httpx.Response.StatusCode <- 500

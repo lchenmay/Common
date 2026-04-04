@@ -163,6 +163,14 @@ let runServer
             return Results.NotFound()
     })) |> ignore
 
+    app.MapGet("/thumbnail/{id}", Func<string, HttpContext, Task<IResult>>(fun id context -> task {
+        let fullPath = fileid__localpath id
+        if File.Exists fullPath then
+            return Results.File(fullPath, enableRangeProcessing = true)
+        else 
+            return Results.NotFound()
+    })) |> ignore
+
     // 保持原有的 FALLBACK 逻辑
     app.MapFallback(Func<HttpContext, Task>(fun context -> task {
 

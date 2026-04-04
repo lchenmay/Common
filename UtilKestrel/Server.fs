@@ -17,7 +17,8 @@ open UtilKestrel.Ctx
 
 let runServer 
     runtime
-    (devRoot, fsRoot, vueDistPath)
+    vueDistPath
+    (incomingFile,fileid__localpath)
     (cert,certpwd)
     (apiEngine)
     (port80, port443)
@@ -101,20 +102,13 @@ let runServer
                 httpx.Response.StatusCode <- 415
                 return ()
 
-            let session = httpx.Request.Form.["session"] |> string
-            let files = httpx.Request.Form.Files
-            let uploadDir = Path.Combine(fsRoot, "uploads", session)
-            
-            if not (Directory.Exists(uploadDir)) then 
-                Directory.CreateDirectory(uploadDir) |> ignore
-
             let mutable totalSize = 0L
-            for file in files do
-                let filePath = Path.Combine(uploadDir, file.FileName)
-                use stream = new FileStream(filePath, FileMode.Create)
-                do! file.CopyToAsync(stream)
-                totalSize <- totalSize + file.Length
-                "[Upload] Saved: " + file.FileName + " for " + session |> output
+            let files = httpx.Request.Form.Files
+            for formfile in files do
+                let! res = incomingFile formfile
+
+                totalSize <- totalSize + formfile.Length
+                "[Upload] Saved: " + formfile.FileName |> output
 
             let res = {| Er = "OK"; Size = totalSize |}
             httpx.Response.ContentType <- "application/json; charset=utf-8"
@@ -153,8 +147,8 @@ let runServer
 
     // 2. 文件服务：/file/{id} 
     app.MapGet("/file/{id}", Func<string, HttpContext, Task<IResult>>(fun id context -> task {
-        let fullPath = Path.Combine(fsRoot, id) 
-        if File.Exists(fullPath) then
+        let fullPath = fileid__localpath id
+        if File.Exists fullPath then
             return Results.File(fullPath, enableRangeProcessing = true)
         else 
             return Results.NotFound()

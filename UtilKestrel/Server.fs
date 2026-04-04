@@ -109,21 +109,14 @@ let runServer
                 httpx.Request.Form.Files
                 |> Seq.toArray
             
-            // 1. 定义一个处理单个文件的函数 (确保它返回 Async)
-            // incomingFile f 应该返回 Async<string> (Gemini 的 JSON 结果)
+            if files.Length <> 1 then
+                return ()
 
-            let! ss = 
-                files 
-                |> Array.map (fun f -> incomingFile f)
-                |> Async.Parallel                     
-
-            let rep = 
-                ss
-                |> Util.Json.Ary
-                |> Util.Json.json__strFinal
+            let rep = incomingFile files[0] |> Async.RunSynchronously
 
             let bin = 
                 rep
+                |> Util.Json.json__strFinal
                 |> System.Text.Encoding.UTF8.GetBytes
 
             httpx.Response.ContentType <- "application/json; charset=utf-8"

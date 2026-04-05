@@ -21,7 +21,7 @@ open UtilKestrel.Ctx
 let runServer 
     runtime
     vueDistPath
-    (incomingFile,fileid__localpath)
+    (incomingFile,fileid__localpath,id__thumbnail)
     (cert,certpwd)
     (apiEngine)
     (port80, port443)
@@ -98,6 +98,12 @@ let runServer
 
     // --- 路由与功能实现区 ---
     
+    app.MapGet("/thumbnail/{id}", 
+        Func<string, HttpContext, Task>(fun id httpx -> task {
+            let bin = id__thumbnail id
+            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory bin)
+    })) |> ignore
+
     // 新增：处理 /api/public/upload 路由 (在通用分发前拦截)
     app.MapPost("/api/public/upload", Func<HttpContext, Task>(fun httpx -> task {
         try
@@ -151,19 +157,11 @@ let runServer
     app.MapPost("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
             let x = runApiEngine (runtime,httpx,scheme,api)
-            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
+            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory x.Struct.rep)
     })) |> ignore
 
     // 2. 文件服务：/file/{id} 
     app.MapGet("/file/{id}", Func<string, HttpContext, Task<IResult>>(fun id context -> task {
-        let fullPath = fileid__localpath id
-        if File.Exists fullPath then
-            return Results.File(fullPath, enableRangeProcessing = true)
-        else 
-            return Results.NotFound()
-    })) |> ignore
-
-    app.MapGet("/thumbnail/{id}", Func<string, HttpContext, Task<IResult>>(fun id context -> task {
         let fullPath = fileid__localpath id
         if File.Exists fullPath then
             return Results.File(fullPath, enableRangeProcessing = true)

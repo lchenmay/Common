@@ -176,11 +176,25 @@ let refin(conn,fieldorders,table,db__rcd,key)(id:int64) =
 
 let id__rcd(conn, fieldorders, table, db__rcd)(id:int64):'T option =
     match { 
-        text = "SELECT " + fieldorders + " FROM [" + table + "] WHERE [ID]=@ID"; 
-        ps = [| kvp__sqlparam("ID",id) |]}
+        text = 
+            match rdbms with
+            | Rdbms.SqlServer -> 
+                "SELECT " + fieldorders + " FROM [" + table + "] WHERE [ID]=@ID"; 
+            | Rdbms.PostgreSql -> 
+                "SELECT " + fieldorders + " FROM " + table + " WHERE id=@id"; 
+        ps = 
+            match rdbms with
+            | Rdbms.SqlServer -> 
+                [| kvp__sqlparam("ID",id) |]
+            | Rdbms.PostgreSql -> 
+                [| kvp__sqlparam("id",id) |]}
         |> singleline_query conn with
-        | Suc x -> x.line.Value |> db__rcd |> Some
-        | _ -> None
+        | Suc x -> 
+            x.line.Value 
+            |> db__rcd 
+            |> Some
+        | Fail (er,x) -> 
+            None
 
 let create_sql
     (table,sps_loader)

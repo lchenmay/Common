@@ -101,6 +101,10 @@ let runServer
     app.MapGet("/thumbnail/{id}", 
         Func<string, HttpContext, Task>(fun id httpx -> task {
             let bin = id__thumbnail id
+
+            //httpx.Response.Headers.["Cache-Control"] <- "public, max-age=86400"
+            httpx.Response.ContentType <- "image/jpeg"
+
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory bin)
     })) |> ignore
 

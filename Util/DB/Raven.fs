@@ -23,13 +23,17 @@ open Util.Collection
 open Util.OS
 open Util.Bin
 
-let c (certFile:string) = new X509Certificate2(certFile)
+let c (certFile:string) = 
+    //new X509Certificate2(certFile)
+    X509CertificateLoader.LoadCertificateFromFile certFile
 
 let connect (certFile:string) url dbname = 
 
     let mutable store = 
         if certFile.Length > 0 then
-            let cert = new X509Certificate2(certFile)
+            let cert = 
+                //new X509Certificate2(certFile)
+                X509CertificateLoader.LoadCertificateFromFile certFile
             new DocumentStore(Certificate = cert,Database = dbname, Urls = [| url |])
         else
             new DocumentStore(Database = dbname, Urls = [| url |])

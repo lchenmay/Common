@@ -8,7 +8,8 @@ open System.Data
 open System.Collections.Generic
 open System.IO
 open System.Data
-open System.Data.SqlClient
+//open System.Data.SqlClient
+open Microsoft.Data.SqlClient
 open System.Text
 
 open Npgsql

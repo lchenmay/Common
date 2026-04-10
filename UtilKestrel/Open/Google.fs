@@ -89,7 +89,10 @@ let translate apiKey src dst txt =
     res
 
 
-let client = new System.Net.Http.HttpClient()
+let client = 
+    let client = new System.Net.Http.HttpClient()
+    client.Timeout <- TimeSpan.FromSeconds 300.0
+    client
 
 // 定义符合 Gemini API 格式的类型结构
 type Part = { text: string }
@@ -113,6 +116,15 @@ let loadTextFromRep responseBody =
         match tryFindByPath [| "content"; "parts" |] items[0] with
         | Some (_, Json.Ary parts) when parts.Length > 0 ->
             tryFindStrByAtt "text" parts[0]
+        | _ -> ""
+    | _ -> ""
+
+let loadErFromRep responseBody = 
+    let root = responseBody |> Util.Json.str__root
+    match tryFindByPath [| "error"; "message" |] root with
+    | Some (s,j) ->
+        match j with
+        | Json.Str txt -> txt
         | _ -> ""
     | _ -> ""
 
@@ -206,6 +218,7 @@ let GeminiMultimodal
             // 5. 构建 URL
             let url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}"
             
+            output msg
             output $"正在向 {model} 发送多模态请求 (共 {files.Length} 个附件)..."
             
             // 6. 发送并获取响应
@@ -216,10 +229,12 @@ let GeminiMultimodal
                 output "✅ 多文件分析成功。"
                 return ("",loadTextFromRep responseBody)
             else
-                output $"❌ 接口返回错误。状态码: {int response.StatusCode}"
-                output $"详情: {responseBody}"
+                let code = response.StatusCode |> int
+                let msg = loadErFromRep responseBody
+                output $"❌ 接口返回错误。状态码: {code}"
+                output $"详情: {msg}"
                 
-                return (responseBody,"")
+                return (code.ToString() + ": " + msg,"")
             
         with | ex -> 
             output $"⚠️ GeminiMultimodal 发生异常: {ex.Message}"

@@ -67,10 +67,10 @@ type SqlTx =
 
 let uncommited = "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;"
 
-let sql__sqlcmd conn sql = 
+let sql__sqlcmd (connGeneric:Conn) sql = 
 
-    match rdbms,conn with
-    | Rdbms.SqlServer,Conn.SqlServer conn -> 
+    match connGeneric with
+    | Conn.SqlServer conn ->
         let sc = new SqlCommand( uncommited + sql.text, conn)
 
         sql.ps 
@@ -82,7 +82,7 @@ let sql__sqlcmd conn sql =
 
         sc
         |> SqlCmd.SqlServer
-    | Rdbms.PostgreSql,Conn.PostgreSql conn -> 
+    | Conn.PostgreSql conn -> 
         let sc = new NpgsqlCommand(sql.text, conn)
 
         sql.ps 

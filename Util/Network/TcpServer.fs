@@ -18,7 +18,10 @@ let log(line) = if(logging.IsSome) then logging.Value("TCP>" + line)
 let prepareserver(port:int, certfile) =
     let cert =
         if(System.IO.File.Exists(certfile)) then
-            Some(X509Certificate.CreateFromCertFile(certfile))
+            //Some(X509Certificate.CreateFromCertFile(certfile))
+            certfile
+            |> X509CertificateLoader.LoadCertificateFromFile
+            |> Some
         else
             None
 
@@ -38,7 +41,7 @@ let validate(cert)(client:TcpClient) =
         client.Close()
         None
 
-let incoming(listener:TcpListener, cert:X509Certificate option) =
+let incoming(listener:TcpListener, cert:X509Certificate2 option) =
     let client = listener.AcceptTcpClient()
     log("Accepted: " + client.Client.RemoteEndPoint.ToString())
     if(cert.IsSome) then
@@ -67,8 +70,8 @@ let read(stream:System.IO.Stream,buffer) =
 
     bb.bytes()
 
-let process_cycle(listener, cert, handler) =
-    match incoming(listener, cert) with
+let process_cycle(listener, certo, handler) =
+    match incoming(listener, certo) with
     | Some(client, s) ->
         let buffer = Array.zeroCreate Tcp.bufferLength
         let rqbytes = read(s,buffer)
@@ -86,13 +89,13 @@ let process_cycle(listener, cert, handler) =
 
 let run(port, certfile, handler) =
 
-    let listener, cert = prepareserver(port, certfile)
+    let listener, certo = prepareserver(port, certfile)
     listener.Start()
     log("TCP server started at [" + port.ToString() + "]")
     [0..8] |> Seq.iter(fun i -> log(""))
 
     while(true) do
         try
-            process_cycle(listener, cert, handler)
+            process_cycle(listener, certo, handler)
         with
         | ex -> Console.WriteLine(ex.ToString())

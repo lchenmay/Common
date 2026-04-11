@@ -74,13 +74,13 @@ type LinearCache<'k,'kk,'v> =
                     | None -> None
                 | None -> None
 
-        and set k v = 
-            let now = DateTime.UtcNow
+    member this.key__valoption k v = 
+        let now = DateTime.UtcNow
 
-            let key = this.k__kk k
-            let i = this.storage.AddOrUpdate(key,adder now k v,updater now v )
-            i.accessedat <- now
-            this.checkLimit ()
+        let key = this.k__kk k
+        let i = this.storage.AddOrUpdate(key,adder now k v,updater now v )
+        i.accessedat <- now
+        this.checkLimit ()
 
 let createLinearCacheWithStringKey<'v>
     (name,limit,truncate) 

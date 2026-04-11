@@ -50,7 +50,6 @@ let connect x =
                 new NpgsqlConnection(x.connStr)
                 |> Conn.PostgreSql
                 |> Some
-            | _ -> None
         Suc x
     with ex -> 
         exnSqlo__fail x ex None
@@ -86,7 +85,8 @@ let commitc (suc,fail) x =
                         sc.ExecuteNonQuery()
                     | SqlCmd.PostgreSql sc,SqlTx.PostgreSql tx ->
                         sc.Transaction <- tx
-                        sc.ExecuteNonQuery())
+                        sc.ExecuteNonQuery()
+                    | _ -> 0)
 
             use cw = new CodeWrapper("Database.commitc/Commit")
 

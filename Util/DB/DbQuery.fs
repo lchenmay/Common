@@ -44,7 +44,6 @@ let connect x =
                 new NpgsqlConnection(x.connStr)
                 |> Conn.PostgreSql
                 |> Some
-            | _ -> None
         Suc x
     with ex -> 
         Fail(ex,x)

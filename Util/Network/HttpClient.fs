@@ -216,7 +216,7 @@ let HttpPost (url: string) (param: string) (contenttype: string) =
 let mutable maxCycle = 0
 
 // ServicePointManager.SecurityProtocol <- SecurityProtocolType.Ssl3 ||| SecurityProtocolType.Tls ||| SecurityProtocolType.Tls12 ||| SecurityProtocolType.Tls11
-ServicePointManager.SecurityProtocol <- SecurityProtocolType.Tls ||| SecurityProtocolType.Tls12 ||| SecurityProtocolType.Tls11
+//ServicePointManager.SecurityProtocol <- SecurityProtocolType.Tls ||| SecurityProtocolType.Tls12 ||| SecurityProtocolType.Tls11
 
 type HttpClient = 
     {

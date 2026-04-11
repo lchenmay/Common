@@ -2,12 +2,14 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <OutputType>Library</OutputType>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Company />
   </PropertyGroup>
 
   <ItemGroup>
+	  <PackageReference Include="FSharp.Core" Version="10.1.201" />
 	  <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.0" />
 	  <Compile Include="AssemblyInfo.fs" />
 	  <Compile Include="Flow.fs" />

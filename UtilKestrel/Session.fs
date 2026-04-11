@@ -49,7 +49,7 @@ let user__session
 
 let validateRuntimeSession 
     (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
-    (x:EchoCtx<'Runtime,'Session,'Error>) = 
+    (x:EchoCtx<'Runtime,SessionTemplate<'User,'SessionData>,'Error>) = 
 
     x.Struct.sessiono <- None
 
@@ -64,7 +64,7 @@ let validateRuntimeSession
 let checkRuntimeSession 
     erUnauthorized 
     (sessions: ModDictStr<SessionTemplate<'User,'SessionData>>)
-    (x:EchoCtx<'Runtime,'Session,'Error>) = 
+    (x:EchoCtx<'Runtime,SessionTemplate<'User,'SessionData>,'Error>) = 
 
     validateRuntimeSession sessions x
 

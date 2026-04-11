@@ -93,8 +93,5 @@
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.5" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="10.1.201" />
-  </ItemGroup>
 
 </Project>

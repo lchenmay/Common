@@ -20,14 +20,14 @@ let getClerkIdentity output (httpx: HttpContext) =
             // 3. 提取 'sub' 字段，这才是 Clerk 的真正 User ID (如 user_2xb...)
             let userId = jwtToken.Subject 
         
-            "✅ 成功解析 JWT，Clerk User ID: " + userId
-            |> output
+            //"✅ 成功解析 JWT，Clerk User ID: " + userId
+            //|> output
                         
             userId
         with
         | ex -> 
-            "❌ JWT 解析失败: " + ex.Message
-            |> output
+            //"❌ JWT 解析失败: " + ex.Message
+            //|> output
             ""                    
     else
         ""

@@ -29,8 +29,8 @@ let runServer
     (args: string[]) =
 
     let showHttpX (httpx:HttpContext) = 
-        " <= " + httpx.Request.Method + " " + httpx.Request.Path.Value
-        |> output
+        //" <= " + httpx.Request.Method + " " + httpx.Request.Path.Value
+        //|> output
 
         httpx.Request.Headers
         |> Seq.iter(fun h ->
@@ -84,7 +84,7 @@ let runServer
             httpx.Response.StatusCode <- 204
             Task.CompletedTask
         else 
-            showHttpX httpx
+            //showHttpX httpx
             next.Invoke(httpx)) |> ignore
 
     // Vue 静态文件托管
@@ -133,7 +133,7 @@ let runServer
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(bin))
 
         with ex ->
-            "[Upload Error] " + ex.Message |> output
+            //"[Upload Error] " + ex.Message |> output
             httpx.Response.StatusCode <- 500
             do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message; Size = 0L |})
     })) |> ignore
@@ -176,8 +176,8 @@ let runServer
     // 保持原有的 FALLBACK 逻辑
     app.MapFallback(Func<HttpContext, Task>(fun context -> task {
 
-        "FALLBACK" |> output
-        showHttpX context
+        //"FALLBACK" |> output
+        //showHttpX context
 
         if HttpMethods.IsGet(context.Request.Method) && 
            not (context.Request.Path.Value.StartsWith("/api", StringComparison.OrdinalIgnoreCase)) then

@@ -5,11 +5,13 @@
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <OutputType>Library</OutputType>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	  <LangVersion>preview</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-	  <PackageReference Include="FSharp.Core" Version="10.1.201" />
+	  <PackageReference Include="FSharp.Core" Version="10.1.300-servicing.26177.108" />
 	  <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.0" />
+	  <None Include="README.md" />
 	  <Compile Include="AssemblyInfo.fs" />
 	  <Compile Include="Flow.fs" />
 	  <Compile Include="ADT.fs" />
@@ -65,6 +67,8 @@
     <Compile Include="Boost.fs" />
   </ItemGroup>
 
+  <ItemGroup />
+
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
     <PackageReference Include="CHTCHSConv" Version="1.0.0" />
@@ -72,7 +76,6 @@
     <PackageReference Include="FSharp.Control.AsyncSeq" Version="4.12.0" />
     <PackageReference Include="FSharp.Stats" Version="0.6.0" />
     <PackageReference Include="FSharpx.Async" Version="1.14.1" />
-    <PackageReference Include="NetMQ" Version="4.0.2.2" />
     <PackageReference Include="Npgsql" Version="10.0.2" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
     <PackageReference Include="RavenDB.Client" Version="7.2.1" />
@@ -83,14 +86,14 @@
     <PackageReference Include="SharpDX.Mathematics" Version="4.2.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="System.Data.SqlClient" Version="4.9.1" />
-    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.5" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.6" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
 
-    <PackageReference Include="System.Management" Version="10.0.5" />
+    <PackageReference Include="System.Management" Version="10.0.6" />
     <PackageReference Include="SHA3" Version="1.0.0">
       <GeneratePathProperty></GeneratePathProperty>
     </PackageReference>
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.5" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.6" />
   </ItemGroup>
 
 

@@ -10,9 +10,6 @@ open System.Net.WebSockets
 open System.Collections.Generic
 open System.Collections.Concurrent
 
-open NetMQ
-open NetMQ.Sockets
-
 open Util.Cat
 open Util.Bin
 open Util.Text

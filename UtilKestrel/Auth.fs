@@ -102,7 +102,7 @@ let socialAuth
     runtime
     checkoutEu
     v__json
-    (x:EchoCtx<'Runtime,'Session,'Error>) =
+    (x:EchoCtx<'Runtime,SessionTemplate<'User,'SessionData>,'Error>) =
 
     match 
         checkSessionUsero 

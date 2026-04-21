@@ -53,13 +53,24 @@ let verrorn = clogn ConsoleColor.Red
 
 let prompt (since:DateTime) s =
     let elapse = DateTime.UtcNow.Subtract since
-    [|
-        elapse.Days.ToString("000") + "."
-        elapse.Hours.ToString("00") + ":"
-        elapse.Minutes.ToString("00") + ":"
-        elapse.Seconds.ToString("00") + "."
-        elapse.Milliseconds.ToString("000") + "> "
-        s |]
+    if elapse.Hours = 0 then
+        [|
+            elapse.Minutes.ToString("00") + ":"
+            elapse.Seconds.ToString("00") + ">"
+            s |]
+    else if elapse.Days = 0 then
+        [|
+            elapse.Hours.ToString("00") + ":"
+            elapse.Minutes.ToString("00") + ":"
+            elapse.Seconds.ToString("00") + ">"
+            s |]
+    else
+        [|
+            elapse.Days.ToString("000") + "."
+            elapse.Hours.ToString("00") + ":"
+            elapse.Minutes.ToString("00") + ":"
+            elapse.Seconds.ToString("00") + ">"
+            s |]
     |> String.Concat
 
 let promptShort (since:DateTime) s =

@@ -188,7 +188,7 @@ let GeminiMultimodal
                 files 
                 |> Array.map (fun path ->
 
-                    let mime = path |> Util.FileSys.filename__mime 
+                    let mime = path |> Util.FileSys.filename__mime output
                     output $"正在读取并转换文件: {System.IO.Path.GetFileName(path)} ({mime})..."
                     let bytes = System.IO.File.ReadAllBytes(path)
                     let base64Data = System.Convert.ToBase64String(bytes)

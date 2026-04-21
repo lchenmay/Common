@@ -12,6 +12,7 @@ open Microsoft.Extensions.Hosting
 open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.FileProviders
+open Microsoft.Extensions.Logging
 open System.Net.WebSockets
 
 open Util.Json
@@ -39,6 +40,8 @@ let runServer
                 h.Key + ": " + v |> output))
 
     let builder = WebApplication.CreateBuilder(args)
+
+    builder.Logging.ClearProviders() |> ignore
 
     // --- 保持原有功能，新增大文件表单配置 ---
     builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>
@@ -100,6 +103,9 @@ let runServer
     
     app.MapGet("/thumbnail/{id}", 
         Func<string, HttpContext, Task>(fun id httpx -> task {
+
+            "/thumbnail/" + id |> output
+
             let bin = id__thumbnail id
 
             //httpx.Response.Headers.["Cache-Control"] <- "public, max-age=86400"
@@ -111,7 +117,9 @@ let runServer
     // 文件服务：/file/{id} 
     app.MapGet("/file/{id}", 
         Func<string, HttpContext, Task>(fun id httpx -> task {
-            let bin,mime = fileid__bin id
+            let (bin:byte[]),mime = fileid__bin id
+
+            "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" |> output
 
             //httpx.Response.Headers.["Cache-Control"] <- "public, max-age=86400"
             httpx.Response.ContentType <- mime
@@ -122,6 +130,8 @@ let runServer
     // 新增：处理 /api/public/upload 路由 (在通用分发前拦截)
     app.MapPost("/api/public/upload", Func<HttpContext, Task>(fun httpx -> task {
         try
+            "/api/public/upload/" |> output
+
             if not httpx.Request.HasFormContentType then
                 httpx.Response.StatusCode <- 415
                 return ()
@@ -132,8 +142,12 @@ let runServer
             
             if files.Length <> 1 then
                 return ()
+            
+            let file = files[0]
+            
+            file.FileName + " " + file.Length.ToString() + " bytes" |> output
 
-            let rep = incomingFile httpx files[0] |> Async.RunSynchronously
+            let rep = incomingFile httpx file |> Async.RunSynchronously
 
             let bin = 
                 rep
@@ -164,6 +178,7 @@ let runServer
     // 1.2 GET 型 API 分发
     app.MapGet("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
+            $"/api/{scheme}/{api}/" |> output
             let x = runApiEngine (runtime,httpx,scheme,api)
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
     })) |> ignore
@@ -171,6 +186,7 @@ let runServer
     // 1.2 POST 型 API 分发
     app.MapPost("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
+            $"/api/{scheme}/{api}/" |> output
             let x = runApiEngine (runtime,httpx,scheme,api)
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory x.Struct.rep)
     })) |> ignore
@@ -178,7 +194,8 @@ let runServer
     // 保持原有的 FALLBACK 逻辑
     app.MapFallback(Func<HttpContext, Task>(fun context -> task {
 
-        //"FALLBACK" |> output
+        "FALLBACK" |> output
+
         //showHttpX context
 
         if HttpMethods.IsGet(context.Request.Method) && 

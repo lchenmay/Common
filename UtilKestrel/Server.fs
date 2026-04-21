@@ -7,6 +7,7 @@ open System.Text.Encodings
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
+open Microsoft.AspNetCore.Http.Extensions
 open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.Hosting
 open Microsoft.AspNetCore.Server.Kestrel.Core
@@ -197,20 +198,20 @@ let runServer
     })) |> ignore
 
     // 保持原有的 FALLBACK 逻辑
-    app.MapFallback(Func<HttpContext, Task>(fun context -> task {
+    app.MapFallback(Func<HttpContext, Task>(fun httpx -> task {
 
-        "FALLBACK" |> output
+        "FALLBACK " + httpx.Request.GetDisplayUrl() |> output
 
         //showHttpX context
 
-        if HttpMethods.IsGet(context.Request.Method) && 
-           not (context.Request.Path.Value.StartsWith("/api", StringComparison.OrdinalIgnoreCase)) then
+        if HttpMethods.IsGet(httpx.Request.Method) && 
+           not (httpx.Request.Path.Value.StartsWith("/api", StringComparison.OrdinalIgnoreCase)) then
             let indexPath = Path.Combine(vueDistPath, "index.html")
             if File.Exists(indexPath) then
-                context.Response.ContentType <- "text/html"
-                do! context.Response.SendFileAsync(indexPath)
+                httpx.Response.ContentType <- "text/html"
+                do! httpx.Response.SendFileAsync(indexPath)
         else
-            context.Response.StatusCode <- 404
+            httpx.Response.StatusCode <- 404
     })) |> ignore
 
     app.Run()

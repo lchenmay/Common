@@ -12,7 +12,6 @@
 	  <FrameworkReference Include="Microsoft.AspNetCore.App" />
 	  <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
 	  <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
-	  <None Include="README.md" Pack="true" PackagePath="\" />
 	  <Compile Include="Types.fs" />
 	  <Compile Include="Ctx.fs" />
 	  <Compile Include="Constans.fs" />

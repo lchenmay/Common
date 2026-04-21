@@ -41,6 +41,11 @@ let runServer
 
     let builder = WebApplication.CreateBuilder(args)
 
+
+    builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning) |> ignore
+    builder.Logging.AddFilter("Microsoft.AspNetCore.Routing.EndpointMiddleware", LogLevel.Warning) |> ignore
+    builder.Logging.AddFilter("Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware", LogLevel.Warning) |> ignore
+    builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Error) |> ignore
     builder.Logging.ClearProviders() |> ignore
 
     // --- 保持原有功能，新增大文件表单配置 ---

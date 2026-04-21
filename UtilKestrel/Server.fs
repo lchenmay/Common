@@ -164,7 +164,7 @@ let runServer
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(bin))
 
         with ex ->
-            //"[Upload Error] " + ex.Message |> output
+            "[Upload Error] " + ex.Message |> output
             httpx.Response.StatusCode <- 500
             do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message; Size = 0L |})
     })) |> ignore

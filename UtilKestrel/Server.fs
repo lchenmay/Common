@@ -109,9 +109,9 @@ let runServer
     app.MapGet("/thumbnail/{id}", 
         Func<string, HttpContext, Task>(fun id httpx -> task {
 
-            "/thumbnail/" + id |> output
+            let bin:byte[] = id__thumbnail id
 
-            let bin = id__thumbnail id
+            "/thumbnail/" + id + " " + bin.Length.ToString() + " bytes" |> output
 
             //httpx.Response.Headers.["Cache-Control"] <- "public, max-age=86400"
             httpx.Response.ContentType <- "image/jpeg"

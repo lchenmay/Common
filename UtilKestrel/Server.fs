@@ -16,7 +16,7 @@ open Microsoft.Extensions.FileProviders
 open Microsoft.Extensions.Logging
 open System.Net.WebSockets
 
-open Util.Json
+open Util.Bash
 
 open UtilKestrel.Ctx
 
@@ -25,7 +25,7 @@ let runServer
     vueDistPath
     (incomingFile,fileid__bin,id__thumbnail)
     (cert,certpwd)
-    (apiEngine)
+    (apiEngine,wsEngineo)
     (port80, port443)
     output
     (args: string[]) =
@@ -73,9 +73,9 @@ let runServer
         options.ListenAnyIP(port443, fun listenOptions ->
             if File.Exists cert then
                 listenOptions.UseHttps(cert,certpwd) |> ignore
-                "SSL Certificate loaded from: " + cert |> output
+                "SSL Certificate loaded from: " + cert |> green |> output
             else
-                "Warning: SSL certificate not found at " + cert + ". HTTPS may not work." |> output
+                "Warning: SSL certificate not found at " + cert + ". HTTPS may not work." |> red |> output
         )
     ) |> ignore
 
@@ -104,6 +104,27 @@ let runServer
 
     // 启用 WebSocket 支持
     app.UseWebSockets() |> ignore
+    app.Use(fun (context: HttpContext) (next: Func<Task>) ->
+        if context.Request.Path = PathString("/ws") then
+            if context.WebSockets.IsWebSocketRequest then
+
+                context.Request.GetDisplayUrl()
+                |> green |> output
+                
+                // 必须将 Async 转换为 Task，并强制转换为 Task 类型
+                (async {
+                    let! webSocket = context.WebSockets.AcceptWebSocketAsync() |> Async.AwaitTask
+                    match wsEngineo with
+                    | Some e -> 
+                        do! e webSocket
+                    | None -> return ()
+                } |> Async.StartAsTask) :> Task
+            else
+                context.Response.StatusCode <- StatusCodes.Status400BadRequest
+                Task.CompletedTask
+        else
+            next.Invoke()
+    ) |> ignore
 
     // --- 路由与功能实现区 ---
     
@@ -112,7 +133,8 @@ let runServer
 
             let bin:byte[] = id__thumbnail id
 
-            "/thumbnail/" + id + " " + bin.Length.ToString() + " bytes" |> output
+            "/thumbnail/" + id + " " + bin.Length.ToString() + " bytes" 
+            |> green |> output
 
             //httpx.Response.Headers.["Cache-Control"] <- "public, max-age=86400"
             httpx.Response.ContentType <- "image/jpeg"
@@ -125,7 +147,8 @@ let runServer
         Func<string, HttpContext, Task>(fun id httpx -> task {
             let (bin:byte[]),mime = fileid__bin id
 
-            "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" |> output
+            "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" 
+            |> green |> output
 
             //httpx.Response.Headers.["Cache-Control"] <- "public, max-age=86400"
             httpx.Response.ContentType <- mime
@@ -136,7 +159,8 @@ let runServer
     // 新增：处理 /api/public/upload 路由 (在通用分发前拦截)
     app.MapPost("/api/public/upload", Func<HttpContext, Task>(fun httpx -> task {
         try
-            "/api/public/upload/" |> output
+            "/api/public/upload/" 
+            |> green |> output
 
             if not httpx.Request.HasFormContentType then
                 httpx.Response.StatusCode <- 415
@@ -151,7 +175,8 @@ let runServer
             
             let file = files[0]
             
-            file.FileName + " " + file.Length.ToString() + " bytes" |> output
+            file.FileName + " " + file.Length.ToString() + " bytes"
+            |> green |> output
 
             let rep = incomingFile httpx file |> Async.RunSynchronously
 
@@ -164,7 +189,9 @@ let runServer
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(bin))
 
         with ex ->
-            "[Upload Error] " + ex.Message |> output
+            "[Upload Error] " + ex.Message
+            |> red |> output
+
             httpx.Response.StatusCode <- 500
             do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message; Size = 0L |})
     })) |> ignore
@@ -184,7 +211,8 @@ let runServer
     // 1.2 GET 型 API 分发
     app.MapGet("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
-            $"/api/{scheme}/{api}/" |> output
+            $"/api/{scheme}/{api}/" 
+            |> green |> output
             let x = runApiEngine (runtime,httpx,scheme,api)
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
     })) |> ignore
@@ -192,15 +220,34 @@ let runServer
     // 1.2 POST 型 API 分发
     app.MapPost("/api/{scheme}/{api}",
         Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
-            $"/api/{scheme}/{api}/" |> output
+            $"/api/{scheme}/{api}/" 
+            |> green |> output
             let x = runApiEngine (runtime,httpx,scheme,api)
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory x.Struct.rep)
     })) |> ignore
 
+    app.Use(fun (context: HttpContext) (next: Func<Task>) ->
+        if context.Request.Path.StartsWithSegments("/.git") || 
+           context.Request.Path.StartsWithSegments("/.env") then
+
+            "Anti scanning: " + context.Request.GetDisplayUrl() 
+            |> red |> output
+
+            // 显式将 StatusCode 设为 403
+            context.Response.StatusCode <- StatusCodes.Status403Forbidden
+            // 必须返回一个 Task 以符合委托签名
+            Task.CompletedTask
+        else
+            // 继续执行管道中的下一个中间件
+            next.Invoke()
+    ) |> ignore
+
+
     // 保持原有的 FALLBACK 逻辑
     app.MapFallback(Func<HttpContext, Task>(fun httpx -> task {
 
-        "FALLBACK " + httpx.Request.GetDisplayUrl() |> output
+        "FALLBACK " + httpx.Request.GetDisplayUrl() 
+        |> red |> output
 
         //showHttpX context
 

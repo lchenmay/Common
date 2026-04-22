@@ -262,4 +262,8 @@ let runServer
             httpx.Response.StatusCode <- 404
     })) |> ignore
 
+
+    "UtilKestrel.Server: app.Run(), comming up ..."
+    |> green |> output
+
     app.Run()

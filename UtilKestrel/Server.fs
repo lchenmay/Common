@@ -96,6 +96,23 @@ let runServer
             //showHttpX httpx
             next.Invoke(httpx)) |> ignore
 
+    // 扫描拦截器
+    app.Use(fun (context: HttpContext) (next: Func<Task>) ->
+        if context.Request.Path.StartsWithSegments("/.git") || 
+           context.Request.Path.StartsWithSegments("/.env") then
+
+            "Anti scanning: " + context.Request.GetDisplayUrl() 
+            |> red |> output
+
+            // 显式将 StatusCode 设为 403
+            context.Response.StatusCode <- StatusCodes.Status403Forbidden
+            // 必须返回一个 Task 以符合委托签名
+            Task.CompletedTask
+        else
+            // 继续执行管道中的下一个中间件
+            next.Invoke()
+    ) |> ignore
+
     // Vue 静态文件托管
     if Directory.Exists(vueDistPath) then
         let fileServerOptions = StaticFileOptions()
@@ -225,22 +242,6 @@ let runServer
             let x = runApiEngine (runtime,httpx,scheme,api)
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory x.Struct.rep)
     })) |> ignore
-
-    app.Use(fun (context: HttpContext) (next: Func<Task>) ->
-        if context.Request.Path.StartsWithSegments("/.git") || 
-           context.Request.Path.StartsWithSegments("/.env") then
-
-            "Anti scanning: " + context.Request.GetDisplayUrl() 
-            |> red |> output
-
-            // 显式将 StatusCode 设为 403
-            context.Response.StatusCode <- StatusCodes.Status403Forbidden
-            // 必须返回一个 Task 以符合委托签名
-            Task.CompletedTask
-        else
-            // 继续执行管道中的下一个中间件
-            next.Invoke()
-    ) |> ignore
 
 
     // 保持原有的 FALLBACK 逻辑

@@ -27,7 +27,7 @@ let loadAll output conn metadata h =
             (metadata.table,metadata.fieldorders(),metadata.db__rcd) with
     | Some items ->
         items
-        |> Array.iter h
+        |> Array.iter (h >> ignore)
     | None -> 
         halt output ("BizLogics.Init.loadAll [" + metadata.table + "]") ""
 

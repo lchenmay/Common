@@ -3,6 +3,7 @@
 open System
 open System.Threading
 open System.Threading.Tasks
+open System.Collections.Generic
 
 
 let lockee = new Object()
@@ -51,6 +52,16 @@ let vwarn = clog ConsoleColor.Yellow
 let verror = clog ConsoleColor.Red
 let verrorn = clogn ConsoleColor.Red
 
+let mutable bufferSize = 0
+let mutable buffer = new List<string>()
+
+let checkBuffer line = 
+    if bufferSize > 0 then
+        buffer.Add line
+        if buffer.Count > bufferSize then
+            buffer.RemoveAt 0
+    line
+
 let prompt (since:DateTime) s =
     let elapse = DateTime.UtcNow.Subtract since
     if elapse.Hours = 0 then
@@ -72,6 +83,7 @@ let prompt (since:DateTime) s =
             elapse.Seconds.ToString("00") + "> "
             s |]
     |> String.Concat
+    |> checkBuffer
 
 let promptShort (since:DateTime) s =
     let elapse = DateTime.UtcNow.Subtract since
@@ -80,3 +92,4 @@ let promptShort (since:DateTime) s =
         elapse.Seconds.ToString("00") + "> "
         s |]
     |> String.Concat
+    |> checkBuffer

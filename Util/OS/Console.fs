@@ -60,6 +60,9 @@ let checkBuffer line =
         buffer.Add line
         if buffer.Count > bufferSize then
             buffer.RemoveAt 0
+    else
+        if buffer.Count > 0 then
+            buffer.Clear()
     line
 
 let prompt (since:DateTime) s =

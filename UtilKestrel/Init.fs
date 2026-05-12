@@ -86,3 +86,13 @@ let updateDbStructure runtime conn =
         "Done" |> runtime.output
     | Fail(e,x) -> 
         "Failed" |> runtime.output
+        
+        match
+            e.sqlo with
+        | Some sql -> sql.text |> runtime.output
+        | None -> ()
+        
+        match
+            e.exno with
+        | Some exn -> exn.ToString() |> runtime.output
+        | None -> ()

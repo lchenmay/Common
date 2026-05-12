@@ -272,6 +272,18 @@ let tryFindFalseByAtt attName json =
         | _ -> false
     | _ -> false
 
+let replaceAtt attName node src = 
+    match src with
+    | Json.Braket items ->
+        items
+        |> Array.map(fun (s,jj) -> 
+            if s = attName then
+                s,node
+            else
+                (s,jj))
+    | _ -> [| (attName,node) |]
+    |> Json.Braket
+
 let inline tryAddBracket<'T> json (attName, attValue:'T)  =
     let appendItems items = Array.singleton >> Array.append items
 

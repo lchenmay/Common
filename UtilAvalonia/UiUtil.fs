@@ -48,10 +48,23 @@ let color__Brush ccolor =
     |> SolidColorBrush
 
 
-let defaultFontFamily = 
-    new FontFamily("Consolas, 'Courier New', monospace")
+//let defaultFontFamily = 
+//    new FontFamily("Consolas, 'Courier New', monospace")
 
-let defaultFontSize = 10.0
+// 推荐使用 'Fira Code' 或你喜欢的其他字体，并在其后添加回退字体
+let defaultFontFamily = 
+    new FontFamily("Fira Code, 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace")
+
+let defaultFontSize = 16.0
+
+let defaultFontSizeSmall = 12.0
+
+let txtFontSize__TextBlock fontsize text = 
+    new TextBlock(
+        Text = text,
+        Foreground = color__Brush BuildInColor.DefaultForeground,
+        FontFamily = defaultFontFamily,
+        FontSize = fontsize)
 
 let txt__TextBlock text = 
     new TextBlock(

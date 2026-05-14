@@ -7,6 +7,7 @@ open System.IO
 open System.Collections.Generic
 open System.Collections.ObjectModel
 open System.Threading.Tasks
+
 open Avalonia
 open Avalonia.Controls
 open Avalonia.Controls.Primitives   // 提供 ScrollBarVisibility
@@ -14,6 +15,7 @@ open Avalonia.Input.Platform        // 提供 IClipboard 的 SetTextAsync 方法
 open Avalonia.Layout
 open Avalonia.Threading
 open Avalonia.Platform.Storage
+
 open UtilAvalonia.UiUtil
 
 type ColoredSegment = { Text: string; Color: BuildInColor }
@@ -103,7 +105,7 @@ type TextConsole(?log: string -> unit) as this =
             dirty <- false
             let ary = lock buffer (fun () -> buffer.ToArray())
             lines.Clear()
-            ary |> Array.iter (txt__TextBlock >> lines.Add)
+            ary |> Array.iter (txtFontSize__TextBlock defaultFontSizeSmall >> lines.Add)
             scrollViewer.ScrollToEnd()
 
     let onTimerTick _ = if dirty then refreshDisplay()

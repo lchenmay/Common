@@ -12,6 +12,8 @@ open Avalonia.Platform.Storage
 open Avalonia.Media
 open Avalonia.Layout
 
+open UtilAvalonia.UiUtil
+
 // ========== 内部辅助函数 ==========
 let getSortedDirectories dirPath =
     try Directory.GetDirectories(dirPath) |> Array.map Path.GetFileName |> Array.sortBy (fun n -> n.ToLower())
@@ -25,7 +27,9 @@ let getSortedFiles dirPath =
 let createTreeNode header path isDirectory =
     let panel = StackPanel(Orientation = Orientation.Horizontal)
     let checkBox = CheckBox(VerticalAlignment = VerticalAlignment.Center, Margin = Thickness(2.0, 0.0, 8.0, 0.0))
-    let textBlock = TextBlock(Text = header, VerticalAlignment = VerticalAlignment.Center)
+    let textBlock = txt__TextBlock header
+    textBlock.VerticalAlignment <- VerticalAlignment.Center
+
     panel.Children.Add checkBox
     panel.Children.Add textBlock
     let node = TreeViewItem(Header = panel, Tag = path)
@@ -42,7 +46,8 @@ let createTreeNode header path isDirectory =
 
 /// 创建简单树节点（不带复选框）
 let createSimpleTreeNode header path isDirectory =
-    let node = TreeViewItem(Header = header, Tag = path)
+    let node = TreeViewItem(Header = txt__TextBlock header, Tag = path)
+
     let ctx = ContextMenu()
     let openItem = MenuItem(Header = (if isDirectory then "从文件管理器打开" else "打开所在文件夹"))
     openItem.Click.Add(fun _ ->
@@ -68,7 +73,8 @@ let rec loadDirectory (node: TreeViewItem) (dirPath: string) (log: string -> uni
                 Dispatcher.UIThread.Post(fun () ->
                     node.Items.Clear()
                     for dirName in subDirs do
-                        let fullPath = Path.Combine(dirPath, dirName)
+                        let fullPath = Path.GetFullPath(Path.Combine(dirPath, dirName))  // 确保绝对路径
+                        log $"创建目录节点: {dirName} -> {fullPath}"
                         let dirNode = createTreeNode dirName fullPath true
                         let hasContent = Directory.GetDirectories(fullPath).Length > 0 || Directory.GetFiles(fullPath).Length > 0
                         if hasContent then

@@ -1,4 +1,4 @@
-namespace UtilAvalonia.Comp.LayoutGrid
+module UtilAvalonia.Comp.LayoutGrid
 
 open System
 open System.Collections.Generic

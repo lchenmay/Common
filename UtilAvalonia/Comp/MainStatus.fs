@@ -1,4 +1,4 @@
-﻿namespace UtilAvalonia.Comp.MainStatus
+﻿module UtilAvalonia.Comp.MainStatus
 
 open System
 open Avalonia               // 提供 Thickness

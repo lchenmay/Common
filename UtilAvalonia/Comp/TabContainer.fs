@@ -1,4 +1,4 @@
-﻿namespace UtilAvalonia.Comp.TabContainer
+﻿module UtilAvalonia.Comp.TabContainer
 
 open System.Collections.ObjectModel
 open Avalonia.Controls

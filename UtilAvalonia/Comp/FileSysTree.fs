@@ -13,16 +13,16 @@ open Avalonia.Media
 open Avalonia.Layout
 
 // ========== 内部辅助函数 ==========
-let private getSortedDirectories dirPath =
+let getSortedDirectories dirPath =
     try Directory.GetDirectories(dirPath) |> Array.map Path.GetFileName |> Array.sortBy (fun n -> n.ToLower())
     with _ -> [||]
 
-let private getSortedFiles dirPath =
+let getSortedFiles dirPath =
     try Directory.GetFiles(dirPath) |> Array.map Path.GetFileName |> Array.sortBy (fun n -> n.ToLower())
     with _ -> [||]
 
 /// 创建带复选框的树节点
-let private createTreeNode header path isDirectory =
+let createTreeNode header path isDirectory =
     let panel = StackPanel(Orientation = Orientation.Horizontal)
     let checkBox = CheckBox(VerticalAlignment = VerticalAlignment.Center, Margin = Thickness(2.0, 0.0, 8.0, 0.0))
     let textBlock = TextBlock(Text = header, VerticalAlignment = VerticalAlignment.Center)
@@ -41,7 +41,7 @@ let private createTreeNode header path isDirectory =
     node
 
 /// 创建简单树节点（不带复选框）
-let private createSimpleTreeNode header path isDirectory =
+let createSimpleTreeNode header path isDirectory =
     let node = TreeViewItem(Header = header, Tag = path)
     let ctx = ContextMenu()
     let openItem = MenuItem(Header = (if isDirectory then "从文件管理器打开" else "打开所在文件夹"))
@@ -55,7 +55,7 @@ let private createSimpleTreeNode header path isDirectory =
     node
 
 /// 递归加载目录内容到树节点（使用带复选框的节点）
-let rec private loadDirectory (node: TreeViewItem) (dirPath: string) (log: string -> unit) =
+let rec loadDirectory (node: TreeViewItem) (dirPath: string) (log: string -> unit) =
     if node.Tag <> null && node.Tag.ToString() = "loaded" then
         log $"loadDirectory 跳过: 节点已加载"
     else

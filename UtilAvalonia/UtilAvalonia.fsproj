@@ -5,12 +5,15 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
-  <ItemGroup>
-    <EmbeddedResource Remove="Comp\**" />
-  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="UiUtil.fs" />
+    <Compile Include="Comp\DialogOkCancel.fs" />
+    <Compile Include="Comp\LayoutGrid.fs" />
+    <Compile Include="Comp\TabContainer.fs" />
+    <Compile Include="Comp\MainStatus.fs" />
+    <Compile Include="Comp\TextConsole.fs" />
+    <Compile Include="Comp\FileSysTree.fs" />
   </ItemGroup>
 
   <ItemGroup>

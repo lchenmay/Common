@@ -1,4 +1,4 @@
-﻿module AIO.AvaloniaApp.UiUtil
+﻿module UtilAvalonia.UiUtil
 
 open LanguagePrimitives
 

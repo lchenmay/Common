@@ -29,16 +29,16 @@ type FileTreeView(getMainWindow: unit -> Window, onRootPathChanged: string -> un
     let selectedPaths = ObservableCollection<string>()
     let selectedPathsChanged = Event<NotifyCollectionChangedEventArgs>()
 
-    let rootNode, _ = createTreeNode "根目录" "" true 0.0
+    let rootNode, _ = createTreeNode "文件服务" "" true 0.0
 
     // 刷新树：清除旧内容，加载新路径
     let refreshTree () =
         if String.IsNullOrEmpty currentRootPath then
-            rootNode.Header <- "根目录 (未选择)"
+            rootNode.Header <- "文件服务 (未选择)"
             rootNode.Tag <- box "placeholder"
             rootNode.Items.Clear()
         else
-            rootNode.Header <- sprintf "根目录 (%s)" currentRootPath
+            rootNode.Header <- sprintf "文件服务 (%s)" currentRootPath
             rootNode.Tag <- box "placeholder"
             rootNode.Items.Clear()
             let placeholder, _ = createTreeNode "加载中..." "" true 0.0
@@ -55,7 +55,7 @@ type FileTreeView(getMainWindow: unit -> Window, onRootPathChanged: string -> un
                         rootNode.Tag <- box "loaded"
                     else
                         log $"目录不存在: {currentRootPath}"
-                        rootNode.Header <- sprintf "根目录 (不存在: %s)" currentRootPath
+                        rootNode.Header <- sprintf "文件服务 (不存在: %s)" currentRootPath
                 )
 
     // 更换根目录
@@ -64,7 +64,7 @@ type FileTreeView(getMainWindow: unit -> Window, onRootPathChanged: string -> un
             let win = getMainWindow()
             if win <> null then
                 let storage = win.StorageProvider
-                let options = FolderPickerOpenOptions(Title = "选择根目录", AllowMultiple = false)
+                let options = FolderPickerOpenOptions(Title = "选择文件服务根目录", AllowMultiple = false)
                 if Directory.Exists currentRootPath then
                     let! start = storage.TryGetFolderFromPathAsync(currentRootPath)
                     options.SuggestedStartLocation <- start
@@ -91,28 +91,39 @@ type FileTreeView(getMainWindow: unit -> Window, onRootPathChanged: string -> un
         let changeItem = MenuItem(Header = "更换文件夹")
         changeItem.Click.Add(fun _ -> changeRoot())
         ctxMenu.Items.Add changeItem
-
         rootNode.ContextMenu <- ctxMenu
-        rootNode.IsExpanded <- false
-        treeView.Items.Add rootNode
+
+        // 将文件服务根节点添加到树
+        treeView.Items.Add(rootNode)
         
         // 使用布局函数创建界面
-// 在 FileTreeView 的 do 块中，修改布局调用
         let layout = createFileTreeLayout treeView selectedPaths clearSelectedPaths log
         this.Content <- layout
+
+    /// 添加根节点（用于开发项目和文档项目）
+    member this.AddRootNode(header: string, tag: obj) =
+        let node = TreeViewItem(Header = txt__TextBlock header, Tag = tag)
+        treeView.Items.Add(node) |> ignore
+        node
+
+    /// 添加带右键菜单的根节点
+    member this.AddRootNode(header: string, tag: obj, contextMenu: ContextMenu) =
+        let node = TreeViewItem(Header = txt__TextBlock header, Tag = tag, ContextMenu = contextMenu)
+        treeView.Items.Add(node) |> ignore
+        node
 
     /// 设置根目录路径
     member _.SetRootPath(path: string) =
         currentRootPath <- path
         refreshTree()
 
-    /// 添加自定义右键菜单项
+    /// 添加自定义右键菜单项到文件服务节点
     member _.AddMenuItem(header: string, onClick: unit -> unit) =
         let item = MenuItem(Header = header)
         item.Click.Add(fun _ -> onClick())
         rootNode.ContextMenu.Items.Add item
 
-    /// 获取当前根节点
+    /// 获取文件服务根节点
     member _.RootNode = rootNode
     
     /// 获取已选路径集合

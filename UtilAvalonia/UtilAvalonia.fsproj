@@ -11,9 +11,11 @@
     <Compile Include="Comp\DialogOkCancel.fs" />
     <Compile Include="Comp\LayoutGrid.fs" />
     <Compile Include="Comp\TabContainer.fs" />
+    <Compile Include="Comp\FileSysTree\FileSysTreeLogics.fs" />
+    <Compile Include="Comp\FileSysTree\FileSysTreeLayout.fs" />
+    <Compile Include="Comp\FileSysTree\FileSysTree.fs" />
     <Compile Include="Comp\MainStatus.fs" />
     <Compile Include="Comp\TextConsole.fs" />
-    <Compile Include="Comp\FileSysTree.fs" />
   </ItemGroup>
 
   <ItemGroup>

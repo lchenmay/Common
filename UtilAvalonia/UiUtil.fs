@@ -11,11 +11,11 @@ open System.Threading.Tasks
 open Avalonia
 open Avalonia.Controls
 open Avalonia.Controls.Primitives
+open Avalonia.Controls.ApplicationLifetimes
 open Avalonia.Media
 open Avalonia.Input.Platform
 open Avalonia.Layout
 open Avalonia.Threading
-open Avalonia.Controls.ApplicationLifetimes
 open Avalonia.Platform.Storage
 
 type BuildInColor =

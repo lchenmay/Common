@@ -35,6 +35,7 @@
 	  <Compile Include="SD\Json.fs" />
 	  <Compile Include="SD\Bin.fs" />
 	  <Compile Include="SD\Crypto.fs" />
+	  <Compile Include="OS\File.fs" />
 	  <Compile Include="OS\FileSys.fs" />
 	  <Compile Include="OS\Log.fs" />
 	  <Compile Include="Measures.fs" />
@@ -66,8 +67,6 @@
     <Compile Include="Test.fs" />
     <Compile Include="Boost.fs" />
   </ItemGroup>
-
-  <ItemGroup />
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />

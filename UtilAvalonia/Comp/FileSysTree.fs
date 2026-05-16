@@ -24,15 +24,31 @@ let getSortedFiles dirPath =
     with _ -> [||]
 
 /// 创建带复选框的树节点
-let createTreeNode header path isDirectory =
+/// 创建带复选框的树节点
+let createTreeNode header path isDirectory size =
     let panel = StackPanel(Orientation = Orientation.Horizontal)
-    let checkBox = CheckBox(VerticalAlignment = VerticalAlignment.Center, Margin = Thickness(2.0, 0.0, 8.0, 0.0))
+    
+    let checkBox = CheckBox(
+        VerticalAlignment = VerticalAlignment.Center,
+        HorizontalAlignment = HorizontalAlignment.Left,
+        Margin = Thickness(2.0, 0.0, 8.0, 0.0),
+        Width = size,
+        Height = size,
+        MinWidth = size,
+        MinHeight = size
+    )
+
     let textBlock = txt__TextBlock header
     textBlock.VerticalAlignment <- VerticalAlignment.Center
+    textBlock.HorizontalAlignment <- HorizontalAlignment.Left
 
+    // 确保复选框是第一个，文本是第二个
     panel.Children.Add checkBox
     panel.Children.Add textBlock
+    
     let node = TreeViewItem(Header = panel, Tag = path)
+    
+    // 添加右键菜单
     let ctx = ContextMenu()
     let openItem = MenuItem(Header = (if isDirectory then "从文件管理器打开" else "打开所在文件夹"))
     openItem.Click.Add(fun _ ->
@@ -42,6 +58,7 @@ let createTreeNode header path isDirectory =
         with _ -> ())
     ctx.Items.Add openItem
     node.ContextMenu <- ctx
+    
     node
 
 /// 创建简单树节点（不带复选框）
@@ -60,7 +77,12 @@ let createSimpleTreeNode header path isDirectory =
     node
 
 /// 递归加载目录内容到树节点（使用带复选框的节点）
-let rec loadDirectory (node: TreeViewItem) (dirPath: string) (log: string -> unit) =
+let rec loadDirectory 
+    (node: TreeViewItem)
+    (dirPath: string) 
+    (log: string -> unit)
+    sizeCheckbox =
+
     if node.Tag <> null && node.Tag.ToString() = "loaded" then
         log $"loadDirectory 跳过: 节点已加载"
     else
@@ -73,17 +95,18 @@ let rec loadDirectory (node: TreeViewItem) (dirPath: string) (log: string -> uni
                 Dispatcher.UIThread.Post(fun () ->
                     node.Items.Clear()
                     for dirName in subDirs do
-                        let fullPath = Path.GetFullPath(Path.Combine(dirPath, dirName))  // 确保绝对路径
+                        let fullPath = Path.GetFullPath(Path.Combine(dirPath, dirName))
                         log $"创建目录节点: {dirName} -> {fullPath}"
-                        let dirNode = createTreeNode dirName fullPath true
+                        let dirNode = createTreeNode dirName fullPath true sizeCheckbox
                         let hasContent = Directory.GetDirectories(fullPath).Length > 0 || Directory.GetFiles(fullPath).Length > 0
                         if hasContent then
-                            dirNode.Items.Add(createTreeNode "加载中..." fullPath true) |> ignore
-                            dirNode.Expanded.Add(fun _ -> loadDirectory dirNode fullPath log)
+                            dirNode.Items.Add(createTreeNode "加载中..." fullPath true sizeCheckbox) |> ignore
+                            dirNode.Expanded.Add(fun _ -> 
+                                loadDirectory dirNode fullPath log sizeCheckbox)
                         node.Items.Add(dirNode) |> ignore
                     for fileName in files do
                         let fullPath = Path.Combine(dirPath, fileName)
-                        node.Items.Add(createTreeNode fileName fullPath false) |> ignore
+                        node.Items.Add(createTreeNode fileName fullPath false sizeCheckbox) |> ignore
                     node.Tag <- box "loaded"
                     log $"目录加载完成: {dirPath}"
                 )
@@ -91,7 +114,7 @@ let rec loadDirectory (node: TreeViewItem) (dirPath: string) (log: string -> uni
                 log $"loadDirectory 异常: {ex.Message}"
                 Dispatcher.UIThread.Post(fun () ->
                     node.Items.Clear()
-                    node.Items.Add(createTreeNode $"错误: {ex.Message}" dirPath true) |> ignore
+                    node.Items.Add(createTreeNode $"错误: {ex.Message}" dirPath true sizeCheckbox) |> ignore
                     node.Tag <- box "error"
                 )
         ) |> ignore
@@ -99,10 +122,11 @@ let rec loadDirectory (node: TreeViewItem) (dirPath: string) (log: string -> uni
 // ========== 公开的组件 ==========
 
 /// 通用文件树视图，根节点可动态更换目录，支持自定义右键菜单
-type FileTreeView(getMainWindow: unit -> Window, onRootPathChanged: string -> unit, ?log: string -> unit) as this =
+type FileTreeView(getMainWindow: unit -> Window, onRootPathChanged: string -> unit, ?log: string -> unit, ?checkboxSize: float) as this =
     inherit UserControl()
 
     let log = defaultArg log ignore
+    let checkboxSize = defaultArg checkboxSize 12.0
     let mutable currentRootPath = ""
     let treeView = TreeView()
     let rootNode = createSimpleTreeNode "根目录" "" true
@@ -125,7 +149,7 @@ type FileTreeView(getMainWindow: unit -> Window, onRootPathChanged: string -> un
                 elif Directory.Exists currentRootPath then
                     log $"开始加载目录: {currentRootPath}"
                     rootNode.Items.Clear()
-                    loadDirectory rootNode currentRootPath log
+                    loadDirectory rootNode currentRootPath log checkboxSize
                     rootNode.Tag <- box "loaded"
                 else
                     log $"目录不存在: {currentRootPath}"

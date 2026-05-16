@@ -12,6 +12,7 @@ open Avalonia
 open Avalonia.Controls
 open Avalonia.Controls.Primitives
 open Avalonia.Media
+open Avalonia.Input.Platform
 open Avalonia.Layout
 open Avalonia.Threading
 open Avalonia.Controls.ApplicationLifetimes
@@ -55,9 +56,11 @@ let color__Brush ccolor =
 let defaultFontFamily = 
     new FontFamily("Fira Code, 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace")
 
-let defaultFontSize = 16.0
+let defaultFontSize = 14.0
 
 let defaultFontSizeSmall = 12.0
+
+let defaultCheckboxSize = 12.0
 
 let txtFontSize__TextBlock fontsize text = 
     new TextBlock(
@@ -81,6 +84,21 @@ let control__withBorder c =
         Background = color__Brush BuildInColor.DefaultBackground,
         CornerRadius = CornerRadius(4.0),
         Child = c)
+
+let copyToClipboard
+    output
+    this text =
+
+    task {
+        match TopLevel.GetTopLevel this with
+        | null -> ()
+        | tl ->
+            match tl.Clipboard with
+            | null -> ()
+            | cb -> 
+                do! cb.SetTextAsync text
+                "已复制到剪贴板" |> output
+    } |> ignore
 
 
 

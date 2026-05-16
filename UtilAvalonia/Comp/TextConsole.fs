@@ -39,7 +39,7 @@ type TextConsole(?log: string -> unit) as this =
 
     let getTopLevel () = TopLevel.GetTopLevel(this)
 
-    let copyToClipboard text =
+    let copyToClipboard_ text =
         task {
             match getTopLevel() with
             | null -> ()
@@ -82,7 +82,9 @@ type TextConsole(?log: string -> unit) as this =
         buttonPanel.Spacing <- 5.0
         buttonPanel.VerticalAlignment <- VerticalAlignment.Top
         clearBtn.Click.Add(fun _ -> this.Clear())
-        copyBtn.Click.Add(fun _ -> copyToClipboard (String.Join(Environment.NewLine, buffer)))
+        copyBtn.Click.Add(fun _ -> 
+            String.Join(Environment.NewLine, buffer)
+            |> copyToClipboard this.Write this)
         saveBtn.Click.Add(fun _ -> saveToFile defaultSavePath |> ignore)
         saveAsBtn.Click.Add(fun _ -> saveToFileWithPicker())
         [ clearBtn; copyBtn; saveBtn; saveAsBtn ] |> List.iter buttonPanel.Children.Add

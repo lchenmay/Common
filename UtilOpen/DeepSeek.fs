@@ -1,4 +1,4 @@
-﻿module UtilKestrel.Open.DeekSeek
+﻿module UtilOpen.DeekSeek
 
 open System
 open System.Net.Http

@@ -1,4 +1,4 @@
-﻿module UtilKestrel.Open.Clerk
+﻿module UtilOpen.Clerk
 
 open System
 open System.Text

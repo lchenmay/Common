@@ -1,4 +1,4 @@
-﻿module UtilKestrel.Open.Monday
+﻿module UUtilOpen.Monday
 
 open System
 open System.Net.Http

@@ -9,32 +9,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Remove="Open\**" />
+    <Compile Include="Clerk.fs" />
+    <Compile Include="DeepSeek.fs" />
+    <Compile Include="Discord.fs" />
+    <Compile Include="Google.fs" />
+    <Compile Include="Monday.fs" />
   </ItemGroup>
 
   <ItemGroup>
 	  <FrameworkReference Include="Microsoft.AspNetCore.App" />
 	  <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
 	  <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
-	  <Compile Include="Types.fs" />
-	  <Compile Include="Ctx.fs" />
-	  <Compile Include="Constans.fs" />
-    <Compile Include="FileSys.fs" />
-    <Compile Include="DbLogger.fs" />
-    <Compile Include="Db.fs" />
-    <Compile Include="Common.fs" />
-    <Compile Include="Init.fs" />
-    <Compile Include="Json.fs" />
-    <Compile Include="Api.fs" />
-    <Compile Include="Session.fs" />
-    <Compile Include="Auth.fs" />
-    <Compile Include="Server.fs" />
-    <Compile Include="OpenGraph.fs" />
-    <Compile Include="SSR.fs" />
-    <Compile Include="PageLog.fs" />
-    <Compile Include="Cache.fs" />
-    <Compile Include="File.fs" />
-    <Compile Include="Runtime.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -47,7 +32,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\UtilOpen\UtilOpen.fsproj" />
     <ProjectReference Include="..\Util\Util.fsproj" />
   </ItemGroup>
 

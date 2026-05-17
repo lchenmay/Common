@@ -1,4 +1,4 @@
-﻿module UtilKestrel.Open.Discord
+﻿module UtilOpen.Discord
 
 open FSharp.Control
 
@@ -15,8 +15,6 @@ open Util.HttpServer
 
 open Discord
 open Discord.WebSocket
-
-open UtilKestrel.Types
 
 (*
 

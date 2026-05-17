@@ -1,4 +1,4 @@
-﻿module UtilKestrel.Open.Google
+﻿module UtilOpen.Google
 
 open System
 open System.Net.Http

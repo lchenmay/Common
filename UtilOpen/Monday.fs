@@ -1,4 +1,4 @@
-﻿module UUtilOpen.Monday
+﻿module UtilOpen.Monday
 
 open System
 open System.Net.Http

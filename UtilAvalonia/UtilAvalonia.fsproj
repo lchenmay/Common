@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <Compile Include="UiUtil.fs" />
+    <Compile Include="Markdown.fs" />
     <Compile Include="Comp\DialogOkCancel.fs" />
     <Compile Include="Comp\LayoutGrid.fs" />
     <Compile Include="Comp\TabContainer.fs" />

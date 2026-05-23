@@ -14,7 +14,7 @@ let client =
 
 
 /// 基础 POST 函数：执行 GraphQL 查询，返回原始 JSON 字符串（仅在无错误时返回 Some）
-let private postToMonday 
+let postToMonday 
     output apiKey 
     queryText =
 

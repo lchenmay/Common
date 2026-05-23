@@ -15,6 +15,15 @@ open Vortice.WIC
 open Util.Perf
 open Util.GraphicsGeo
 
+let measureText 
+    (rt:ID2D1RenderTarget) 
+    fontsize s = 
+
+    let factory = Vortice.DirectWrite.DWrite.DWriteCreateFactory()
+    let format = factory.CreateTextFormat("Callibri",fontsize)
+
+    factory.CreateTextLayout(s,format, 1000.f, 1000.f).Metrics
+
 let drawText 
     (rt:ID2D1RenderTarget) 
     (fontsize,back:Color4,fore:Color4)

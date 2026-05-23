@@ -34,8 +34,15 @@ let checkP coord p =
         coord.psup <- p
 
 let stretch coord rate = 
-    coord.pinf <- coord.pinf * (1.0 + rate)
-    coord.psup <- coord.psup * (1.0 + rate)
+    if coord.pinf > 0.0 then
+        coord.pinf <- coord.pinf * (1.0 - rate)
+    else
+        coord.pinf <- coord.pinf * (1.0 + rate)
+
+    if coord.psup > 0.0 then
+        coord.psup <- coord.pinf * (1.0 + rate)
+    else
+        coord.psup <- coord.psup * (1.0 - rate)
 
 type CoordXY = {
 mutable x: Coord

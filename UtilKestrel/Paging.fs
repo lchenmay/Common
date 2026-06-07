@@ -138,7 +138,9 @@ let paging item__json json (ary:'a[]) =
 
     let json = 
         let index = paging.page * paging.npp
-        if index + paging.npp < ary.Length then
+        if paging.pages <= paging.npp then
+            ary
+        elif index + paging.npp < ary.Length then
             Array.sub ary index paging.npp
         else
             Array.sub ary (ary.Length - paging.npp - 1) paging.npp

@@ -1194,7 +1194,7 @@ let Dictionary__json
                     let j = key__json key
                     match j with
                     | Json.Str s -> s
-                    | Json.Num s -> "\"" + s + "\""
+                    | Json.Num s -> s//"\"" + s + "\""
                     | _ -> (j |> json__strFinal).Replace("\"","")
 
                 let v = val__json dict[key]

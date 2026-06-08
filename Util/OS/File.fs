@@ -283,7 +283,7 @@ let buildFileAttachmentContent output maxTextLength path =
         | Image ->
             getImageInfo path
         
-        | Binary ->
+        | _ -> // Binary ->
             let info = FileInfo(path)
             $"""--- 二进制文件: {Path.GetFileName(path)} (大小: {info.Length} 字节) ---
 [二进制文件内容无法直接显示]"""
@@ -316,7 +316,7 @@ let buildFileAttachmentContentAsync output maxTextLength path =
             | Image ->
                 return getImageInfo path
             
-            | Binary ->
+            | _ -> // Binary ->
                 let info = FileInfo(path)
                 return $"""--- 二进制文件: {Path.GetFileName(path)} (大小: {info.Length} 字节) ---
 [二进制文件内容无法直接显示]"""

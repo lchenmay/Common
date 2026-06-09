@@ -118,7 +118,7 @@ let ifElse yes no predicate =
 let processOptionWithNone h none o =
     match o with
     | Some v -> h v
-    | None -> none
+    | None -> none()
 
 let processOption h o =
     match o with

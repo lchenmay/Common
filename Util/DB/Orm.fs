@@ -385,6 +385,15 @@ let data__ps(creator, assignor) =
         assignor(item,p)
         p)
 
+type MarshallTypes<'Data> = 
+    {
+        clone: 'Data -> 'Data
+        empty__data: unit -> 'Data
+        data__bin: BytesBuilder -> 'Data -> unit
+        bin__data: (byte[] * Ref<int>) -> 'Data
+        data__json: 'Data -> Json
+        json__datao: Json -> 'Data option }
+
 type MetadataTypes<'p> = 
     {
         fieldorders: unit -> string

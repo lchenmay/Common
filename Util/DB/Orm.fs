@@ -410,8 +410,9 @@ type MetadataTypes<'p> =
         json__po: Json -> 'p option
         rcd__json: Rcd<'p> -> Json
         json__rcdo: Json -> Rcd<'p> option
+        p_create: (string -> unit) -> 'p -> Rcd<'p> option
         sql_update: unit -> string
-        rcd_update: (string -> unit) -> Rcd<'p> -> unit
+        rcd_update: (string -> unit) -> Rcd<'p> -> Rcd<'p> option
         table: string
         shorthand: string }
 
@@ -468,7 +469,8 @@ let batch output processor (conn,top,where,order,metadata) =
         threads
         |> Array.iter(fun t -> 
             processor t
-            metadata.rcd_update output t)
+            metadata.rcd_update output t
+            |> ignore)
 
         processed <- processed + threads.Length
 

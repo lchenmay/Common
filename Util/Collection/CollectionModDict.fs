@@ -101,6 +101,14 @@ type ModDict<'k,'v> =
                 | None -> ()
                 o)
 
+    member this.Set v__k v =
+        let k = v__k v
+        let p,partition = this.modulo k
+        lock partition (fun _ ->
+            if partition.ContainsKey k = false then
+                Interlocked.Increment(&this.count) |> ignore
+            partition[k] <- v)
+
     member this.Remove key =
         let p,partition = this.modulo key
         lock partition (fun ()->

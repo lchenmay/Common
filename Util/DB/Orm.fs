@@ -156,6 +156,10 @@ let db__Rcd db__p (line:Object[]) = {
     Sort = line.[3] :?> int64;
     p = db__p line }
 
+let applyChange tgt src =
+    tgt.Updatedat <- src.Updatedat
+    tgt.p <- src.p
+
 let refin(conn,fieldorders,table,db__rcd,key)(id:int64) =
 
     match 

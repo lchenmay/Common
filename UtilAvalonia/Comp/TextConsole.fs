@@ -30,6 +30,7 @@ type TextConsole(?log: string -> unit) as this =
     let scrollViewer = ScrollViewer()
     let itemsControl = ItemsControl()
     let lines = ObservableCollection<TextBlock>()
+    let mutable textHandler = (fun s -> s)
     let buttonPanel = StackPanel()
     let clearBtn = txt__Button "清空"
     let copyBtn = txt__Button "复制"
@@ -128,10 +129,18 @@ type TextConsole(?log: string -> unit) as this =
                 buffer.RemoveRange(0, buffer.Count - bufferSize)
                 dirty <- true
 
+    member _.TextHandler 
+        with get() = textHandler
+        and set h = 
+            textHandler <- h
+
     // 不使用预览语法 buffer[^1]，改用显式计算索引
-    member _.Write text =
+    member _.Write text_ =
+        let text = 
+            text_
+            |> textHandler
         if buffer.Count = 0 then
-            buffer.Add text
+            text |> buffer.Add
         else
             let lastIdx = buffer.Count - 1
             buffer.[lastIdx] <- buffer.[lastIdx] + text

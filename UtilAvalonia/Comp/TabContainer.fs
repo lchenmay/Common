@@ -5,6 +5,7 @@ open Avalonia.Controls
 open Avalonia.Media
 
 open UtilAvalonia.UiUtil
+open UtilAvalonia.Style
 
 type TabContainer() as this =
     inherit UserControl()
@@ -14,22 +15,22 @@ type TabContainer() as this =
         tabControl.Background <- BuildInColor.TabBackground |> color__Brush
         this.Content <- tabControl
 
-    member this.AddTab header isClosable content =
-        let tabItem = TabItem()
-        tabItem.Header <- header
+    member this.AddTab header content =
+        let tabItem = new TabItem()
+        tabItem.Header <- header |> txt__TextBlockTab
         tabItem.Content <- content
         tabControl.Items.Add tabItem |> ignore
         tabControl.SelectedItem <- tabItem
         tabItem
 
-    member this.OpenOrActivateTab header isClosable content =
+    member this.OpenOrActivateTab header content =
         let existing = 
             tabControl.Items 
             |> Seq.cast<TabItem>
-            |> Seq.tryFind (fun ti -> ti.Header = header)
+            |> Seq.tryFind (fun ti -> ti.Header = new TextBlock(Text = header))
         match existing with
         | Some ti ->
             ti.Content <- content
             tabControl.SelectedItem <- ti
         | None ->
-            this.AddTab header isClosable content |> ignore
+            this.AddTab header content |> ignore

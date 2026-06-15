@@ -6,7 +6,7 @@ open Avalonia
 open Avalonia.Controls
 open Avalonia.Layout
 
-type LayoutGrid(rows: float[], cols: float[]) as this =
+type LayoutGrid(rows, cols) as this =
     inherit Grid()
 
     let children = List<Control>()

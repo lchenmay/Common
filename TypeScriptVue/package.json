@@ -1,6 +1,6 @@
 {
   "name": "@lchenmay/jcs-common",
-  "version": "1.0.45",
+  "version": "1.0.61",
   "type": "module",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -43,6 +43,6 @@
   },
   "dependencies": {
     "markdown-it": "^14.2.0",
-    "markdown-it-katex": "^2.0.3"
+    "markdown-it-texmath": "^1.0.0"
   }
 }

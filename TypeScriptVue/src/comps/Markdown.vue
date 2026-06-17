@@ -1,5 +1,8 @@
 <template>
   <div class="markdown-container">
+    <div>
+      version 1.0.61
+    </div>
     <div v-if="loading" class="markdown-loading">
       <div class="loading-spinner"></div>
       <span>渲染中...</span>
@@ -13,16 +16,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import MarkdownIt from 'markdown-it'
-
 // @ts-ignore
-import markdownItKatex from 'markdown-it-katex'
-
-// ✅ 只需要 KaTeX 的 CSS
+import texmath from 'markdown-it-texmath'
+import katex from 'katex'
 import 'katex/dist/katex.min.css'
-// ❌ 移除这行：markdown-it-katex 的样式通常不需要单独导入
-// import 'markdown-it-katex/dist/katex.min.css'
 
 const props = defineProps<{
   markdown: string
@@ -31,7 +30,7 @@ const props = defineProps<{
 const renderedHtml = ref('')
 const loading = ref(false)
 
-// 配置 markdown-it
+// ✅ 配置 markdown-it
 const md = new MarkdownIt({
   html: true,
   linkify: true,
@@ -42,16 +41,20 @@ const md = new MarkdownIt({
   }
 })
 
-// 加载 KaTeX 插件
-md.use(markdownItKatex, {
-  throwOnError: false,
-  errorColor: '#ef4444',
-  macros: {
-    "\\R": "\\mathbb{R}",
-    "\\N": "\\mathbb{N}",
-    "\\Z": "\\mathbb{Z}",
-    "\\Q": "\\mathbb{Q}",
-    "\\C": "\\mathbb{C}"
+// ✅ 使用 texmath 插件，使用 KaTeX 引擎渲染
+md.use(texmath, {
+  engine: katex,
+  delimiters: 'dollars',
+  katexOptions: {
+    throwOnError: false,
+    errorColor: '#ef4444',
+    macros: {
+      "\\R": "\\mathbb{R}",
+      "\\N": "\\mathbb{N}",
+      "\\Z": "\\mathbb{Z}",
+      "\\Q": "\\mathbb{Q}",
+      "\\C": "\\mathbb{C}"
+    }
   }
 })
 
@@ -64,9 +67,9 @@ const renderMarkdown = async () => {
   loading.value = true
 
   try {
+    // ✅ 直接渲染 Markdown，texmath 会调用 KaTeX 将公式转为 HTML
     const html = md.render(props.markdown)
     renderedHtml.value = html
-    await nextTick()
   } catch (error) {
     console.error('Markdown 渲染失败:', error)
     renderedHtml.value = `
@@ -89,7 +92,6 @@ defineExpose({
 </script>
 
 <style scoped>
-/* ... 样式保持不变 ... */
 .markdown-container {
   padding: 1.5rem;
   background: #fff;
@@ -117,7 +119,9 @@ defineExpose({
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .markdown-empty {
@@ -296,15 +300,6 @@ defineExpose({
   padding: 0.75rem 0;
 }
 
-.markdown-content :deep(.katex-block-wrapper) {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 0.5rem 1.5rem;
-  margin: 1rem 0;
-  border: 1px solid #e2e8f0;
-  overflow-x: auto;
-}
-
 .markdown-content :deep(.katex-inline) {
   vertical-align: middle;
 }
@@ -312,6 +307,7 @@ defineExpose({
 .markdown-content :deep(.katex .msupsub) {
   font-size: 0.75em;
 }
+
 .markdown-content :deep(.katex .supsub) {
   font-size: 0.75em;
 }
@@ -336,26 +332,5 @@ defineExpose({
 .markdown-content :deep(.katex .tag) {
   font-size: 0.85em;
   color: #64748b;
-}
-
-@media (max-width: 640px) {
-  .markdown-container {
-    padding: 0.75rem;
-  }
-  .markdown-content {
-    font-size: 14px;
-  }
-  .markdown-content :deep(h1) {
-    font-size: 1.5rem;
-  }
-  .markdown-content :deep(h2) {
-    font-size: 1.25rem;
-  }
-  .markdown-content :deep(h3) {
-    font-size: 1.1rem;
-  }
-  .markdown-content :deep(.katex-display) {
-    font-size: 0.9em;
-  }
 }
 </style>

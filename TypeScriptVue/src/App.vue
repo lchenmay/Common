@@ -23,6 +23,12 @@
       <SearchField />
     </div>
 
+    <div>Markdown</div>
+    <div>
+      <Markdown
+        :markdown="md"
+      />
+    </div>
 
 
   <Crud 
@@ -66,9 +72,19 @@ import * as vue from 'vue'
 import TabContainer from './comps/TabContainer.vue'
 import TablePaged from './comps/TablePaged.vue'
 import SearchField from './comps/SearchField.vue'
+import Markdown from './comps/Markdown.vue'
 import { amt__2digitDollar } from './lib/text'
 
+const md = String.raw`
+1. 基准为线性参考模型 $y(x) = ax + b$
+2. 需要至少两个数值确定线性参数，典型的包括停机/启动临界的下界，和最大工况的上界
+3. 大部分情况考虑衰减，通常用指数衰减。以线性模型为理想模型，即上限；
+用指数衰减 $\text e^\lambda x$ 来修正线性模型为保守模型
+$y(x) = a\text e^\lambda x + b$，即下限；
+`
+
 vue.onMounted(async () => {
+  console.log(md)
 })
 
 </script>

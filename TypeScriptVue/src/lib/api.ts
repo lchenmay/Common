@@ -35,39 +35,6 @@ export const checkUrl = (url: string) => {
   return base + url
 }
 
-const request = (method: "POST" | "GET") => async (url: string, data: Record<string, any>) => {
-
-  url = checkUrl(url)
-
-  // --- 关键修改：截获 Clerk Token ---
-  /*let clerkToken = null
-  if (window.Clerk?.session) {
-      // 异步获取 Clerk 签发的 JWT 令牌
-      clerkToken = await window.Clerk.session.getToken()
-  }*/
-
-  const inits: RequestInit = {
-    method: method,
-    mode: 'cors',
-    headers: { 
-      'Content-Type': 'application/json',
-      // 将 Token 注入 Header 
-      //'Authorization': clerkToken ? `Bearer ${clerkToken}` : ''
-     }
-  }
-  switch (method) {
-    case "POST":
-      if (runtime.session) { data['session'] = runtime.session }
-      inits['body'] = JSON.stringify(data)
-      break
-    case "GET":
-      const queryString = new URLSearchParams(data).toString()
-      url = queryString ? `${url}?${queryString}` : url;
-      break
-  }
-  return fetch(url, inits).then(res => { return res.json() }).catch(err => { console.error('Error:', err) })
-}
-
 export const upload = 
   (suc:Function,fail:Function) => 
   (file:any,dst:string,desc:string) => {
@@ -106,14 +73,29 @@ export const upload =
   reader.readAsArrayBuffer(file)
 }
 
-export const post = request("POST")
-export const get = request("GET")
+export const loader = async (url: string, postdata: any, h: Function, ex: Function = () => {}) => {
+  postdata.session = globalThis.runtime.session
 
-export const loader = async (url:string,post:any,h:Function,ex:Function = () => {}) => {
-  post.session = runtime.session
-  let rep = await post(url, post)
-  if(rep.Er == "OK")
-    h(rep)
-  else
-    ex(rep)
+  try {
+    const fullUrl = checkUrl(url)
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(postdata)
+    })
+    
+    const rep = await response.json()
+    
+    if (rep?.Er == "OK") {
+      h(rep)
+    } else {
+      ex(rep)
+    }
+  } catch (err) {
+    console.error('Loader error:', err)
+    ex({ Er: 'NetworkError', message: err })
+  }
 }

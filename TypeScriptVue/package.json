@@ -1,6 +1,6 @@
 {
   "name": "@lchenmay/jcs-common",
-  "version": "1.0.25",
+  "version": "1.0.41",
   "type": "module",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -20,8 +20,10 @@
   ],
   "scripts": {
     "build": "vue-tsc --noEmit && vite build",
+    "dev": "vite --open",
     "prepublishOnly": "npm run build"
   },
+
   "peerDependencies": {
     "vue": "^3.5.0",
     "vue-router": "^4.0.0"
@@ -33,11 +35,10 @@
     "typescript": "^5.4.5",
     "vite": "^8.0.16",
     "vite-plugin-dts": "^4.0.0",
-    "vue-tsc": "^2.0.21"
-  },
-  "dependencies": {
+    "vue-tsc": "^2.0.21",
     "axios": "^1.7.9",
     "katex": "^0.17.0",
-    "marked": "^18.0.5"
+    "marked": "^18.0.5",
+    "vue-router": "4.0.0"
   }
 }

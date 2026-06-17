@@ -22,7 +22,9 @@ import TabContainer from './TabContainer.vue'
 import SearchField from './SearchField.vue'
 
 const props = defineProps([
-  'caption','api','fields',
+  'caption',
+  'api',
+  'fields',
   'hpostdata',
   'component',
   'data__title','empty__data','data__id','data__desc'])

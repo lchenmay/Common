@@ -10,3 +10,5 @@
 /.vs/Common/v17/.wsuo
 /.vs/slnx.sqlite
 /Util/obj
+TypeScriptVue/.npmrc
+*.lock

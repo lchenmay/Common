@@ -19,7 +19,8 @@
       "~/*": ["./src/*"],
       "@/*": ["./src/*"]
     },
-    "types": ["vite/client", "node"],
+    "types": ["node"],
+    "typeRoots": ["./src/types", "./node_modules/@types"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },

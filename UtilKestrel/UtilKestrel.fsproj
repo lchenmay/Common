@@ -35,6 +35,7 @@
     <Compile Include="PageLog.fs" />
     <Compile Include="Cache.fs" />
     <Compile Include="File.fs" />
+    <Compile Include="BashDeployer.fs" />
     <Compile Include="Runtime.fs" />
   </ItemGroup>
 

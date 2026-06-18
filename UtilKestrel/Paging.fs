@@ -22,8 +22,6 @@ open UtilKestrel.Ctx
 open UtilKestrel.Json
 open UtilKestrel.Db
 open UtilKestrel.DbLogger
-open UtilKestrel.Api
-
 
 type Paging = {
 mutable npp: Int32
@@ -147,7 +145,6 @@ let paging item__json json (ary:'a[]) =
         |> Array.map item__json
         |> Json.Ary
 
-    [|  ok
-        ("data",json)
+    [|  ("data",json)
         ("paging",paging |> Paging__json) |]
 

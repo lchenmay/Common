@@ -1,7 +1,7 @@
 <template>
   <div class="markdown-container">
     <div>
-      version 1.0.61
+      Markdown Component Version 1.0.63
     </div>
     <div v-if="loading" class="markdown-loading">
       <div class="loading-spinner"></div>

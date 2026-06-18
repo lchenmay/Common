@@ -25,8 +25,8 @@
     <Compile Include="Common.fs" />
     <Compile Include="Init.fs" />
     <Compile Include="Json.fs" />
-    <Compile Include="Api.fs" />
     <Compile Include="Paging.fs" />
+    <Compile Include="Api.fs" />
     <Compile Include="Session.fs" />
     <Compile Include="Auth.fs" />
     <Compile Include="Server.fs" />

@@ -22,6 +22,7 @@ open UtilKestrel.Ctx
 open UtilKestrel.Json
 open UtilKestrel.Db
 open UtilKestrel.DbLogger
+open UtilKestrel.Paging
 
 let ok = "Er",Json.Str "OK"
 let er er = [|  "Er",(er.ToString() |> Json.Str) |]
@@ -206,6 +207,132 @@ let apiList item__json =
 let apiPing x =
     [|  ok
         ("timestamp",Json.Num (DateTime.UtcNow.Ticks.ToString()))   |]
+
+
+type InternalEr = 
+| Ok of (string * Json)[]
+| InvalideParameter
+| Internal
+
+let saveApi 
+    output
+    rcd__existsg
+    onSucCreateo
+    onSucUpdateeo
+    metadata 
+    json = 
+    
+    json 
+    |> tryFindByAtt "rcd"
+    |> processOptionWithNone 
+        (fun (s,json) -> 
+            match
+                json
+                |> metadata.json__rcdo with
+            | Some rcd ->
+
+                if rcd__existsg rcd then
+                    match 
+                        rcd
+                        |> metadata.rcd_update output with
+                    | Some rcd -> 
+                        match onSucUpdateeo with
+                        | Some h -> h rcd
+                        | None -> ()
+
+                        [| ("data",metadata.rcd__json rcd) |]
+                        |> InternalEr.Ok
+                    | None -> InternalEr.Internal
+                else
+                    match 
+                        rcd.p
+                        |> metadata.p_create output with
+                    | Some rcd -> 
+                        match onSucCreateo with
+                        | Some h -> h rcd
+                        | None -> ()
+
+                        [| ("data",metadata.rcd__json rcd) |]
+                        |> InternalEr.Ok
+                    | None -> InternalEr.Internal
+            | None -> InternalEr.InvalideParameter)
+        (fun _ -> InternalEr.InvalideParameter)
+
+type ApiDbCtx<'Data,'p> = {
+marshall:MarshallTypes<'Data>
+metadata:MetadataTypes<'p>
+__items: unit -> 'Data[]
+listFilter: 'Data -> bool
+searching: string -> 'Data -> bool
+rcd__existing: Rcd<'p> -> bool
+onSucCreateo: (Rcd<'p> -> unit) option
+onSucUpdateo: (Rcd<'p> -> unit) option
+continueo: (string -> Json -> InternalEr) option }
+
+let empty__ApiDbCtx
+    (marshall,metadata)
+    __items
+    listFilter
+    searching
+    rcd_existing
+    onSucCreateo
+    onSucUpdateo
+    continueo = {
+        marshall = marshall
+        metadata = metadata
+        __items = __items
+        listFilter = listFilter
+        searching = searching
+        rcd__existing = rcd_existing
+        onSucCreateo = onSucCreateo
+        onSucUpdateo = onSucUpdateo
+        continueo = continueo }
+
+let apiBuilder
+    output 
+    (adx:ApiDbCtx<'Data,'p>)
+    json: InternalEr = 
+
+    let act = json |> tryFindStrByAtt "act"
+
+    match act with
+    | "ls-all" ->  
+        adx.__items()
+        |> paging adx.marshall.data__json json 
+        |> InternalEr.Ok
+
+    | "ls" ->  
+        adx.__items()
+        |> Array.filter adx.listFilter
+        |> paging adx.marshall.data__json json 
+        |> InternalEr.Ok
+
+    | "search" ->
+        let term = (json |> tryFindStrByAtt "term").ToLower()
+        let filter = adx.searching term
+
+        let data = 
+            adx.__items()
+            |> Array.filter filter
+            |> Array.map adx.marshall.data__json
+            |> Json.Ary
+
+        [| ("data",data) |]
+        |> InternalEr.Ok
+
+    | "save" -> 
+        saveApi 
+            output 
+            adx.rcd__existing
+            adx.onSucCreateo
+            adx.onSucUpdateo
+            adx.metadata
+            json
+    | _ -> 
+        match adx.continueo with
+        | Some switcher -> switcher act json
+        | None -> InternalEr.InvalideParameter
+
 
 let apiMonitorPerf x = 
 

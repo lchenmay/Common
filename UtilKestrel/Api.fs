@@ -237,7 +237,7 @@ let saveApi
                         |> metadata.rcd_update output with
                     | Some rcd -> 
                         match onSucUpdateeo with
-                        | Some h -> h rcd
+                        | Some h -> h rcd |> ignore
                         | None -> ()
 
                         [| ("data",metadata.rcd__json rcd) |]
@@ -249,7 +249,7 @@ let saveApi
                         |> metadata.p_create output with
                     | Some rcd -> 
                         match onSucCreateo with
-                        | Some h -> h rcd
+                        | Some h -> h rcd |> ignore
                         | None -> ()
 
                         [| ("data",metadata.rcd__json rcd) |]
@@ -265,8 +265,8 @@ __items: unit -> 'Data[]
 listFilter: 'Data -> bool
 searching: string -> 'Data -> bool
 rcd__existing: Rcd<'p> -> bool
-onSucCreateo: (Rcd<'p> -> unit) option
-onSucUpdateo: (Rcd<'p> -> unit) option
+onSucCreateo: (Rcd<'p> -> Rcd<'p>) option
+onSucUpdateo: (Rcd<'p> -> Rcd<'p>) option
 continueo: (string -> Json -> InternalEr) option }
 
 let empty__ApiDbCtx

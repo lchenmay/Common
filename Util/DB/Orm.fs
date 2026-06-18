@@ -8,6 +8,7 @@ open System.Text
 
 open Util.Cat
 open Util.Bin
+open Util.CollectionModDict
 open Util.Text
 open Util.Json
 open Util.Db
@@ -156,9 +157,14 @@ let db__Rcd db__p (line:Object[]) = {
     Sort = line.[3] :?> int64;
     p = db__p line }
 
+let setModDictRcd (md:ModDict<int64,Rcd<'p>>) (rcd:Rcd<'p>) = 
+    md[rcd.ID] <- rcd
+    rcd
+
 let applyChange tgt src =
     tgt.Updatedat <- src.Updatedat
     tgt.p <- src.p
+    tgt
 
 let refin(conn,fieldorders,table,db__rcd,key)(id:int64) =
 

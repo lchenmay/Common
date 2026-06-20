@@ -6,23 +6,6 @@
       amt__2digitDollar: {{ amt__2digitDollar(-21223453245.2123) }}
     </div>
 
-    <div>TabContainer</div>
-    <div>
-      <TabContainer />
-    </div>
-
-    <div>TablePaged</div>
-    <div>
-      <TablePaged 
-        api="/api/admin/models"
-      />
-    </div>
-
-    <div>SearchField</div>
-    <div>
-      <SearchField />
-    </div>
-
     <div>Markdown</div>
     <div>
       <Markdown
@@ -59,7 +42,8 @@
     { key: '说明',
       style: 'table-cell-text',
       width: '300px',
-      text: 'left' }]"
+      text: 'left' }]",
+    :selected="[1,2,4]"
   />
 
   </div>
@@ -69,9 +53,7 @@
 
 import * as vue from 'vue'
 
-import TabContainer from './comps/TabContainer.vue'
-import TablePaged from './comps/TablePaged.vue'
-import SearchField from './comps/SearchField.vue'
+import { Crud } from '@lchenmay/jcs-common'
 import Markdown from './comps/Markdown.vue'
 import { amt__2digitDollar } from './lib/text'
 

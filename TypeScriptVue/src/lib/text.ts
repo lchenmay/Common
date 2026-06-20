@@ -3,7 +3,7 @@ export const s__limitLength = (length: number) => (s:string) => {
   if(s.length <= length)
     return s
   else
-    return s.substring(0,length)
+    return s.substring(0,length) + ' ...'
 }
 
 export const amt__2digitDollar = (num: number): string => {

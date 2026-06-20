@@ -18,10 +18,9 @@
       class="absolute z-10 bg-white border rounded shadow-lg mt-1 max-h-150 overflow-y-auto min-w-[400px] w-max max-w-none left-0">
       <li 
         v-for="opt in s.opts" 
-        @click="selectOption(opt)"
+        @click="onClick(opt)"
         :value="props.item__key(opt)"
-        class="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm whitespace-nowrap"
-      >
+        class="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm whitespace-nowrap">
         {{ props.item__text(opt) }}
       </li>
     </ul>
@@ -29,21 +28,21 @@
 
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts" generic="Data">
 
 import * as vue from 'vue'
 import { loader } from '~/lib/api'
 
-const props = defineProps(['api','item__key','item__text'])
-props.api as string
-props.item__key as Function
-props.item__text as Function
+const props = defineProps<{
+  api: string
+  item__key: (item: Data) => string
+  item__text: (item: Data) => string
+  onselect: (item: Data) => void
+}>()
 
-const s = vue.reactive({
-  opts: []
+const s = vue.shallowReactive({
+  opts: [] as Data[]
 })
-
-const emits = defineEmits(['select']) 
 
 const searchText = vue.ref('')
 const isDropdownVisible = vue.ref(false)
@@ -55,17 +54,18 @@ const onInput = () => {
     term: searchText.value,
     act: "search"
   }, (rep: any) => {
-    s.opts = rep.data
-    console.log(s.opts)
+    console.log(JSON.stringify(s.opts))
+    s.opts = rep.data as Data[]
   },() => {
   })
 }
 
-const selectOption = (opt: any) => {
+const onClick = (opt: Data) => {
   searchText.value = props.item__key(opt)
   isDropdownVisible.value = false
 
-  emits('select',opt)
+  if(props.onselect)
+    props.onselect(opt)
 }
 
 const onBlur = () => {

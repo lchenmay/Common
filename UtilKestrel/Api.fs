@@ -263,6 +263,7 @@ marshall:MarshallTypes<'Data>
 metadata:MetadataTypes<'p>
 __items: unit -> 'Data[]
 listFilter: 'Data -> bool
+key__sortingo: (int -> string -> ('Data[] -> 'Data[]) option) option
 searching: string -> 'Data -> bool
 rcd__existing: Rcd<'p> -> bool
 onSucCreateo: (Rcd<'p> -> Rcd<'p>) option
@@ -273,6 +274,7 @@ let empty__ApiDbCtx
     (marshall,metadata)
     __items
     listFilter
+    key__sortingo
     searching
     rcd_existing
     onSucCreateo
@@ -282,11 +284,24 @@ let empty__ApiDbCtx
         metadata = metadata
         __items = __items
         listFilter = listFilter
+        key__sortingo = key__sortingo
         searching = searching
         rcd__existing = rcd_existing
         onSucCreateo = onSucCreateo
         onSucUpdateo = onSucUpdateo
         continueo = continueo }
+
+let sortBy__functoro direction sortBy = 
+    if direction > 0 then
+        sortBy 
+        |> Array.sortBy 
+        |> Some
+    else if direction < 0 then
+        sortBy
+        |> Array.sortByDescending
+        |> Some
+    else
+        None
 
 let apiBuilder
     output 
@@ -295,15 +310,36 @@ let apiBuilder
 
     let act = json |> tryFindStrByAtt "act"
 
+    let sorting ary = 
+        match adx.key__sortingo with
+        | Some key__sorting -> 
+            let sort = json |> tryFindStrByAtt "sort"
+            let direction = 
+                if sort.StartsWith "+" then
+                    +1
+                else if sort.StartsWith "-" then
+                    -1
+                else
+                    0
+            if direction <> 0 then
+                match key__sorting direction (sort.Substring 1) with
+                | Some sorting -> ary |> sorting
+                | None -> ary
+            else
+                ary
+        | None -> ary
+
     match act with
     | "ls-all" ->  
         adx.__items()
+        |> sorting
         |> paging adx.marshall.data__json json 
         |> InternalEr.Ok
 
     | "ls" ->  
         adx.__items()
         |> Array.filter adx.listFilter
+        |> sorting
         |> paging adx.marshall.data__json json 
         |> InternalEr.Ok
 

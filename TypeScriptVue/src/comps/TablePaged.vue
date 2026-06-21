@@ -27,9 +27,14 @@
                             :style="[
                               f.width ? { width: f.width, textAlign: f.text === 'right' ? 'right' : 'left' } : 
                               { textAlign: f.text === 'right' ? 'right' : 'left' }]"
-                            :class="buildStyleTh(f)">                      
+                            :class="buildStyleTh(f)"
+                            @click="f.sortable ? handleSort(f.key) : undefined">
                             {{ f.key }}
-                            <span v-if="f.sortable" class="table-sort-icon">↓</span>
+                            <span v-if="f.sortable" class="table-sort-icon" :class="getSortIconClass(f.key)">
+                              <span v-if="getSortDirection(f.key) === 'asc'">↑</span>
+                              <span v-else-if="getSortDirection(f.key) === 'desc'">↓</span>
+                              <span v-else>⇅</span>
+                            </span>
                         </th>
                     </tr>
                 </thead>
@@ -159,8 +164,6 @@ props.hpostdata as Function
 props.onRowClick as Function
 props.selected as Data[] | undefined
 
-// 在 Vue 3 的 reactive 中，泛型数组 Data[] 会被 Vue 的响应式系统包装，导致类型推断为 UnwrapRefSimple<Data>[] 而不是原始的 Data[]。
-//const s = vue.reactive({
 const s = vue.shallowReactive({
   npps: [10,30,50,100,200],
   paging: {
@@ -170,13 +173,59 @@ const s = vue.shallowReactive({
     pages: 0
   } as Paging,
   items: [] as Data[],
-  trigger: 0 // 轻量响应式计数器，专门用来驱动直接修改数组引用内部的值时的视图联动
+  sort: '', // 排序字段，格式: '+field' 或 '-field'
+  sortField: '', // 当前排序的字段名
+  sortDirection: '' as '' | 'asc' | 'desc', // 排序方向
+  trigger: 0
 })
+
+// 获取排序方向
+const getSortDirection = (fieldKey: string): '' | 'asc' | 'desc' => {
+  if (s.sortField === fieldKey) {
+    return s.sortDirection
+  }
+  return ''
+}
+
+// 获取排序图标样式
+const getSortIconClass = (fieldKey: string): string => {
+  if (s.sortField === fieldKey) {
+    return 'sort-active'
+  }
+  return 'sort-inactive'
+}
+
+// 处理排序点击
+const handleSort = (fieldKey: string) => {
+  // 点击同一个字段：切换排序方向
+  if (s.sortField === fieldKey) {
+    if (s.sortDirection === 'asc') {
+      // 升序 → 降序
+      s.sortDirection = 'desc'
+      s.sort = '-' + fieldKey
+    } else if (s.sortDirection === 'desc') {
+      // 降序 → 不排序
+      s.sortDirection = ''
+      s.sort = ''
+      s.sortField = ''
+      // 触发加载
+      loadPage(0)
+      return
+    }
+  } else {
+    // 点击不同字段：默认升序
+    s.sortField = fieldKey
+    s.sortDirection = 'asc'
+    s.sort = '+' + fieldKey
+  }
+  
+  // 触发加载
+  loadPage(0)
+}
 
 // 判定某行对象是否被多选勾选
 const isRowSelected = (item: Data): boolean => {
   if (!props.selected) return false
-  // 依赖 s.trigger。当 trigger 改变时，此处的判断函数会被强制重新运行
   return s.trigger >= 0 && props.selected.includes(item)
 }
 
@@ -186,32 +235,31 @@ const isAllSelected = computed(() => {
   return s.trigger >= 0 && s.items.every(item => isRowSelected(item))
 })
 
-// 判定半选状态（当前页仅部分行勾选）
+// 判定半选状态
 const isIndeterminate = computed(() => {
   if (!props.selected || s.items.length === 0) return false
   if (isAllSelected.value) return false
   return s.trigger >= 0 && s.items.some(item => isRowSelected(item))
 })
 
-// 改变单行勾选状态：直接操作 props.selected 原数组进行 push / splice 剪切
+// 改变单行勾选状态
 const toggleRow = (item: Data) => {
   if (!props.selected) return
 
   const idx = props.selected.indexOf(item)
   if (idx !== -1) {
-    props.selected.splice(idx, 1) // 存在则直接剔除
+    props.selected.splice(idx, 1)
   } else {
-    props.selected.push(item)     // 不存在则执行调用你所期望的 .push()
+    props.selected.push(item)
   }
-  s.trigger++ // 触发依赖更新，让 checkbox 的对勾亮起或熄灭
+  s.trigger++
 }
 
-// 改变全选状态：批量进行 push / 就地移除
+// 改变全选状态
 const toggleAll = () => {
   if (!props.selected) return
 
   if (isAllSelected.value) {
-    // 如果当前页已经全选，点击时把当前页所有的元素从 props.selected 里就地拿掉
     s.items.forEach(item => {
       const idx = props.selected.indexOf(item)
       if (idx !== -1) {
@@ -219,14 +267,13 @@ const toggleAll = () => {
       }
     })
   } else {
-    // 如果没有全选，把当前页里还没勾选的对象 push 进去
     s.items.forEach(item => {
       if (!isRowSelected(item)) {
         props.selected.push(item)
       }
     })
   }
-  s.trigger++ // 触发依赖更新
+  s.trigger++
 }
 
 const buildStyleTh = (f:TableField) => {
@@ -252,6 +299,7 @@ const loadPage = (page:number) => {
 
   let postdata = {
     paging: s.paging,
+    sort: s.sort,
     act: "ls"
   }
 
@@ -270,3 +318,113 @@ vue.onMounted(async () => {
 })
 
 </script>
+
+
+<style scoped>
+/* 排序图标样式 */
+.table-header-cell-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.table-sort-icon {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.75rem;
+  transition: color 0.2s;
+}
+
+.table-sort-icon.sort-active {
+  color: #3b82f6;
+  font-weight: bold;
+}
+
+.table-sort-icon.sort-inactive {
+  color: #9ca3af;
+}
+
+.table-header-cell-sortable:hover .table-sort-icon.sort-inactive {
+  color: #6b7280;
+}
+
+/* 原有样式 */
+.table-container {
+  @apply w-full;
+}
+
+.table-card {
+  @apply bg-white rounded-lg shadow overflow-hidden;
+}
+
+.table-wrapper {
+  @apply overflow-x-auto;
+}
+
+.table {
+  @apply w-full text-sm;
+}
+
+.table-header {
+  @apply bg-gray-50;
+}
+
+.table-header-cell {
+  @apply px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+}
+
+.table-header-cell-sortable {
+  @apply cursor-pointer hover:bg-gray-100;
+}
+
+.table-row-border {
+  @apply border-b border-gray-200;
+}
+
+.table-row {
+  @apply hover:bg-gray-50 transition-colors duration-150;
+}
+
+.table-cell {
+  @apply px-4 py-3 text-sm text-gray-900;
+}
+
+.table-pagination {
+  @apply px-4 py-3 bg-white border-t border-gray-200;
+}
+
+.table-pagination-inner {
+  @apply flex items-center justify-between flex-wrap gap-2;
+}
+
+.table-page-size {
+  @apply flex items-center gap-2;
+}
+
+.table-page-size-select {
+  @apply border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500;
+}
+
+.table-page-size-label {
+  @apply text-sm text-gray-600;
+}
+
+.table-pagination-buttons {
+  @apply flex items-center gap-1;
+}
+
+.table-page-btn {
+  @apply px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150;
+}
+
+.table-page-btn:disabled {
+  @apply cursor-not-allowed opacity-50;
+}
+
+.table-stats {
+  @apply text-sm text-gray-600;
+}
+
+.table-stats-number {
+  @apply font-medium text-gray-800;
+}
+</style>

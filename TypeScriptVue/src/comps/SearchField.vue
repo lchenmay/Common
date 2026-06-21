@@ -61,7 +61,7 @@ const onInput = () => {
 }
 
 const onClick = (opt: Data) => {
-  searchText.value = props.item__key(opt)
+  searchText.value = props.item__text(opt)
   isDropdownVisible.value = false
 
   if(props.onselect)

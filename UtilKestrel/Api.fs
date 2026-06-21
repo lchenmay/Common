@@ -309,11 +309,22 @@ let apiBuilder
 
     | "search" ->
         let term = (json |> tryFindStrByAtt "term").ToLower()
+        let limit = 
+            let v = json |> tryFindStrByAtt "limit" |> parse_int32
+            if v <= 5 then
+                5
+            else
+                v
         let filter = adx.searching term
 
         let data = 
-            adx.__items()
-            |> Array.filter filter
+            let items =
+                adx.__items()
+                |> Array.filter filter
+            if items.Length > limit then
+                Array.sub items 0 limit
+            else
+                items
             |> Array.map adx.marshall.data__json
             |> Json.Ary
 

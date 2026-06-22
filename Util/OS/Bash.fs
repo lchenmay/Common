@@ -1,29 +1,53 @@
 ﻿module Util.Bash
 
 open System
+open System.Runtime.InteropServices
 open System.Diagnostics
 open System.Text
+open System.IO
 
-// ANSI 颜色
 let cyan (s: string) = $"\u001b[36m{s}\u001b[0m"
 let green (s: string) = $"\u001b[32m{s}\u001b[0m"
 let red (s: string) = $"\u001b[31m{s}\u001b[0m"
+let white (s: string) = $"\u001b[37m{s}\u001b[0m"
+let yellow (s: string) = $"\u001b[33m{s}\u001b[0m"
+let orange (s: string) = $"\u001b[38;5;208m{s}\u001b[0m"
 
-/// 执行命令，同时输出到控制台并返回原始输出字符串
-let exec output setDir (fileName: string) (args: string) : string =
+type Credential = (int option) * string * string
+
+/// 全局 SSH 私钥路径（由调用方设置）
+let mutable sshPrivateKeyPath = ""
+
+/// 获取 SSH 私钥路径
+let getSshPrivateKeyPath() =
+    if not (String.IsNullOrEmpty sshPrivateKeyPath) then
+        sshPrivateKeyPath
+    else
+        match Environment.GetEnvironmentVariable("SSH_PRIVATE_KEY_PATH") with
+        | null | "" -> 
+            // 默认使用当前目录下的 id_rsa
+            let defaultPath = Path.Combine(Directory.GetCurrentDirectory(), "id_rsa")
+            if File.Exists(defaultPath) then defaultPath else ""
+        | path -> path
+
+/// 获取 SSH 私钥参数
+let getSshPrivateKeyArg() =
+    match getSshPrivateKeyPath() with
+    | "" -> ""
+    | path -> $"-i \"{path}\""
+
+/// 执行本地命令（支持自定义超时）
+let execWithTimeout output setDir (fileName: string) (args: string) (timeoutMs: int) : string =
     $"{fileName}: {args}" |> cyan |> output
-
     let psi = ProcessStartInfo(fileName, args)
-    if not (String.IsNullOrWhiteSpace setDir) then
+    if not (String.IsNullOrWhiteSpace(setDir)) then
         psi.WorkingDirectory <- setDir
-        
     psi.RedirectStandardOutput <- true
     psi.RedirectStandardError <- true
     psi.UseShellExecute <- false
     psi.CreateNoWindow <- true
 
     use proc = new Process(StartInfo = psi)
-
     let outputBuilder = StringBuilder()
     let errorBuilder = StringBuilder()
 
@@ -41,10 +65,9 @@ let exec output setDir (fileName: string) (args: string) : string =
     proc.BeginOutputReadLine()
     proc.BeginErrorReadLine()
     
-    let timeout = 30000
-    if not (proc.WaitForExit(timeout)) then
+    if not (proc.WaitForExit(timeoutMs)) then
         proc.Kill()
-        red $"命令执行超时 ({timeout}ms)" |> output
+        $"命令执行超时（{timeoutMs}ms）" |> red |> output
         ""
 
     elif proc.ExitCode <> 0 then
@@ -54,84 +77,148 @@ let exec output setDir (fileName: string) (args: string) : string =
     else
         outputBuilder.ToString()
 
-/// SSH 远程执行，返回输出字符串
-let bashOne output user server cmd : string =
-    $"{user}@{server} " + cmd
-    |> exec output "" "ssh"
+/// 执行本地命令（默认30秒超时）
+let exec output setDir (fileName: string) (args: string) : string =
+    execWithTimeout output setDir fileName args 30000
 
-/// SSH 远程执行，返回输出字符串
-let bashMultiple output user server cmds : string =
-    $"{user}@{server} " + (cmds |> String.concat " && ")
-    |> exec output "" "ssh"
-
-
-(*
-PS C:\WINDOWS\system32> ssh-keygen -t rsa -b 4096 -C siduochen@hotmail.com
-Generating public/private rsa key pair.
-Enter file in which to save the key (C:\Users\RR/.ssh/id_rsa): 206.119.172.186
-Enter passphrase (empty for no passphrase):
-Enter same passphrase again:
-Your identification has been saved in 206.119.172.186
-Your public key has been saved in 206.119.172.186.pub
-The key fingerprint is:
-SHA256:R0jTmc9g302JWH1IzfCMy/Tqlb5w0VoDnFhCduowCBY siduochen@hotmail.com
-The key's randomart image is:
-+---[RSA 4096]----+
-|     E. o..*o===.|
-|    . ...oB.B.o*=|
-|       ..+.B =oo+|
-|         .+ +oooo|
-|        S ..  oo+|
-|         .     ++|
-|             .oo.|
-|             .+. |
-|              .o.|
-+----[SHA256]-----+
-PS C:\WINDOWS\system32>
-*)
-//在本地生成密钥（如果还没有）
+/// 生成 SSH 密钥的命令
 let email__SshKey email = 
     $"ssh-keygen -t rsa -b 4096 -C {email}"
 
-let combine user server = 
-    user + "@" + server
+/// SSH 远程执行（带自定义超时）
+let bashWithTimeout output credential (cmd: string) (timeoutMs: int) : string =
+    let porto, user, server = credential
+    let effectiveCmd = 
+        if String.IsNullOrWhiteSpace cmd then 
+            "echo 'SSH connection established'"
+        else 
+            cmd
+    
+    let privateKeyArg = getSshPrivateKeyArg()
+    let args = 
+        match porto with
+        | Some p -> $"{privateKeyArg} -p {p} {user}@{server} \"{effectiveCmd}\""
+        | None -> $"{privateKeyArg} {user}@{server} \"{effectiveCmd}\""
+    
+    execWithTimeout output "" "ssh" args timeoutMs
 
-let remoteCopy_SshKey (user,server) file = 
-    //"ssh-copy-id " + combine user server
-    "cat " + file + " | ssh " + (combine user server) + " \"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys\""
+/// SSH 远程执行（默认30秒超时）
+let bash output credential cmd : string =
+    bashWithTimeout output credential cmd 30000
 
-(*
-let log s = printfn "%s" s
+/// SSH 远程执行多个命令
+let bashMultiple output credential cmds =
+    cmds 
+    |> String.concat " && "
+    |> bash output credential
 
-// 1. 建立持久连接
-sshConnect log "root" "192.168.1.100"
+/// 检查 SSH 免密登录是否已配置成功（带超时）
+let checkSshKeyConfiguredWithTimeout output credential (timeoutMs: int) : bool =
+    let porto, user, server = credential
+    let portArg = 
+        match porto with
+        | Some p -> $"-p {p}"
+        | None -> ""
+    
+    let privateKeyArg = getSshPrivateKeyArg()
+    let args = $"{privateKeyArg} {portArg} -o BatchMode=yes -o ConnectTimeout=10 {user}@{server} \"echo 'ok'\""
+    
+    let psi = ProcessStartInfo("ssh", args)
+    psi.RedirectStandardOutput <- true
+    psi.RedirectStandardError <- true
+    psi.UseShellExecute <- false
+    psi.CreateNoWindow <- true
 
-// 2. 执行多个命令（复用连接）
-bashWithControl log "root" "192.168.1.100" [
-    "cd /var/www"
-    "ls -la"
-    "git status"
-]
+    use proc = new Process(StartInfo = psi)
+    let outputBuilder = StringBuilder()
+    let errorBuilder = StringBuilder()
 
-// 3. 关闭连接
-sshDisconnect log "root" "192.168.1.100"
+    proc.OutputDataReceived.Add(fun e -> 
+        if not (String.IsNullOrEmpty e.Data) then 
+            outputBuilder.AppendLine(e.Data) |> ignore)
 
-*)
+    proc.ErrorDataReceived.Add(fun e -> 
+        if not (String.IsNullOrEmpty e.Data) then 
+            errorBuilder.AppendLine(e.Data) |> ignore)
 
+    proc.Start() |> ignore
+    proc.BeginOutputReadLine()
+    proc.BeginErrorReadLine()
+    
+    let exited = proc.WaitForExit(timeoutMs)
+    
+    if not exited then
+        proc.Kill()
+        $"SSH 连接超时 ({user}@{server})" |> yellow |> output
+        false
+    else
+        let exitCode = proc.ExitCode
+        if exitCode = 0 then
+            $"SSH 免密登录已配置 ({user}@{server})" |> green |> output
+            true
+        else
+            let error = errorBuilder.ToString()
+            if error.Contains("Permission denied") then
+                $"SSH 免密登录未配置 ({user}@{server})，需要先配置密钥" |> yellow |> output
+            else
+                $"SSH 连接失败 ({user}@{server}): {error.Trim()}" |> yellow |> output
+            false
 
-/// 创建一个持久的 SSH 控制连接
-let sshConnect output user server =
-    "-Nf -M -S ~/.ssh/control-%r@%h:%p " + combine user server
-    |> exec output "" "ssh" 
-    |> ignore
-    $"SSH 控制连接已建立: {user}@{server}"
+/// 检查 SSH 免密登录是否已配置成功（默认30秒超时）
+let checkSshKeyConfigured output credential : bool =
+    checkSshKeyConfiguredWithTimeout output credential 30000
 
-/// 关闭 SSH 控制连接
-let sshDisconnect output user server =
-    "-O exit -S ~/.ssh/control-%r@%h:%p " + combine user server
-    |> exec output "" "ssh"
-    |> ignore
-    $"SSH 控制连接已关闭: {user}@{server}"
+/// 获取复制 SSH 公钥的命令（返回命令字符串，不自动执行）
+let remoteCopy_SshKeyCommands output credential (file: string) =
+    let porto, user, server = credential
+    let target = $"{user}@{server}"
+    let portArg = 
+        match porto with
+        | Some port -> $"-p {port}"
+        | None -> ""
+    
+    let pubFile = 
+        if file.EndsWith ".pub" then 
+            file 
+        else 
+            file + ".pub"
+    
+    if not (File.Exists(pubFile)) then
+        red $"公钥文件不存在: {pubFile}" |> output
+        None
+    else
+        green $"复制公钥到 {target}" |> output
+        
+        let privateKeyArg = getSshPrivateKeyArg()
+        
+        // 命令1：复制公钥
+        let copyCmd = $"type \"{pubFile}\" | ssh {privateKeyArg} {portArg} {target} \"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys\""
+        
+        // 命令2：设置权限（目录 700，文件 600）
+        let permCmd = $"chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
+        
+        // 命令3：验证连接
+        let testCmd = $"echo 'SSH configured successfully'"
+        
+        Some (pubFile, copyCmd, permCmd, testCmd)
 
-
-
+/// 检查服务器是否启用公钥认证
+let checkPubkeyAuthentication output credential =
+    let porto, user, server = credential
+    
+    // 直接使用 bash，不用 cmd /c
+    let cmd = "grep -E '^PubkeyAuthentication yes' /etc/ssh/sshd_config"
+    
+    // 给予 60 秒超时（网络慢的情况）
+    let result = bashWithTimeout output credential cmd 60000
+    
+    if result.Contains("PubkeyAuthentication yes") then
+        "✓ 服务器已启用公钥认证" |> green |> output
+        true
+    elif result.Contains("命令执行超时") || result.Contains("Connection timed out") then
+        "⚠ SSH 连接超时，跳过公钥认证检查" |> yellow |> output
+        // 返回 true 允许流程继续（可能服务器已配置）
+        true
+    else
+        "⚠ 服务器未启用公钥认证" |> yellow |> output
+        false

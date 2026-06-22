@@ -20,6 +20,7 @@ import TabContainer from './TabContainer.vue'
 import SearchField from './SearchField.vue';
 
 const props = defineProps([
+  'lang',
   'caption',
   'api',
   'fields',
@@ -27,6 +28,7 @@ const props = defineProps([
   'component',
   'selected',
   'data__title', 'empty__data', 'data__id', 'data__desc'])
+props.lang as string
 props.caption as string
 props.api as string
 props.fields as TableField[]
@@ -62,6 +64,7 @@ vue.onMounted(async () => {
     title: props.caption,
     component: TablePaged,
     props: {
+      'lang': props.lang,
       fields: props.fields,
       api: props.api,
       hpostdata: props.hpostdata,

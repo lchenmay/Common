@@ -84,16 +84,22 @@
                           {{ v }}  
                         </option>
                     </select>
-                    <span class="table-page-size-label"> records per page</span>
+                    <span class="table-page-size-label">
+                      {{ lang__display('rpp') }} 
+                    </span>
                 </div>
                 
                 <div class="table-pagination-buttons">
                     <button 
                       @click="loadPage(0)"
-                      class="table-page-btn" :disabled="s.paging.page === 0">First</button>
+                      class="table-page-btn" :disabled="s.paging.page === 0">
+                      {{ lang__display('fst') }} 
+                    </button>
                     <button 
                       @click="loadPage(s.paging.page - 1)"
-                      class="table-page-btn" :disabled="s.paging.page === 0">Previous</button>
+                      class="table-page-btn" :disabled="s.paging.page === 0">
+                      {{ lang__display('prv') }} 
+                    </button>
                     
                     <span v-for="i in [-3,-2,-1,0,1,2,3]" :key="i">
                       <span v-if="i == 0" class="mx-2 font-bold">{{ s.paging.page + 1 }}</span>                      
@@ -107,18 +113,22 @@
                     
                     <button
                       @click="loadPage(s.paging.page + 1)" 
-                      class="table-page-btn" :disabled="s.paging.page >= s.paging.pages - 1">Next</button>
+                      class="table-page-btn" :disabled="s.paging.page >= s.paging.pages - 1">
+                      {{ lang__display('nxt') }} 
+                    </button>
                     <button 
                       @click="loadPage(s.paging.pages - 1)"
-                      class="table-page-btn" :disabled="s.paging.page >= s.paging.pages - 1">Last</button>
+                      class="table-page-btn" :disabled="s.paging.page >= s.paging.pages - 1">
+                      {{ lang__display('lst') }} 
+                    </button>
                 </div>
                 
                 <div class="table-stats">
-                    Total: 
+                    {{ lang__display('total') }} 
                     <span class="table-stats-number">
                       {{ s.paging.total.toLocaleString('en-US') }}  
                     </span>.
-                    Page: 
+                    {{ lang__display('current') }} 
                     <span class="table-stats-number">
                       {{ (s.paging.page + 1).toLocaleString('en-US') }}  
                     </span> / <span class="table-stats-number">
@@ -157,7 +167,8 @@ export interface Paging{
   pages: number
 }
 
-const props = defineProps(['fields','api','hpostdata','onRowClick','selected'])
+const props = defineProps(['lang','fields','api','hpostdata','onRowClick','selected'])
+props.lang as string
 props.fields as TableField[]
 props.api as string
 props.hpostdata as Function
@@ -178,6 +189,33 @@ const s = vue.shallowReactive({
   sortDirection: '' as '' | 'asc' | 'desc', // 排序方向
   trigger: 0
 })
+
+const lang__display = (display:string) => {
+  if(props.lang && props.lang == 'zh'){
+    switch(display){
+      case 'rpp': return '记录/页'
+      case 'fst': return '首页'
+      case 'prv': return '上页'
+      case 'nxt': return '下页'
+      case 'lst': return '末页'
+      case 'total': return '总页数'
+      case 'current': return '当前'
+      default: return ''
+    }
+  }
+  else{
+    switch(display){
+      case 'rpp': return 'records per page'
+      case 'fst': return 'First'
+      case 'prv': return 'Previous'
+      case 'nxt': return 'Next'
+      case 'lst': return 'Last'
+      case 'total': return 'Total: '
+      case 'current': return 'Current: '
+      default: return ''
+    }
+  }
+}
 
 // 获取排序方向
 const getSortDirection = (fieldKey: string): '' | 'asc' | 'desc' => {

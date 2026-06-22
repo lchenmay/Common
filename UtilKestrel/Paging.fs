@@ -141,7 +141,8 @@ let paging item__json json (ary:'a[]) =
         elif index + paging.npp < ary.Length then
             Array.sub ary index paging.npp
         else
-            Array.sub ary (ary.Length - paging.npp - 1) paging.npp
+            // 最后一页：从 index 取到数组末尾
+            Array.sub ary index (ary.Length - index)
         |> Array.map item__json
         |> Json.Ary
 

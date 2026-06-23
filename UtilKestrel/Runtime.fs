@@ -23,19 +23,34 @@ open UtilKestrel.File
 
 let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
     projectCode
-    (host:Host<'HostData>)
+    (hostdata: 'HostData)
     (data:'RuntimeData):RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData> =
     {
         since = DateTime.UtcNow
         inited = false
-        host = host
+        host = {
+            data = hostdata
+            port = 1723
+            rdbms = Util.Db.Rdbms.PostgreSql
+            conn = ""
+            url = ""
+            cert = ""
+            certpwd = ""
+
+            deploy = {
+                credential = (None,"root","")
+                postgresPwd = ""
+                gitName = ""
+                gitEmail = "@.com" }
+
+            updateDatabase = true
+
+            disk = "C:/" }
+
         data = data 
         langs = [| en |]
         users = createModDictInt64 4
         sessions = createModDictStr 4
         output = output
-        //listener = 
-        //    createLisener output 
-        //        (fileService host.fsDir host.req__vueDeployDir) host.port
         projectCode = projectCode }
 

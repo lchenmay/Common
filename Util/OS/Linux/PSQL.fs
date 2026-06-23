@@ -89,41 +89,56 @@ let checkPostgresRemoteConfigured output credential =
         $"⚠ 检查 PostgreSQL 配置时出错: {ex.Message}" |> yellow |> output
         false
 
-/// 检查 PostgreSQL 端口是否可访问（从外部）
+/// 检查 PostgreSQL 端口是否可访问（从外部）- 修复 fi 问题
 let checkPostgresPortAccessible output credential =
     let porto,user,server,target,portArg = credentialExpand credential
     
-    // 使用 nc 或 telnet 检查端口
-    let checkCmd = 
-        $"nc -zv {server} 5432 2>&1 || " +
-        $"timeout 5 telnet {server} 5432 2>&1 || " +
-        $"echo 'PORT_CHECK_FAILED'"
+    // 使用 curl 从外部测试
+    let curlCmd = $"curl -v --connect-timeout 5 telnet://{server}:5432 2>&1 | grep -q 'Connected' && echo 'OPEN' || echo 'CLOSED'"
+    let curlResult = bash output credential curlCmd
     
-    let result = bash output credential checkCmd
-    
-    if result.Contains("succeeded") || result.Contains("Connected") || result.Contains("open") then
+    if curlResult.Contains("OPEN") then
         "✓ PostgreSQL 端口 5432 可从外部访问" |> green |> output
         true
-    elif result.Contains("refused") || result.Contains("timeout") then
-        "⚠ PostgreSQL 端口 5432 无法从外部访问" |> yellow |> output
-        false
     else
-        "⚠ 无法确定端口状态" |> yellow |> output
-        false
+        // 使用 bash /dev/tcp 测试
+        let bashTestCmd = $"""
+timeout 3 bash -c "echo >/dev/tcp/{server}/5432" 2>/dev/null && echo 'OPEN' || echo 'CLOSED'
+"""
+        let bashResult = bash output credential bashTestCmd
+        
+        if bashResult.Contains("OPEN") then
+            "✓ PostgreSQL 端口 5432 可从外部访问" |> green |> output
+            true
+        else
+            // 使用本地 ss 检查
+            let localCheckCmd = "ss -tlnp 2>/dev/null | grep -q ':5432' && echo 'LISTENING' || echo 'NOT_LISTENING'"
+            let localResult = bash output credential localCheckCmd
+            
+            if localResult.Contains("LISTENING") then
+                "⚠ PostgreSQL 在本地监听，但外部无法访问（防火墙/安全组问题）" |> yellow |> output
+                false
+            else
+                "⚠ 无法确定端口状态" |> yellow |> output
+                false
 
-/// 自动修复防火墙
+/// 自动修复防火墙 - 修复 fi 问题
 let autoFixFirewall output credential =
     "\n--- 自动修复防火墙 ---" |> cyan |> output
     
     let cmds = [|
-        // 检查 firewalld 是否运行
+        // 1. 检查并启动 firewalld（如果可用）
+        "if command -v firewalld > /dev/null 2>&1; then systemctl start firewalld 2>/dev/null || true; fi"
+        // 2. 检查 firewalld 是否运行
         "systemctl is-active firewalld > /dev/null 2>&1 && echo 'FIREWALLD_RUNNING' || echo 'FIREWALLD_NOT_RUNNING'"
-        // 如果 firewalld 运行，开放端口
-        "if systemctl is-active firewalld > /dev/null 2>&1; then firewall-cmd --permanent --add-port=5432/tcp && firewall-cmd --reload; fi"
-        // 如果 iptables 存在，添加规则
-        "if command -v iptables > /dev/null 2>&1; then iptables -C INPUT -p tcp --dport 5432 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 5432 -j ACCEPT; fi"
-        // 保存 iptables 规则
+        // 3. 如果 firewalld 运行，开放端口
+        "if systemctl is-active firewalld > /dev/null 2>&1; then firewall-cmd --permanent --add-port=5432/tcp 2>/dev/null && firewall-cmd --reload 2>/dev/null; fi"
+        // 4. 如果 iptables 存在，添加规则
+        "if command -v iptables > /dev/null 2>&1; then iptables -C INPUT -p tcp --dport 5432 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 5432 -j ACCEPT 2>/dev/null; fi"
+        // 5. 保存 iptables 规则
         "if command -v iptables-save > /dev/null 2>&1; then iptables-save > /etc/sysconfig/iptables 2>/dev/null || true; fi"
+        // 6. 提示
+        "echo '如果以上命令执行后仍无法连接，请检查云服务商安全组/防火墙规则'"
     |]
     
     for cmd in cmds do
@@ -131,6 +146,11 @@ let autoFixFirewall output credential =
         result |> output
     
     "✓ 防火墙配置完成" |> green |> output
+    
+    "📋 手动检查命令:" |> cyan |> output
+    "  ss -tlnp | grep 5432" |> yellow |> output
+    "  curl -v telnet://206.119.172.186:5432" |> yellow |> output
+    "  如果使用云服务器，请在安全组中开放 5432 端口" |> yellow |> output
 
 /// 检查 PostgreSQL 实际监听地址
 let checkPostgresActualListening output credential =
@@ -240,10 +260,14 @@ let sqls_ConfigureRemote psqlPath (password: string) =
         $"echo '--- Setting postgres user password ---'"
         $"ALTER USER postgres WITH PASSWORD '{password}';" |> psql__cmd
         
-        // 7. 开放防火墙端口
+        // 7. 开放防火墙端口 - 多种方式
         "echo '--- Opening firewall port 5432 ---'"
+        // firewalld
         "systemctl is-active firewalld > /dev/null 2>&1 && firewall-cmd --permanent --add-port=5432/tcp && firewall-cmd --reload || echo 'firewalld not running'"
-        "command -v iptables > /dev/null 2>&1 && iptables -C INPUT -p tcp --dport 5432 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 5432 -j ACCEPT || true"
+        // iptables
+        "command -v iptables > /dev/null 2>&1 && iptables -C INPUT -p tcp --dport 5432 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 5432 -j ACCEPT 2>/dev/null || true"
+        // 检查是否 docker 环境
+        "command -v docker > /dev/null 2>&1 && echo '检测到 Docker 环境，请确保容器端口已映射' || true"
         
         // 8. 重启 PostgreSQL 服务（使用 pg_ctl）
         "echo '--- Restarting PostgreSQL ---'"
@@ -263,6 +287,10 @@ let sqls_ConfigureRemote psqlPath (password: string) =
         // 12. 显示监听端口状态
         "echo '--- Port listening status ---'"
         "ss -tlnp 2>/dev/null | grep 5432 || netstat -tlnp 2>/dev/null | grep 5432 || echo 'netstat/ss not available'"
+        
+        // 13. 显示防火墙状态
+        "echo '--- Firewall status ---'"
+        "iptables -L -n | grep 5432 2>/dev/null || echo 'iptables rules not found'"
         
         "echo '[OK] PostgreSQL configured for remote access'"
     |]
@@ -325,8 +353,6 @@ let exeRemoteConfigurePSQL
                 bash output credential restartCmd |> ignore
                 bash output credential "sleep 3" |> ignore
                 "✓ 配置已修复" |> green |> output
-            // 注意：这里删除了 fi，因为 F# 不需要
-            // 如果不需要额外的 else 分支，直接结束 if 块
             
             // 3. 检查端口是否可访问
             let portAccessible = checkPostgresPortAccessible output credential
@@ -340,8 +366,12 @@ let exeRemoteConfigurePSQL
                 if retryAccessible then
                     "✓ 端口已开放" |> green |> output
                 else
-                    "⚠ 端口仍不可访问，请手动检查防火墙设置" |> yellow |> output
-                    "提示: 可能需要在云服务商控制台开放 5432 端口" |> yellow |> output
+                    "⚠ 端口仍不可访问" |> yellow |> output
+                    "📋 请手动检查以下内容:" |> yellow |> output
+                    "  1. 云服务商安全组是否开放了 5432 端口" |> yellow |> output
+                    "  2. 服务器防火墙是否开放了 5432 端口" |> yellow |> output
+                    "  3. PostgreSQL 是否正在运行" |> yellow |> output
+                    "  4. 使用命令检查: ss -tlnp | grep 5432" |> yellow |> output
             else
                 "✓ 端口可访问" |> green |> output
             
@@ -385,7 +415,6 @@ let exeRemoteConfigurePSQL
                     "✓ 配置验证通过" |> green |> output
                 else
                     "⚠ 配置仍未生效，请手动检查" |> yellow |> output
-            // 注意：这里删除了 fi
             
             // 检查实际监听
             checkPostgresActualListening output credential |> ignore
@@ -400,8 +429,12 @@ let exeRemoteConfigurePSQL
                 if retryAccessible then
                     "✓ 端口已开放" |> green |> output
                 else
-                    "⚠ 端口仍不可访问，请手动检查防火墙设置" |> yellow |> output
-                    "提示: 可能需要在云服务商控制台开放 5432 端口" |> yellow |> output
+                    "⚠ 端口仍不可访问" |> yellow |> output
+                    "📋 请手动检查以下内容:" |> yellow |> output
+                    "  1. 云服务商安全组是否开放了 5432 端口" |> yellow |> output
+                    "  2. 服务器防火墙是否开放了 5432 端口" |> yellow |> output
+                    "  3. PostgreSQL 是否正在运行" |> yellow |> output
+                    "  4. 使用命令检查: ss -tlnp | grep 5432" |> yellow |> output
             else
                 "✓ 端口可访问" |> green |> output
             

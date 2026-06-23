@@ -1,4 +1,4 @@
-module UtilAvalonia.Comp.Skia.SkiaCommon
+module UtilAvalonia.SkiaCommon
 
 open System
 open SkiaSharp

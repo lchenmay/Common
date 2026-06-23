@@ -1,11 +1,11 @@
-module UtilAvalonia.Comp.Skia.SkiaBiLayer
+module UtilAvalonia.SkiaBiLayer
 
 open System
 open SkiaSharp
 
 open Util.Perf
 open Util.GraphicsGeo
-open UtilAvalonia.Comp.Skia.SkiaCommon
+open UtilAvalonia.SkiaCommon
 
 /// 双缓冲层——替代 UtilVortice.BiLayer.BiLayer
 /// 背景层可缓存为 SKBitmap，前景层每帧重绘

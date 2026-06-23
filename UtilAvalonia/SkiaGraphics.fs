@@ -1,11 +1,11 @@
-module UtilAvalonia.Comp.Skia.SkiaGraphics
+module UtilAvalonia.SkiaGraphics
 
 open System
 open SkiaSharp
 
 open Util.Perf
 open Util.GraphicsGeo
-open UtilAvalonia.Comp.Skia.SkiaCommon
+open UtilAvalonia.SkiaCommon
 
 // ============================================================================
 // 文本绘制（SkiaSharp 3.x 使用 SKFont 替代 SKPaint 上的字体属性）

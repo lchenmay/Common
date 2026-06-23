@@ -19,6 +19,9 @@
     <Compile Include="Comp\FileSysTree\FileSysTree.fs" />
     <Compile Include="Comp\MainStatus.fs" />
     <Compile Include="Comp\TextConsole.fs" />
+    <Compile Include="Comp\Skia\SkiaCommon.fs" />
+    <Compile Include="Comp\Skia\SkiaGraphics.fs" />
+    <Compile Include="Comp\Skia\SkiaBiLayer.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,6 +33,7 @@
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="SkiaSharp" Version="3.118.0" />
   </ItemGroup>
 
   <ItemGroup>

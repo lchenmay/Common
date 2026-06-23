@@ -8,6 +8,7 @@ open System.IO
 
 open Util.Linux.Bash
 open Util.Linux.Linux
+open System.Diagnostics
 
 
 let loadPathPSQL 
@@ -295,6 +296,89 @@ let sqls_ConfigureRemote psqlPath (password: string) =
         "echo '[OK] PostgreSQL configured for remote access'"
     |]
 
+// ==================== NAT 检测与 SSH 隧道 ====================
+
+/// 检测远程服务器是否位于云 NAT 网关之后（5432 端口未转发）
+/// 判断逻辑: 服务器本地监听 5432 但自身无法通过公网 IP 访问自己
+let exeCheckIfBehindNAT output credential : bool =
+    let porto,user,server,target,portArg = credentialExpand credential
+    
+    "\n--- 检测云 NAT 环境 ---" |> cyan |> output
+    
+    // 1. 确认 PostgreSQL 本地监听正常
+    let localListenCmd = 
+        "ss -tlnp 2>/dev/null | grep -q ':5432' && echo 'LISTENING' || echo 'NOT_LISTENING'"
+    let localResult = bash output credential localListenCmd
+    
+    if not (localResult.Contains("LISTENING")) then
+        "PostgreSQL 未在本地监听 5432，跳过 NAT 检测" |> yellow |> output
+        false
+    else
+        // 2. 从服务器自身测试公网 IP 端口可达性
+        //    如果服务器自己都连不上自己的公网 IP:5432，说明是云 NAT 问题
+        //    （云厂商安全组/浮动 IP 未转发该端口）
+        let selfTestCmd = 
+            $"timeout 3 bash -c 'echo >/dev/tcp/{server}/5432' 2>/dev/null " +
+            "&& echo 'SELF_REACHABLE' || echo 'SELF_UNREACHABLE'"
+        let selfResult = bash output credential selfTestCmd
+        
+        if selfResult.Contains("SELF_REACHABLE") then
+            $"✓ 服务器公网端口 {server}:5432 可达" |> green |> output
+            false
+        else
+            // 3. 获取内网 IP 确认 NAT
+            let ipCmd = "hostname -I 2>/dev/null | awk '{print $1}'"
+            let internalIp = (bash output credential ipCmd).Trim()
+            
+            $"🔍 检测到云 NAT 环境" |> orange |> output
+            $"   公网 IP: {server}" |> yellow |> output
+            $"   内网 IP: {internalIp}" |> yellow |> output
+            $"   端口 5432 在 NAT 网关未转发" |> yellow |> output
+            true
+
+/// 为 PostgreSQL 建立 SSH 隧道（用于 NAT 环境绕过云防火墙）
+/// 返回 (localPort, tunnelConnString) option
+let exeSetupPSQLTunnel output credential (postgresPwd:string) : (int * string) option =
+    let porto,user,server,target,portArg = credentialExpand credential
+    
+    "\n--- 建立 PostgreSQL SSH 隧道 ---" |> cyan |> output
+    
+    // 从 55432 开始查找可用端口（与 5432 区分）
+    let tunnelPort = findAvailablePort 55432
+    
+    $"尝试端口: {tunnelPort}" |> cyan |> output
+    
+    let success = startSSHTunnel output tunnelPort credential 5432
+    
+    if success then
+        // 等待隧道稳定
+        System.Threading.Thread.Sleep 1500
+        
+        let conn = 
+            $"Host=localhost;Port={tunnelPort};" +
+            $"Username=postgres;Password={postgresPwd};" +
+            $"Database=postgres;SSL Mode=Disable"
+        
+        "========================================" |> cyan |> output
+        "📋 SSH 隧道 PostgreSQL 连接信息:" |> green |> output
+        "========================================" |> cyan |> output
+        $"  Host: localhost (通过 SSH 隧道)" |> green |> output
+        $"  Tunnel: localhost:{tunnelPort} -> {server}:5432" |> green |> output
+        $"  Port: {tunnelPort}" |> green |> output
+        $"  Username: postgres" |> green |> output
+        $"  Password: {postgresPwd}" |> green |> output
+        $"  Database: postgres" |> green |> output
+        $"  Connection String:" |> cyan |> output
+        $"  {conn}" |> yellow |> output
+        "========================================" |> cyan |> output
+        "💡 隧道在本次部署会话期间保持活跃" |> cyan |> output
+        "   也可手动建立: ssh -L 55432:localhost:5432 -N {user}@{server}" |> cyan |> output
+        
+        Some (tunnelPort, conn)
+    else
+        $"❌ SSH 隧道建立失败" |> red |> output
+        None
+
 // ==================== 执行函数 ====================
 
 /// 执行单个命令的辅助函数
@@ -322,7 +406,87 @@ let exeRemoteValidatePSQL
         $"\nDeployment error: {ex.Message}" |> red |> output
         "Please check remote server status" |> yellow |> output
 
-/// 配置 PostgreSQL 允许远程连接（仅当需要时）- 包含自动修复
+/// 解析端口可达性: 防火墙修复 → NAT检测 → SSH隧道，返回最终连接字符串
+let private resolvePortAndConnection output credential (postgresPwd:string) : string =
+    let porto,user,server,target,portArg = credentialExpand credential
+    
+    // 检查端口是否可访问
+    let mutable portAccessible = checkPostgresPortAccessible output credential
+    
+    if not portAccessible then
+        "⚠ 端口不可访问，尝试自动修复防火墙..." |> yellow |> output
+        autoFixFirewall output credential
+        
+        portAccessible <- checkPostgresPortAccessible output credential
+        if portAccessible then
+            "✓ 端口已开放" |> green |> output
+    
+    if portAccessible then
+        // 端口可达 → 使用直连
+        "✓ 端口可访问，使用直连模式" |> green |> output
+        let conn = $"Host={server};Port=5432;Username=postgres;Password={postgresPwd};Database=postgres;SSL Mode=Disable"
+        "📋 PostgreSQL 连接信息:" |> cyan |> output
+        "========================================" |> cyan |> output
+        $"  Host: {server}" |> green |> output
+        $"  Port: 5432" |> green |> output
+        $"  Username: postgres" |> green |> output
+        $"  Password: {postgresPwd}" |> green |> output
+        $"  Database: postgres" |> green |> output
+        $"  SSL Mode: Disable" |> green |> output
+        "========================================" |> cyan |> output
+        conn
+    else
+        // 端口不可达 → 检查是否为 NAT 环境
+        "⚠ 服务器防火墙已开放但端口仍不可达" |> yellow |> output
+        
+        let behindNAT = exeCheckIfBehindNAT output credential
+        
+        if behindNAT then
+            // NAT 环境 → 自动建立 SSH 隧道
+            "🔧 自动建立 SSH 隧道绕过云 NAT..." |> cyan |> output
+            
+            match exeSetupPSQLTunnel output credential postgresPwd with
+            | Some (tunnelPort, tunnelConn) ->
+                tunnelConn
+            | None ->
+                // 隧道失败，回退到直连信息（带警告）
+                "❌ SSH 隧道建立失败，回退到直连模式" |> red |> output
+                let conn = $"Host={server};Port=5432;Username=postgres;Password={postgresPwd};Database=postgres;SSL Mode=Disable"
+                "📋 直连 PostgreSQL 连接信息 (⚠ 可能不可用):" |> yellow |> output
+                "========================================" |> yellow |> output
+                $"  Host: {server}" |> yellow |> output
+                $"  Port: 5432" |> yellow |> output
+                $"  Username: postgres" |> yellow |> output
+                $"  Password: {postgresPwd}" |> yellow |> output
+                $"  Database: postgres" |> yellow |> output
+                $"  SSL Mode: Disable" |> yellow |> output
+                "========================================" |> yellow |> output
+                "📋 请手动检查以下内容:" |> yellow |> output
+                "  1. 云服务商安全组是否开放了 5432 端口" |> yellow |> output
+                "  2. 服务器防火墙是否开放了 5432 端口" |> yellow |> output
+                "  3. 手动建立隧道: ssh -L 55432:localhost:5432 -N {user}@{server}" |> yellow |> output
+                conn
+        else
+            // 非 NAT 环境 → 防火墙问题或其他
+            "⚠ 非 NAT 环境但端口不可达，可能是防火墙问题" |> yellow |> output
+            "📋 请手动检查以下内容:" |> yellow |> output
+            "  1. 云服务商安全组是否开放了 5432 端口" |> yellow |> output
+            "  2. 服务器防火墙是否开放了 5432 端口" |> yellow |> output
+            "  3. PostgreSQL 是否正在运行" |> yellow |> output
+            "  4. 使用命令检查: ss -tlnp | grep 5432" |> yellow |> output
+            let conn = $"Host={server};Port=5432;Username=postgres;Password={postgresPwd};Database=postgres;SSL Mode=Disable"
+            "📋 直连 PostgreSQL 连接信息 (⚠ 可能不可用):" |> yellow |> output
+            "========================================" |> yellow |> output
+            $"  Host: {server}" |> yellow |> output
+            $"  Port: 5432" |> yellow |> output
+            $"  Username: postgres" |> yellow |> output
+            $"  Password: {postgresPwd}" |> yellow |> output
+            $"  Database: postgres" |> yellow |> output
+            $"  SSL Mode: Disable" |> yellow |> output
+            "========================================" |> yellow |> output
+            conn
+
+/// 配置 PostgreSQL 允许远程连接（仅当需要时）- 包含自动修复 + NAT检测 + SSH隧道
 let exeRemoteConfigurePSQL
     output
     (credential: Credential)
@@ -354,41 +518,8 @@ let exeRemoteConfigurePSQL
                 bash output credential "sleep 3" |> ignore
                 "✓ 配置已修复" |> green |> output
             
-            // 3. 检查端口是否可访问
-            let portAccessible = checkPostgresPortAccessible output credential
-            
-            if not portAccessible then
-                "⚠ 端口不可访问，尝试自动修复防火墙..." |> yellow |> output
-                autoFixFirewall output credential
-                
-                // 重新检查
-                let retryAccessible = checkPostgresPortAccessible output credential
-                if retryAccessible then
-                    "✓ 端口已开放" |> green |> output
-                else
-                    "⚠ 端口仍不可访问" |> yellow |> output
-                    "📋 请手动检查以下内容:" |> yellow |> output
-                    "  1. 云服务商安全组是否开放了 5432 端口" |> yellow |> output
-                    "  2. 服务器防火墙是否开放了 5432 端口" |> yellow |> output
-                    "  3. PostgreSQL 是否正在运行" |> yellow |> output
-                    "  4. 使用命令检查: ss -tlnp | grep 5432" |> yellow |> output
-            else
-                "✓ 端口可访问" |> green |> output
-            
-            // 打印连接信息
-            let conn = $"Host={server};Port=5432;Username=postgres;Password={postgresPwd};Database=postgres;SSL Mode=Disable"
-            "📋 PostgreSQL 连接信息:" |> cyan |> output
-            "========================================" |> cyan |> output
-            $"  Host: {server}" |> green |> output
-            $"  Port: 5432" |> green |> output
-            $"  Username: postgres" |> green |> output
-            $"  Password: {postgresPwd}" |> green |> output
-            $"  Database: postgres" |> green |> output
-            $"  SSL Mode: Disable" |> green |> output
-            "========================================" |> cyan |> output
-            "⚠ 注意: 如果从外部连接，请确保防火墙允许端口 5432" |> yellow |> output
-            "⚠ 如果使用云服务器，请在安全组/防火墙规则中开放 5432 端口" |> yellow |> output
-            conn
+            // 3. 检查端口可达性 → 自动检测NAT → 建立SSH隧道
+            resolvePortAndConnection output credential postgresPwd
         else
             "⚠ PostgreSQL 未配置远程访问，开始配置..." |> yellow |> output
             
@@ -419,39 +550,8 @@ let exeRemoteConfigurePSQL
             // 检查实际监听
             checkPostgresActualListening output credential |> ignore
             
-            // 检查端口
-            let portAccessible = checkPostgresPortAccessible output credential
-            if not portAccessible then
-                "⚠ 端口不可访问，尝试自动修复防火墙..." |> yellow |> output
-                autoFixFirewall output credential
-                
-                let retryAccessible = checkPostgresPortAccessible output credential
-                if retryAccessible then
-                    "✓ 端口已开放" |> green |> output
-                else
-                    "⚠ 端口仍不可访问" |> yellow |> output
-                    "📋 请手动检查以下内容:" |> yellow |> output
-                    "  1. 云服务商安全组是否开放了 5432 端口" |> yellow |> output
-                    "  2. 服务器防火墙是否开放了 5432 端口" |> yellow |> output
-                    "  3. PostgreSQL 是否正在运行" |> yellow |> output
-                    "  4. 使用命令检查: ss -tlnp | grep 5432" |> yellow |> output
-            else
-                "✓ 端口可访问" |> green |> output
-            
-            // 打印连接信息
-            let conn = $"Host={server};Port=5432;Username=postgres;Password={postgresPwd};Database=postgres;SSL Mode=Disable"
-            "📋 PostgreSQL 连接信息:" |> cyan |> output
-            "========================================" |> cyan |> output
-            $"  Host: {server}" |> green |> output
-            $"  Port: 5432" |> green |> output
-            $"  Username: postgres" |> green |> output
-            $"  Password: {postgresPwd}" |> green |> output
-            $"  Database: postgres" |> green |> output
-            $"  SSL Mode: Disable" |> green |> output
-            "========================================" |> cyan |> output
-            "⚠ 注意: 如果从外部连接，请确保防火墙允许端口 5432" |> yellow |> output
-            "⚠ 如果使用云服务器，请在安全组/防火墙规则中开放 5432 端口" |> yellow |> output
-            conn
+            // 检查端口可达性 → 自动检测NAT → 建立SSH隧道
+            resolvePortAndConnection output credential postgresPwd
     with ex ->
         $"\nConfiguration error: {ex.Message}" |> red |> output
         "Please check remote server status" |> yellow |> output

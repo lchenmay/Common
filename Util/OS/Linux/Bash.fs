@@ -5,6 +5,8 @@ open System.Runtime.InteropServices
 open System.Diagnostics
 open System.Text
 open System.IO
+open System.Collections.Generic
+open System.Net.Sockets
 
 let cyan (s: string) = $"\u001b[36m{s}\u001b[0m"
 let green (s: string) = $"\u001b[32m{s}\u001b[0m"
@@ -238,3 +240,99 @@ let psqlpath__Cmd (psqlPath:string) (sql:string) =
     let cleanPath = psqlPath.Trim().Replace("\n", "").Replace("\r", "")
     let escapedSql = sql.Replace("'", "'\\''")
     $"sudo -u postgres {cleanPath} -h /var/run/postgresql -p 5432 -c '{escapedSql}'"
+
+// ==================== SSH 隧道管理 ====================
+
+/// SSH 隧道进程注册表 (localPort -> Process)
+let mutable tunnelProcesses : Dictionary<int, Process> = Dictionary<int, Process>()
+
+/// 检查本地 TCP 端口是否可用
+let isLocalPortAvailable (port:int) : bool =
+    try
+        use socket = new TcpListener(System.Net.IPAddress.Loopback, port)
+        socket.Start()
+        socket.Stop()
+        true
+    with _ -> false
+
+/// 从 startPort 开始查找可用端口
+let findAvailablePort (startPort:int) : int =
+    let mutable port = startPort
+    while port < startPort + 1000 && not (isLocalPortAvailable port) do
+        port <- port + 1
+    if port >= startPort + 1000 then
+        failwith "No available ports in range"
+    port
+
+/// 启动 SSH 隧道: localPort -> remoteHost:remotePort
+/// 在 Windows 上使用 -N（非 fork 模式），手动管理后台进程
+let startSSHTunnel output (localPort:int) credential (remotePort:int) : bool =
+    let porto, user, server = credential
+    let portArg = match porto with Some p -> $"-p {p}" | None -> ""
+    let privateKeyArg = getSshPrivateKeyArg()
+    
+    // -N: 不执行远程命令（纯转发）
+    // -o ExitOnForwardFailure=yes: 转发失败则退出
+    // -o ServerAliveInterval=60: 保持连接活跃
+    let args = 
+        $"{privateKeyArg} {portArg} -o StrictHostKeyChecking=no " +
+        $"-o ExitOnForwardFailure=yes -o ServerAliveInterval=60 " +
+        $"-N -L {localPort}:localhost:{remotePort} {user}@{server}"
+    
+    $"启动 SSH 隧道: localhost:{localPort} -> {server}:{remotePort}" 
+    |> cyan |> output
+    
+    let psi = ProcessStartInfo("ssh", args)
+    psi.RedirectStandardOutput <- true
+    psi.RedirectStandardError <- true
+    psi.UseShellExecute <- false
+    psi.CreateNoWindow <- true
+    
+    let proc = new Process(StartInfo = psi)
+    
+    // 捕获错误输出用于诊断
+    let errBuilder = StringBuilder()
+    proc.ErrorDataReceived.Add(fun e -> 
+        if not (String.IsNullOrEmpty e.Data) then 
+            errBuilder.AppendLine(e.Data) |> ignore)
+    
+    proc.Start() |> ignore
+    proc.BeginErrorReadLine()
+    
+    // 等待 2 秒检查是否立即失败（如端口冲突、认证失败）
+    System.Threading.Thread.Sleep 2000
+    
+    if proc.HasExited then
+        let err = errBuilder.ToString()
+        $"❌ SSH 隧道建立失败 (ExitCode={proc.ExitCode}): {err}" |> red |> output
+        false
+    else
+        tunnelProcesses.[localPort] <- proc
+        $"✓ SSH 隧道已建立: localhost:{localPort} -> {server}:{remotePort}" 
+        |> green |> output
+        true
+
+/// 关闭指定端口的 SSH 隧道
+let stopSSHTunnel output (localPort:int) =
+    if tunnelProcesses.ContainsKey localPort then
+        let proc = tunnelProcesses.[localPort]
+        try
+            if not proc.HasExited then
+                proc.Kill()
+                proc.WaitForExit(3000) |> ignore
+            $"✓ 隧道 localhost:{localPort} 已关闭" |> green |> output
+        with ex ->
+            $"⚠ 关闭隧道时出错: {ex.Message}" |> yellow |> output
+        tunnelProcesses.Remove localPort |> ignore
+
+/// 关闭所有 SSH 隧道
+let stopAllSshTunnels output =
+    let ports : int array = tunnelProcesses.Keys |> Seq.toArray
+    for port in ports do
+        stopSSHTunnel output port
+    $"所有 SSH 隧道已关闭（共 {ports.Length} 个）" |> cyan |> output
+
+/// 检查本地端口是否已被 SSH 隧道占用（且进程存活）
+let isTunnelActive (localPort:int) =
+    tunnelProcesses.ContainsKey localPort && 
+    not (tunnelProcesses.[localPort].HasExited)

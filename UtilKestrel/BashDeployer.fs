@@ -12,30 +12,43 @@ open Util.Linux.Git
 
 open UtilKestrel.Types
 
-let gitPush(gitName,gitEmail) = 
-    [|  $"config user.name \"{gitName}\""
-        $"config user.email \"{gitEmail}\""
-        "add ."
-        "commit -m \"auto-deploy\""
-        "push" |]
 
-let mutable pathGit = @"C:\Program Files\Git\bin\git.exe"
+// ==================== Git 推送函数 ====================
 
-let remote(deployDir) = 
-    [|  $"cd ~/{deployDir}"
-        "git fetch --all"
-        "git reset --hard origin/main"
-        "sudo killall -9 dotnet || true"
-        "sudo fuser -k 80/tcp || true"
-        "sudo fuser -k 443/tcp || true"
-        $"cd ~/{deployDir}/vscode"
-        "/root/.bun/bin/bun install"
-        "/root/.bun/bin/bun add vite @vitejs/plugin-vue @vitejs/plugin-vue-jsx @vitejs/plugin-basic-ssl -D"
-        "/root/.bun/bin/bun generateRoutes.cjs"
-        "/root/.bun/bin/bunx --/root/.bun/bin/bun vite build --emptyOutDir"
-        "cd .."
-        "cd Server"
-        "sudo dotnet run" |]
+/// 推送本地仓库变更（单个仓库）
+let pushLocalRepo output (repoPath: string) (gitName: string) (gitEmail: string) =
+    $"\n--- 推送 {repoPath} 仓库变更 ---" |> cyan |> output
+    
+    let cmds = [|
+        $"cd {repoPath}"
+        $"git config user.name \"{gitName}\""
+        $"git config user.email \"{gitEmail}\""
+        "git add ."
+        "git commit -m \"auto-deploy\" || echo '没有变更需要提交'"
+        "git push"
+    |]
+    
+    for cmd in cmds do
+        let result = exec output repoPath "powershell" cmd
+        result |> output
+    
+    "✓ 推送完成" |> green |> output
+
+/// 推送所有本地仓库变更
+let pushAllLocalRepos output (code: string) (gitName: string) (gitEmail: string) (disk: string) =
+    $"\n=== 开始推送所有本地仓库变更 ===" |> yellow |> output
+    
+    let repos = [
+        ("主项目", $"{disk}Dev/{code}")
+        ("Common", $"{disk}Dev/Common")
+        ("JCS", $"{disk}Dev/JCS")
+    ]
+    
+    for (name, path) in repos do
+        pushLocalRepo output path gitName gitEmail |> ignore
+        "\n" |> output
+    
+    "=== 所有本地仓库推送完成 ===" |> yellow |> output
 
 
 // ==================== 目录管理函数 ====================
@@ -56,61 +69,18 @@ let deleteAllRepos output credential (code: string) =
     
     "=== 所有仓库目录删除完成 ===" |> yellow |> output
 
-// ==================== 检查和验证函数 ====================
 
-/// 检查服务是否运行
-let checkServiceRunning output credential =
-    let checkCmd = "ps aux | grep -q '[d]otnet.*Aiarwa' && echo 'RUNNING' || echo 'NOT_RUNNING'"
-    let result = bash output credential checkCmd
-    
-    if result.Contains("RUNNING") then
-        "✓ Aiarwa 服务正在运行" |> green |> output
-        true
-    else
-        "⚠ Aiarwa 服务未运行" |> yellow |> output
-        false
+// ==================== 构建函数 ====================
 
-/// 启动服务
-let startService output credential (deployDir: string) =
-    $"\n--- 启动 Aiarwa 服务 ---" |> cyan |> output
-    
-    let cmds = [|
-        $"cd ~/{deployDir}/Server"
-        "sudo killall -9 dotnet || true"
-        "sudo fuser -k 80/tcp || true"
-        "sudo fuser -k 443/tcp || true"
-        "sudo nohup dotnet run > /tmp/aiarwa.log 2>&1 &"
-        "sleep 3"
-    |]
-    
-    cmds |> String.concat " && " |> bash output credential |> ignore
-    
-    // 验证服务是否启动
-    let running = checkServiceRunning output credential
-    if running then
-        "✓ Aiarwa 服务启动成功" |> green |> output
-        "日志文件: /tmp/aiarwa.log" |> yellow |> output
-    else
-        "❌ Aiarwa 服务启动失败，请检查日志" |> red |> output
-    
-    running
-
-
-/// 构建前端（逐条执行）
-let buildFrontend output credential (deployDir: string) =
+/// 构建前端（逐条执行）- 使用 code 参数
+let buildFrontend output credential (code: string) =
     "\n--- 构建前端 ---" |> cyan |> output
     
-    let vscodeDir = $"{deployDir}/vscode"
+    let vscodeDir = $"Dev/{code}/vscode"
     
     // 检查 package.json 是否存在
     "检查 package.json..." |> cyan |> output
-    let checkPackageCmd = $"""
-if [ -f ~/{vscodeDir}/package.json ]; then
-    echo "EXISTS"
-else
-    echo "NOT_EXISTS"
-fi
-"""
+    let checkPackageCmd = $"if [ -f ~/{vscodeDir}/package.json ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
     let packageExists = bash output credential checkPackageCmd
     
     if packageExists.Contains("NOT_EXISTS") then
@@ -145,21 +115,15 @@ fi
         "✓ 前端构建完成" |> green |> output
         true
 
-/// 构建后端（逐条执行）
-let buildBackend output credential (deployDir: string) =
+/// 构建后端（逐条执行）- 使用 code 参数
+let buildBackend output credential (code: string) =
     "\n--- 构建后端 ---" |> cyan |> output
     
-    let serverDir = $"{deployDir}/Server"
+    let serverDir = $"Dev/{code}/Server"
     
     // 检查 .fsproj 是否存在
     "检查项目文件..." |> cyan |> output
-    let checkProjCmd = $"""
-if ls ~/{serverDir}/*.fsproj 1> /dev/null 2>&1; then
-    echo "EXISTS"
-else
-    echo "NOT_EXISTS"
-fi
-"""
+    let checkProjCmd = $"if ls ~/{serverDir}/*.fsproj 1> /dev/null 2>&1; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
     let projExists = bash output credential checkProjCmd
     
     if projExists.Contains("NOT_EXISTS") then
@@ -178,23 +142,23 @@ fi
         
         // 2. 添加 Common 引用
         "  - 检查并添加 Common 引用..." |> cyan |> output
-        let commonRefCmds = [|
-            "if [ -d ~/Dev/Common ]; then echo 'Common 存在'; else echo 'Common 不存在，跳过'; exit 0; fi"
-            "dotnet add reference ~/Dev/Common/Common.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-        |]
-        for cmd in commonRefCmds do
-            let result = bash output credential cmd
-            result |> output
+        let commonCheckCmd = $"if [ -d ~/Dev/Common ]; then echo 'Common 存在'; else echo 'Common 不存在，跳过'; fi"
+        let commonCheckResult = bash output credential commonCheckCmd
+        commonCheckResult |> output
+        
+        let commonRefCmd = "dotnet add reference ~/Dev/Common/Common.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+        let commonRefResult = bash output credential commonRefCmd
+        commonRefResult |> output
         
         // 3. 添加 JCS 引用
         "  - 检查并添加 JCS 引用..." |> cyan |> output
-        let jcsRefCmds = [|
-            "if [ -d ~/Dev/JCS ]; then echo 'JCS 存在'; else echo 'JCS 不存在，跳过'; exit 0; fi"
-            "dotnet add reference ~/Dev/JCS/JCS.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-        |]
-        for cmd in jcsRefCmds do
-            let result = bash output credential cmd
-            result |> output
+        let jcsCheckCmd = $"if [ -d ~/Dev/JCS ]; then echo 'JCS 存在'; else echo 'JCS 不存在，跳过'; fi"
+        let jcsCheckResult = bash output credential jcsCheckCmd
+        jcsCheckResult |> output
+        
+        let jcsRefCmd = "dotnet add reference ~/Dev/JCS/JCS.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+        let jcsRefResult = bash output credential jcsRefCmd
+        jcsRefResult |> output
         
         // 4. dotnet build
         "  - dotnet build --configuration Release" |> cyan |> output
@@ -204,53 +168,6 @@ fi
         "✓ 后端构建完成" |> green |> output
         true
 
-/// 启动服务（逐条执行）
-let startServiceVerbose output credential (deployDir: string) =
-    "\n--- 启动服务 ---" |> cyan |> output
-    
-    let serverDir = $"{deployDir}/Server"
-    
-    // 切换到 server 目录
-    $"cd ~/{serverDir}" |> bash output credential |> ignore
-    
-    // 1. 停止现有服务
-    "  1. 停止现有服务..." |> cyan |> output
-    
-    let stopCmds = [|
-        "sudo killall -9 dotnet || echo '没有运行中的 dotnet 进程'"
-        "sudo fuser -k 80/tcp || echo '端口 80 未被占用'"
-        "sudo fuser -k 443/tcp || echo '端口 443 未被占用'"
-    |]
-    for cmd in stopCmds do
-        let result = bash output credential cmd
-        result |> output
-    
-    // 2. 启动服务
-    "  2. 启动服务..." |> cyan |> output
-    let startCmd = "sudo nohup dotnet run > /tmp/aiarwa.log 2>&1 &"
-    let startResult = bash output credential startCmd
-    startResult |> output
-    
-    // 3. 等待启动
-    "  3. 等待服务启动（3秒）..." |> cyan |> output
-    bash output credential "sleep 3" |> ignore
-    
-    // 4. 验证服务是否运行
-    "  4. 验证服务状态..." |> cyan |> output
-    let running = checkServiceRunning output credential
-    
-    if running then
-        "✓ 服务启动成功" |> green |> output
-        "日志文件: /tmp/aiarwa.log" |> yellow |> output
-    else
-        "❌ 服务启动失败，请检查日志" |> red |> output
-        // 显示日志末尾
-        "--- 日志末尾 ---" |> yellow |> output
-        let logCmd = "tail -20 /tmp/aiarwa.log 2>/dev/null || echo '日志文件不存在'"
-        let logResult = bash output credential logCmd
-        logResult |> output
-    
-    running
 
 /// 部署代码（从 GitHub 更新所有仓库）- 逐条执行
 let exeDeployCode
@@ -317,27 +234,27 @@ let exeDeployCode
         showRepoStatus output credential "JCS" key__dir["JCS"]
         
         // ========================================
-        // 6. 构建前端
+        // 6. 构建前端 - 使用 code 参数
         // ========================================
         "6. 构建前端..." |> cyan |> output
-        buildFrontend output credential key__dir["code"] |> ignore
+        buildFrontend output credential code |> ignore
         
         // ========================================
-        // 7. 构建后端
+        // 7. 构建后端 - 使用 code 参数
         // ========================================
         "7. 构建后端..." |> cyan |> output
-        buildBackend output credential key__dir["code"] |> ignore
+        buildBackend output credential code |> ignore
         
         // ========================================
-        // 8. 启动服务
+        // 8. 启动服务 - 使用 code 参数
         // ========================================
         "8. 启动服务..." |> cyan |> output
-        let serviceRunning = checkServiceRunning output credential
+        let serviceRunning = checkDotNetServiceRunning output credential code
         if serviceRunning then
-            "✓ 服务已在运行" |> green |> output
-            "如需重启，请手动执行: sudo systemctl restart aiarwa" |> yellow |> output
+            $"✓ {code} 服务已在运行" |> green |> output
+            $"如需重启，请手动执行: sudo systemctl restart {code.ToLower()}" |> yellow |> output
         else
-            startServiceVerbose output credential key__dir["code"] |> ignore
+            startServiceVerbose output credential code |> ignore
         
         // ========================================
         // 9. 显示部署摘要
@@ -351,7 +268,7 @@ let exeDeployCode
    - Common: ~/{key__dir["Common"]}
    - JCS: ~/{key__dir["JCS"]}
 🔗 PostgreSQL: Host={server};Port=5432;Username=postgres;Password=***
-📋 日志文件: /tmp/aiarwa.log
+📋 日志文件: /tmp/{code.ToLower()}.log
 ========================================
 """
         summary |> cyan |> output
@@ -370,6 +287,7 @@ let routine
     let porto,user,server,target,portArg = credentialExpand credential
     let devDir = host.disk + "Dev/" + runtime.projectCode
     let output = runtime.output
+    let code = runtime.projectCode
 
     // 设置 SSH 私钥路径
     sshPrivateKeyPath <- devDir + "/id_rsa"
@@ -384,17 +302,21 @@ let routine
     // 2. 检查 SSH 免密登录是否已配置
     "2. 检查 SSH 免密登录状态..." |> cyan |> output
     checkSSHAuth output credential (host.disk + runtime.projectCode, host.deploy.gitEmail)
+    
+    // 3. 推送本地所有仓库变更到 GitHub
+    "3. 推送本地所有仓库变更到 GitHub..." |> cyan |> output
+    pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
         
-    // 3. 验证 PostgreSQL（确保服务运行）
-    "3. 验证 PostgreSQL..." |> cyan |> output
+    // 4. 验证 PostgreSQL（确保服务运行）
+    "4. 验证 PostgreSQL..." |> cyan |> output
     exeRemoteValidatePSQL output host.deploy.credential
 
-    // 4. 配置 PostgreSQL 远程访问（仅当未配置时）
-    "4. 配置 PostgreSQL 远程访问..." |> cyan |> output
+    // 5. 配置 PostgreSQL 远程访问（仅当未配置时）
+    "5. 配置 PostgreSQL 远程访问..." |> cyan |> output
     exeRemoteConfigurePSQL output host.deploy.credential host.deploy.postgresPwd
 
-    // 5. 部署代码（从 GitHub 更新）
-    "5. 部署代码..." |> cyan |> output
-    exeDeployCode output host.deploy.credential runtime.projectCode
+    // 6. 部署代码（从 GitHub 更新）
+    "6. 部署代码..." |> cyan |> output
+    exeDeployCode output host.deploy.credential code
         
     "\n✅ 部署流程完成!" |> green |> output

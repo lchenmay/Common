@@ -18,6 +18,10 @@ type Credential = (int option) * string * string
 /// 全局 SSH 私钥路径（由调用方设置）
 let mutable sshPrivateKeyPath = ""
 
+/// 清理命令中的 Windows 行尾符和多余空白
+let cleanCommand (cmd: string) =
+    cmd.Replace("\r\n", "\n").Replace("\r", "\n").Trim()
+
 /// 获取 SSH 私钥路径
 let getSshPrivateKeyPath() =
     if not (String.IsNullOrEmpty sshPrivateKeyPath) then
@@ -25,7 +29,6 @@ let getSshPrivateKeyPath() =
     else
         match Environment.GetEnvironmentVariable("SSH_PRIVATE_KEY_PATH") with
         | null | "" -> 
-            // 默认使用当前目录下的 id_rsa
             let defaultPath = Path.Combine(Directory.GetCurrentDirectory(), "id_rsa")
             if File.Exists(defaultPath) then defaultPath else ""
         | path -> path
@@ -85,14 +88,14 @@ let exec output setDir (fileName: string) (args: string) : string =
 let email__SshKey email = 
     $"ssh-keygen -t rsa -b 4096 -C {email}"
 
-/// SSH 远程执行（带自定义超时）
+/// SSH 远程执行（带自定义超时）- 自动清理命令
 let bashWithTimeout output credential (cmd: string) (timeoutMs: int) : string =
     let porto, user, server = credential
     let effectiveCmd = 
         if String.IsNullOrWhiteSpace cmd then 
             "echo 'SSH connection established'"
         else 
-            cmd
+            cleanCommand cmd
     
     let privateKeyArg = getSshPrivateKeyArg()
     let args = 
@@ -198,13 +201,8 @@ let remoteCopy_SshKeyCommands output credential (file: string) =
         
         let privateKeyArg = getSshPrivateKeyArg()
         
-        // 命令1：复制公钥
         let copyCmd = $"type \"{pubFile}\" | ssh {privateKeyArg} {portArg} {target} \"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys\""
-        
-        // 命令2：设置权限（目录 700，文件 600）
         let permCmd = $"chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
-        
-        // 命令3：验证连接
         let testCmd = $"echo 'SSH configured successfully'"
         
         Some (pubFile, copyCmd, permCmd, testCmd)
@@ -212,11 +210,7 @@ let remoteCopy_SshKeyCommands output credential (file: string) =
 /// 检查服务器是否启用公钥认证
 let checkPubkeyAuthentication output credential =
     let porto, user, server = credential
-    
-    // 直接使用 bash，不用 cmd /c
     let cmd = "grep -E '^PubkeyAuthentication yes' /etc/ssh/sshd_config"
-    
-    // 给予 60 秒超时（网络慢的情况）
     let result = bashWithTimeout output credential cmd 60000
     
     if result.Contains("PubkeyAuthentication yes") then
@@ -224,7 +218,6 @@ let checkPubkeyAuthentication output credential =
         true
     elif result.Contains("命令执行超时") || result.Contains("Connection timed out") then
         "⚠ SSH 连接超时，跳过公钥认证检查" |> yellow |> output
-        // 返回 true 允许流程继续（可能服务器已配置）
         true
     else
         "⚠ 服务器未启用公钥认证" |> yellow |> output
@@ -234,7 +227,5 @@ let checkPubkeyAuthentication output credential =
 // 构建 psql 命令 - 使用单引号包裹 SQL 避免 SSH 解析问题
 let psqlpath__Cmd (psqlPath:string) (sql:string) = 
     let cleanPath = psqlPath.Trim().Replace("\n", "").Replace("\r", "")
-    // 使用单引号代替双引号，避免 shell 解析
-    // 转义 SQL 中的单引号
     let escapedSql = sql.Replace("'", "'\\''")
     $"sudo -u postgres {cleanPath} -h /var/run/postgresql -p 5432 -c '{escapedSql}'"

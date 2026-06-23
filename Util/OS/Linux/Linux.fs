@@ -33,7 +33,6 @@ let checkSSHAuth
     else
         "⚠ SSH 免密登录未配置，开始配置..." |> yellow |> output
     
-        // 2a. 简要提示公钥认证（不检查，避免超时）
         "2a. 检查服务器公钥认证..." |> cyan |> output
         "提示：请确保服务器已启用 PubkeyAuthentication" |> yellow |> output
         let enableCmd = 
@@ -41,7 +40,6 @@ let checkSSHAuth
         $"如未启用，请手动执行: {enableCmd}" |> orange |> output
         "" |> output
     
-        // 2b. 生成 SSH 密钥
         let rsaFile = rsaPath + "/id_rsa"
         let pubFile = rsaFile + ".pub"
         
@@ -55,7 +53,6 @@ let checkSSHAuth
             Console.ReadKey() |> ignore
             "\n" |> output
     
-        // 2c. 获取复制公钥的命令
         "复制公钥到服务器（需要输入密码）..." |> cyan |> output
         
         match remoteCopy_SshKeyCommands output credential rsaFile with
@@ -88,7 +85,6 @@ let checkSSHAuth
 
             "\n" |> output
         
-            // 循环检查 SSH 配置，直到成功或用户取消
             let mutable retryCount = 0
             let maxRetries = 5
             let mutable configuredAfterRetry = false
@@ -127,9 +123,7 @@ let checkSSHAuth
                 "密钥文件不存在，用户取消部署" |> red |> output
                 failwith "密钥文件不存在，用户取消部署"
     
-    // 3. 测试 SSH 连接
     "3. 测试 SSH 连接..." |> cyan |> output
-    // 用快速检查代替完整命令
     let isConnected = checkSshKeyConfiguredWithTimeout output credential 10000
     if isConnected then
         "✓ SSH 连接正常" |> green |> output
@@ -137,18 +131,12 @@ let checkSSHAuth
         "⚠ SSH 连接异常，继续执行..." |> yellow |> output
 
 
-/// 检查并创建目录（如果不存在）- 使用 ~ 让 shell 解析
+/// 检查并创建目录（如果不存在）- 修复逻辑
 let ensureDirectory output credential (targetDir: string) =
     $"\n--- 检查目录 ~/{targetDir} ---" |> cyan |> output
     
-    // 检查目录是否存在
-    let checkCmd = $"""
-if [ -d ~/{targetDir} ]; then
-    echo "EXISTS"
-else
-    echo "NOT_EXISTS"
-fi
-"""
+    // 检查目录是否存在 - 使用简单的 if 语句避免多行问题
+    let checkCmd = $"if [ -d ~/{targetDir} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
     let checkResult = bash output credential checkCmd
     
     if checkResult.Contains("NOT_EXISTS") then
@@ -159,13 +147,7 @@ fi
         mkdirResult |> output
         
         // 验证创建是否成功
-        let verifyCmd = $"""
-if [ -d ~/{targetDir} ]; then
-    echo "CREATED"
-else
-    echo "FAILED"
-fi
-"""
+        let verifyCmd = $"if [ -d ~/{targetDir} ]; then echo 'CREATED'; else echo 'FAILED'; fi"
         let verifyResult = bash output credential verifyCmd
         
         if verifyResult.Contains("CREATED") then
@@ -182,13 +164,7 @@ fi
         $"✓ 目录 ~/{targetDir} 已存在" |> green |> output
         
         // 检查权限
-        let permCmd = $"""
-if [ -w ~/{targetDir} ] && [ -r ~/{targetDir} ] && [ -x ~/{targetDir} ]; then
-    echo "PERM_OK"
-else
-    echo "PERM_BAD"
-fi
-"""
+        let permCmd = $"if [ -w ~/{targetDir} ] && [ -r ~/{targetDir} ] && [ -x ~/{targetDir} ]; then echo 'PERM_OK'; else echo 'PERM_BAD'; fi"
         let permResult = bash output credential permCmd
         
         if permResult.Contains("PERM_OK") then
@@ -212,7 +188,6 @@ let ensureDirectories output credential (dirs: (string * string) []) =
             let success = ensureDirectory output credential path
             (name, path, success))
     
-    // 显示结果汇总
     "\n--- 目录检查结果 ---" |> cyan |> output
     let allSuccess = 
         results 
@@ -229,17 +204,11 @@ let ensureDirectories output credential (dirs: (string * string) []) =
     
     allSuccess
 
-/// 删除远程目录（用于清理）- 使用 ~ 让 shell 解析
+/// 删除远程目录（用于清理）
 let deleteRemoteDir output credential (targetDir: string) =
     $"\n--- 删除目录 ~/{targetDir} ---" |> yellow |> output
     
-    let checkCmd = $"""
-if [ -d ~/{targetDir} ]; then
-    echo "EXISTS"
-else
-    echo "NOT_EXISTS"
-fi
-"""
+    let checkCmd = $"if [ -d ~/{targetDir} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
     let checkResult = bash output credential checkCmd
     
     if checkResult.Contains("NOT_EXISTS") then
@@ -250,13 +219,7 @@ fi
         let deleteResult = bash output credential deleteCmd
         deleteResult |> output
         
-        let verifyCmd = $"""
-if [ -d ~/{targetDir} ]; then
-    echo "STILL_EXISTS"
-else
-    echo "DELETED"
-fi
-"""
+        let verifyCmd = $"if [ -d ~/{targetDir} ]; then echo 'STILL_EXISTS'; else echo 'DELETED'; fi"
         let verifyResult = bash output credential verifyCmd
         
         if verifyResult.Contains("DELETED") then
@@ -266,18 +229,86 @@ fi
             $"❌ 目录 ~/{targetDir} 删除失败" |> red |> output
             false
 
-/// 删除所有仓库目录
-let deleteAllRepos output credential (code: string) =
-    $"\n=== 开始删除所有仓库目录 ===" |> yellow |> output
+/// 检查服务是否运行
+let checkDotNetServiceRunning 
+    output 
+    credential
+    code =
+
+    let checkCmd = $"ps aux | grep -q '[d]otnet.*{code}' && echo 'RUNNING' || echo 'NOT_RUNNING'"
+    let result = bash output credential checkCmd
     
-    let repos = [
-        ("主项目", $"Dev/{code}")
-        ("Common", "Dev/Common")
-        ("JCS", "Dev/JCS")
-        ("Dev 根目录", "Dev")
-    ]
+    if result.Contains("RUNNING") then
+        $"✓ {code} .NET 服务正在运行" |> green |> output
+        true
+    else
+        $"⚠ {code} .NET 服务未运行" |> yellow |> output
+        false
+
+let startDotNetService output credential (code:string) =
+    $"\n--- 启动 Aiarwa 服务 ---" |> cyan |> output
     
-    for (name, path) in repos do
-        deleteRemoteDir output credential path |> ignore
+    let cmds = [|
+        $"cd ~/Dev/{code}/Server"
+        "sudo killall -9 dotnet || true"
+        "sudo fuser -k 80/tcp || true"
+        "sudo fuser -k 443/tcp || true"
+        $"sudo nohup dotnet run > /tmp/{code.ToLower()}.log 2>&1 &"
+        "sleep 3"
+    |]
     
-    "=== 所有仓库目录删除完成 ===" |> yellow |> output
+    cmds |> String.concat " && " |> bash output credential |> ignore
+    
+    // 验证服务是否启动
+    let running = checkDotNetServiceRunning output credential code
+    if running then
+        $"✓ {code} 服务启动成功" |> green |> output
+        $"日志文件: /tmp/{code.ToLower()}.log" |> yellow |> output
+    else
+        $"❌ {code} 服务启动失败，请检查日志" |> red |> output
+    
+    running
+
+/// 启动服务（逐条执行）
+let startServiceVerbose output credential (code:string) =
+    "\n--- 启动服务 ---" |> cyan |> output
+    
+    let serverDir = $"Dev/{code}/Server"
+    
+    // 1. 停止现有服务
+    "  1. 停止现有服务..." |> cyan |> output
+    
+    let stopCmds = [|
+        "sudo killall -9 dotnet || echo '没有运行中的 dotnet 进程'"
+        "sudo fuser -k 80/tcp || echo '端口 80 未被占用'"
+        "sudo fuser -k 443/tcp || echo '端口 443 未被占用'"
+    |]
+    for cmd in stopCmds do
+        let result = bash output credential cmd
+        result |> output
+    
+    // 2. 启动服务
+    "  2. 启动服务..." |> cyan |> output
+    let startCmd = $"cd ~/{serverDir} && sudo nohup dotnet run > /tmp/{code.ToLower()}.log 2>&1 &"
+    let startResult = bash output credential startCmd
+    startResult |> output
+    
+    // 3. 等待启动
+    "  3. 等待服务启动（3秒）..." |> cyan |> output
+    bash output credential "sleep 3" |> ignore
+    
+    // 4. 验证服务是否运行
+    "  4. 验证服务状态..." |> cyan |> output
+    let running = checkDotNetServiceRunning output credential code
+    
+    if running then
+        "✓ 服务启动成功" |> green |> output
+        $"日志文件: /tmp/{code.ToLower()}.log" |> yellow |> output
+    else
+        "❌ 服务启动失败，请检查日志" |> red |> output
+        "--- 日志末尾 ---" |> yellow |> output
+        let logCmd = $"tail -20 /tmp/{code.ToLower()}.log 2>/dev/null || echo '日志文件不存在'"
+        let logResult = bash output credential logCmd
+        logResult |> output
+    
+    running

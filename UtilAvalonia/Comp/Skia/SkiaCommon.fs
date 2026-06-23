@@ -19,14 +19,15 @@ let htmlcolor__SKColor (s: string) =
     let c = System.Drawing.ColorTranslator.FromHtml s
     SKColor(c.R, c.G, c.B, c.A)
 
-/// Vortice.Mathematics.Color4 → SKColor（用于 Palette 迁移）
-let color4__SKColor (r, g, b) =
+/// Vortice.Mathematics.Color4 (r,g,b) → SKColor（用于 Palette 迁移）
+let color4__SKColor (r: float32, g: float32, b: float32) =
     SKColor(
         byte (r * 255.f |> min 255.f |> max 0.f),
         byte (g * 255.f |> min 255.f |> max 0.f),
         byte (b * 255.f |> min 255.f |> max 0.f))
 
-let color4a__SKColor (r, g, b, a) =
+/// Vortice.Mathematics.Color4 (r,g,b,a) → SKColor
+let color4a__SKColor (r: float32, g: float32, b: float32, a: float32) =
     SKColor(
         byte (r * 255.f |> min 255.f |> max 0.f),
         byte (g * 255.f |> min 255.f |> max 0.f),
@@ -54,6 +55,14 @@ let drawToSKBitmap (w: uint32) (h: uint32) (drawer: Ctx -> unit) =
     use img = surface.Snapshot()
     SKBitmap.FromImage(img)
 
+/// 将 SKBitmap 像素拷贝到目标 IntPtr（用于 WriteableBitmap Lock）
+let private copyPixelsToPtr (skbmp: SKBitmap) (dstPtr: nativeint) =
+    let pixels = skbmp.GetPixels()
+    let byteCount = skbmp.ByteCount
+    let src = System.ReadOnlySpan<byte>(pixels.ToPointer(), byteCount)
+    let dst = System.Span<byte>(dstPtr.ToPointer(), byteCount)
+    src.CopyTo(dst)
+
 /// SKBitmap → Avalonia WriteableBitmap（用于 Image 控件显示）
 let SKBitmap__WriteableBitmap (skbmp: SKBitmap) =
     let avbmp = new Avalonia.Media.Imaging.WriteableBitmap(
@@ -63,25 +72,9 @@ let SKBitmap__WriteableBitmap (skbmp: SKBitmap) =
         Avalonia.Platform.AlphaFormat.Premul)
 
     use lck = avbmp.Lock()
-    let ptr = skbmp.GetPixels()
-    let len = skbmp.ByteCount
-    System.Runtime.InteropServices.Marshal.Copy(ptr, lck.Address, len)
+    copyPixelsToPtr skbmp lck.Address
 
     avbmp
-
-/// SKBitmap → GDI+ Bitmap（用于兼容旧代码）
-let SKBitmap__GdiBmp (skbmp: SKBitmap) =
-    use cw = new CodeWrapper("UtilAvalonia.Skia.SKBitmap__GdiBmp")
-
-    let gdibmp = new System.Drawing.Bitmap(skbmp.Width, skbmp.Height)
-    let data = gdibmp.LockBits(
-        System.Drawing.Rectangle(0, 0, skbmp.Width, skbmp.Height),
-        System.Drawing.Imaging.ImageLockMode.WriteOnly,
-        System.Drawing.Imaging.PixelFormat.Format32bppPArgb)
-    System.Runtime.InteropServices.Marshal.Copy(skbmp.GetPixels(), data.Scan0, skbmp.ByteCount)
-    gdibmp.UnlockBits(data)
-
-    gdibmp
 
 /// 从 Avalonia WriteableBitmap 创建渲染上下文
 let writeableBitmap__Ctx (wbmp: Avalonia.Media.Imaging.WriteableBitmap) =

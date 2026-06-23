@@ -8,15 +8,21 @@ open Util.GraphicsGeo
 open UtilAvalonia.Comp.Skia.SkiaCommon
 
 // ============================================================================
-// 文本绘制
+// 文本绘制（SkiaSharp 3.x 使用 SKFont 替代 SKPaint 上的字体属性）
 // ============================================================================
+
+/// 创建 Calibri SKFont
+let private calibriFont (fontSize: float32) =
+    new SKFont(SKTypeface.FromFamilyName("Calibri"), fontSize)
+
+/// 创建 Courier SKFont
+let private courierFont (fontSize: float32) =
+    new SKFont(SKTypeface.FromFamilyName("Courier"), fontSize)
 
 /// 测量文本尺寸——替代 UtilVortice.Graphics.measureText
 let measureText (fontSize: float32) (s: string) =
-    use paint = new SKPaint(
-        Typeface = SKTypeface.FromFamilyName("Calibri"),
-        TextSize = fontSize)
-    let bounds = paint.MeasureText(s)
+    use font = calibriFont fontSize
+    let bounds = font.MeasureText(s)
     {| Width = bounds; Height = fontSize |}
 
 /// 绘制文本（带背景）——替代 UtilVortice.Graphics.drawText
@@ -26,20 +32,15 @@ let drawText
     (s: string)
     (x: float32, y: float32) =
 
-    use paint = new SKPaint(
-        Typeface = SKTypeface.FromFamilyName("Calibri"),
-        TextSize = fontSize,
-        IsAntialias = true)
-
-    let textWidth = paint.MeasureText(s)
+    use font = calibriFont fontSize
+    let textWidth = font.MeasureText(s)
     let rect = SKRect(x, y, x + textWidth, y + fontSize)
 
-    paint.Color <- back
-    paint.Style <- SKPaintStyle.Fill
+    use paint = new SKPaint(Color = back, Style = SKPaintStyle.Fill, IsAntialias = true)
     canvas.DrawRect(rect, paint)
 
     paint.Color <- fore
-    canvas.DrawText(s, x, y + fontSize * 0.8f, paint)
+    canvas.DrawText(s, x, y + fontSize * 0.8f, SKTextAlign.Left, font, paint)
 
 /// 在图表内绘制文本（支持四角定位）——替代 UtilVortice.Graphics.drawTextOnChart
 let drawTextOnChart
@@ -49,12 +50,8 @@ let drawTextOnChart
     (l: float32, t: float32, r: float32, b: float32)
     (s: string, corner: ChartCorner) =
 
-    use paint = new SKPaint(
-        Typeface = SKTypeface.FromFamilyName("Courier"),
-        TextSize = fontSize,
-        IsAntialias = true)
-
-    let textWidth = paint.MeasureText(s)
+    use font = courierFont fontSize
+    let textWidth = font.MeasureText(s)
     let w = textWidth + padding * 2.f
     let h = fontSize + padding * 2.f
 
@@ -65,12 +62,11 @@ let drawTextOnChart
         | RightTop -> SKRect(r - w, t, r, t + h)
         | RightBottom -> SKRect(r - w, b - h, r, b)
 
-    paint.Color <- back
-    paint.Style <- SKPaintStyle.Fill
+    use paint = new SKPaint(Color = back, Style = SKPaintStyle.Fill, IsAntialias = true)
     canvas.DrawRect(rect, paint)
 
     paint.Color <- fore
-    canvas.DrawText(s, rect.Left + padding, rect.Top + padding + fontSize * 0.8f, paint)
+    canvas.DrawText(s, rect.Left + padding, rect.Top + padding + fontSize * 0.8f, SKTextAlign.Left, font, paint)
 
 /// 在图表内绘制垂直对齐文本——替代 UtilVortice.Graphics.drawTextVerOnChart
 let drawTextVerOnChart
@@ -80,12 +76,8 @@ let drawTextVerOnChart
     (l: float32, t: float32, r: float32, b: float32)
     (s: string, y: float32, align: VerAlign) =
 
-    use paint = new SKPaint(
-        Typeface = SKTypeface.FromFamilyName("Courier"),
-        TextSize = fontSize,
-        IsAntialias = true)
-
-    let textWidth = paint.MeasureText(s)
+    use font = courierFont fontSize
+    let textWidth = font.MeasureText(s)
     let w = textWidth + padding * 2.f
     let h = fontSize + padding * 2.f
 
@@ -98,12 +90,11 @@ let drawTextVerOnChart
         | RightCenter -> SKRect(r - w, y - 0.5f * h, r, y + 0.5f * h)
         | RightBelow -> SKRect(r - w, y, r, y + h)
 
-    paint.Color <- back
-    paint.Style <- SKPaintStyle.Fill
+    use paint = new SKPaint(Color = back, Style = SKPaintStyle.Fill, IsAntialias = true)
     canvas.DrawRect(rect, paint)
 
     paint.Color <- fore
-    canvas.DrawText(s, rect.Left + padding, rect.Top + padding + fontSize * 0.8f, paint)
+    canvas.DrawText(s, rect.Left + padding, rect.Top + padding + fontSize * 0.8f, SKTextAlign.Left, font, paint)
 
 /// 在图表内绘制水平对齐文本——替代 UtilVortice.Graphics.drawTextHorOnChart
 let drawTextHorOnChart
@@ -113,12 +104,8 @@ let drawTextHorOnChart
     (l: float32, t: float32, r: float32, b: float32)
     (s: string, x: float32, align: HorAlign) =
 
-    use paint = new SKPaint(
-        Typeface = SKTypeface.FromFamilyName("Courier"),
-        TextSize = fontSize,
-        IsAntialias = true)
-
-    let textWidth = paint.MeasureText(s)
+    use font = courierFont fontSize
+    let textWidth = font.MeasureText(s)
     let w = textWidth + padding * 2.f
     let h = fontSize + padding * 2.f
 
@@ -131,12 +118,11 @@ let drawTextHorOnChart
         | BottomCenter -> SKRect(x - 0.5f * w, b - h, x + 0.5f * w, b)
         | BottomRight -> SKRect(x, b - h, x + w, b)
 
-    paint.Color <- back
-    paint.Style <- SKPaintStyle.Fill
+    use paint = new SKPaint(Color = back, Style = SKPaintStyle.Fill, IsAntialias = true)
     canvas.DrawRect(rect, paint)
 
     paint.Color <- fore
-    canvas.DrawText(s, rect.Left + padding, rect.Top + padding + fontSize * 0.8f, paint)
+    canvas.DrawText(s, rect.Left + padding, rect.Top + padding + fontSize * 0.8f, SKTextAlign.Left, font, paint)
 
 // ============================================================================
 // 线条绘制

@@ -57,6 +57,4 @@ let flushFinalToWriteableBitmap (bilayer: BiLayer) =
     |> SKBitmap__WriteableBitmap
 
 /// 将 BiLayer 最终结果输出为 GDI+ Bitmap（用于兼容旧代码）
-let flushFinalToGdiBmp (bilayer: BiLayer) =
-    flushFinal bilayer
-    |> SKBitmap__GdiBmp
+/// 注意：UtilAvalonia 不依赖 System.Drawing.Common，如需 GDI+ Bitmap 请在调用方自行转换

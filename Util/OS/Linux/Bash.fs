@@ -20,7 +20,7 @@ let mutable sshPrivateKeyPath = ""
 
 /// 清理命令中的 Windows 行尾符和多余空白
 let cleanCommand (cmd: string) =
-    cmd.Replace("\r\n", "\n").Replace("\r", "\n").Trim()
+    cmd.Replace("\r\n", "\n").Replace("\r", "").Trim()
 
 /// 获取 SSH 私钥路径
 let getSshPrivateKeyPath() =
@@ -39,9 +39,10 @@ let getSshPrivateKeyArg() =
     | "" -> ""
     | path -> $"-i \"{path}\""
 
-/// 执行本地命令（支持自定义超时）
+/// 执行本地命令（支持自定义超时）- 修复编码和 PowerShell 兼容
 let execWithTimeout output setDir (fileName: string) (args: string) (timeoutMs: int) : string =
     $"{fileName}: {args}" |> cyan |> output
+    
     let psi = ProcessStartInfo(fileName, args)
     if not (String.IsNullOrWhiteSpace(setDir)) then
         psi.WorkingDirectory <- setDir
@@ -49,6 +50,10 @@ let execWithTimeout output setDir (fileName: string) (args: string) (timeoutMs: 
     psi.RedirectStandardError <- true
     psi.UseShellExecute <- false
     psi.CreateNoWindow <- true
+    
+    // 设置 UTF-8 编码
+    psi.StandardOutputEncoding <- Encoding.UTF8
+    psi.StandardErrorEncoding <- Encoding.UTF8
 
     use proc = new Process(StartInfo = psi)
     let outputBuilder = StringBuilder()
@@ -56,13 +61,15 @@ let execWithTimeout output setDir (fileName: string) (args: string) (timeoutMs: 
 
     proc.OutputDataReceived.Add(fun e -> 
         if not (String.IsNullOrEmpty e.Data) then 
-            e.Data |> output
-            outputBuilder.AppendLine(e.Data) |> ignore)
+            let data = e.Data
+            data |> output
+            outputBuilder.AppendLine(data) |> ignore)
 
     proc.ErrorDataReceived.Add(fun e -> 
         if not (String.IsNullOrEmpty e.Data) then 
-            e.Data |> output
-            errorBuilder.AppendLine(e.Data) |> ignore)
+            let data = e.Data
+            data |> output
+            errorBuilder.AppendLine(data) |> ignore)
 
     proc.Start() |> ignore
     proc.BeginOutputReadLine()
@@ -138,6 +145,8 @@ let checkSshKeyConfiguredWithTimeout output credential (timeoutMs: int) : bool =
     psi.RedirectStandardError <- true
     psi.UseShellExecute <- false
     psi.CreateNoWindow <- true
+    psi.StandardOutputEncoding <- Encoding.UTF8
+    psi.StandardErrorEncoding <- Encoding.UTF8
 
     use proc = new Process(StartInfo = psi)
     let outputBuilder = StringBuilder()

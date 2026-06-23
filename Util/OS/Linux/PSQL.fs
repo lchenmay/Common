@@ -42,6 +42,7 @@ let loadPathPSQL
         |]
         
         let mutable found = false
+        let mutable foundPath = ""
         for defaultPath in defaultPaths do
             if not found then
                 $"尝试默认路径: {defaultPath}" |> yellow |> output
@@ -50,19 +51,16 @@ let loadPathPSQL
                 if checkResult.Contains("EXISTS") then
                     $"✅ 找到 psql: {defaultPath}" |> green |> output
                     found <- true
-                    defaultPath
+                    foundPath <- defaultPath
                 else
-                    ""
-            else
-                ""
-        |> ignore
+                    ()
+        done
         
         // 如果仍然找不到，抛出异常
         if not found then
             failwith "psql not found on server. Please install PostgreSQL."
         else
-            // 返回找到的路径（这里简化处理，实际需要返回找到的路径）
-            "/usr/bin/psql"  // 默认返回
+            foundPath
     else
         $"✅ psql found: {cleanPath}" |> green |> output
         cleanPath
@@ -91,6 +89,48 @@ let checkPostgresRemoteConfigured output credential =
         $"⚠ 检查 PostgreSQL 配置时出错: {ex.Message}" |> yellow |> output
         false
 
+/// 检查 PostgreSQL 端口是否可访问（从外部）
+let checkPostgresPortAccessible output credential =
+    let porto,user,server,target,portArg = credentialExpand credential
+    
+    // 使用 nc 或 telnet 检查端口
+    let checkCmd = 
+        $"nc -zv {server} 5432 2>&1 || " +
+        $"timeout 5 telnet {server} 5432 2>&1 || " +
+        $"echo 'PORT_CHECK_FAILED'"
+    
+    let result = bash output credential checkCmd
+    
+    if result.Contains("succeeded") || result.Contains("Connected") || result.Contains("open") then
+        "✓ PostgreSQL 端口 5432 可从外部访问" |> green |> output
+        true
+    elif result.Contains("refused") || result.Contains("timeout") then
+        "⚠ PostgreSQL 端口 5432 无法从外部访问" |> yellow |> output
+        false
+    else
+        "⚠ 无法确定端口状态" |> yellow |> output
+        false
+
+/// 自动修复防火墙
+let autoFixFirewall output credential =
+    "\n--- 自动修复防火墙 ---" |> cyan |> output
+    
+    let cmds = [|
+        // 检查 firewalld 是否运行
+        "systemctl is-active firewalld > /dev/null 2>&1 && echo 'FIREWALLD_RUNNING' || echo 'FIREWALLD_NOT_RUNNING'"
+        // 如果 firewalld 运行，开放端口
+        "if systemctl is-active firewalld > /dev/null 2>&1; then firewall-cmd --permanent --add-port=5432/tcp && firewall-cmd --reload; fi"
+        // 如果 iptables 存在，添加规则
+        "if command -v iptables > /dev/null 2>&1; then iptables -C INPUT -p tcp --dport 5432 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 5432 -j ACCEPT; fi"
+        // 保存 iptables 规则
+        "if command -v iptables-save > /dev/null 2>&1; then iptables-save > /etc/sysconfig/iptables 2>/dev/null || true; fi"
+    |]
+    
+    for cmd in cmds do
+        let result = bash output credential cmd
+        result |> output
+    
+    "✓ 防火墙配置完成" |> green |> output
 
 /// 验证 PostgreSQL 状态的 SQL 语句
 let sqls_Validate psqlPath  = 
@@ -184,24 +224,29 @@ let sqls_ConfigureRemote psqlPath (password: string) =
         $"echo '--- Setting postgres user password ---'"
         $"ALTER USER postgres WITH PASSWORD '{password}';" |> psql__cmd
         
-        // 7. 重启 PostgreSQL 服务（使用 pg_ctl）
+        // 7. 开放防火墙端口
+        "echo '--- Opening firewall port 5432 ---'"
+        "systemctl is-active firewalld > /dev/null 2>&1 && firewall-cmd --permanent --add-port=5432/tcp && firewall-cmd --reload || echo 'firewalld not running'"
+        "command -v iptables > /dev/null 2>&1 && iptables -C INPUT -p tcp --dport 5432 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 5432 -j ACCEPT || true"
+        
+        // 8. 重启 PostgreSQL 服务（使用 pg_ctl）
         "echo '--- Restarting PostgreSQL ---'"
         "sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data restart -w -t 30"
         
-        // 8. 等待服务重启完成
+        // 9. 等待服务重启完成
         "sleep 3"
         
-        // 9. 验证连接
+        // 10. 验证连接
         "echo '--- Verifying connection ---'"
         "SELECT version();" |> psql__cmd
         
-        // 10. 显示当前的 listen_addresses
+        // 11. 显示当前的 listen_addresses
         "echo '--- Current listen_addresses ---'"
         "SHOW listen_addresses;" |> psql__cmd
         
-        // 11. 显示连接信息
-        "echo '--- Connection Info ---'"
-        "\\conninfo" |> psql__cmd
+        // 12. 显示监听端口状态
+        "echo '--- Port listening status ---'"
+        "ss -tlnp 2>/dev/null | grep 5432 || netstat -tlnp 2>/dev/null | grep 5432 || echo 'netstat/ss not available'"
         
         "echo '[OK] PostgreSQL configured for remote access'"
     |]
@@ -233,7 +278,7 @@ let exeRemoteValidatePSQL
         $"\nDeployment error: {ex.Message}" |> red |> output
         "Please check remote server status" |> yellow |> output
 
-/// 配置 PostgreSQL 允许远程连接（仅当需要时）
+/// 配置 PostgreSQL 允许远程连接（仅当需要时）- 包含自动修复
 let exeRemoteConfigurePSQL
     output
     (credential: Credential)
@@ -242,15 +287,40 @@ let exeRemoteConfigurePSQL
     let porto,user,server,target,portArg = credentialExpand credential
 
     try
-        // 先检查是否已配置
+        // 1. 检查是否已配置
         let alreadyConfigured = checkPostgresRemoteConfigured output credential
         
         if alreadyConfigured then
             "✓ PostgreSQL 已配置远程访问，跳过配置步骤" |> green |> output
-            // 打印连接字符串
-            let connStr = $"Host={server};Port=5432;Username=postgres;Password={postgresPwd};Database=postgres;SSL Mode=Disable"
-            "📋 PostgreSQL 连接字符串:" |> cyan |> output
-            connStr |> green |> output
+            
+            // 2. 检查端口是否可访问
+            let portAccessible = checkPostgresPortAccessible output credential
+            
+            if not portAccessible then
+                "⚠ 端口不可访问，尝试自动修复防火墙..." |> yellow |> output
+                autoFixFirewall output credential
+                
+                // 重新检查
+                let retryAccessible = checkPostgresPortAccessible output credential
+                if retryAccessible then
+                    "✓ 端口已开放" |> green |> output
+                else
+                    "⚠ 端口仍不可访问，请手动检查防火墙设置" |> yellow |> output
+            else
+                "✓ 端口可访问" |> green |> output
+            
+            // 打印连接信息
+            let conn = $"Host={server};Port=5432;Username=postgres;Password={postgresPwd};Database=postgres;SSL Mode=Disable"
+            "📋 PostgreSQL 连接信息:" |> cyan |> output
+            "========================================" |> cyan |> output
+            $"  Host: {server}" |> green |> output
+            $"  Port: 5432" |> green |> output
+            $"  Username: postgres" |> green |> output
+            $"  Password: {postgresPwd}" |> green |> output
+            $"  Database: postgres" |> green |> output
+            $"  SSL Mode: Disable" |> green |> output
+            "========================================" |> cyan |> output
+            conn
         else
             "⚠ PostgreSQL 未配置远程访问，开始配置..." |> yellow |> output
             
@@ -261,11 +331,51 @@ let exeRemoteConfigurePSQL
 
             $"\n>>> {server} PostgreSQL remote configuration completed." |> cyan |> output
             
-            // 打印连接字符串
-            let connStr = $"Host={server};Port=5432;Username=postgres;Password={postgresPwd};Database=postgres;SSL Mode=Disable"
-            "📋 PostgreSQL 连接字符串:" |> cyan |> output
-            connStr |> green |> output
+            // 验证配置是否成功
+            let verifyConfigured = checkPostgresRemoteConfigured output credential
+            if verifyConfigured then
+                "✓ 配置验证通过" |> green |> output
+            else
+                "⚠ 配置可能未生效，尝试重启 PostgreSQL..." |> yellow |> output
+                let restartCmd = "sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data restart -w -t 30"
+                bash output credential restartCmd |> ignore
+                // 等待重启完成
+                bash output credential "sleep 3" |> ignore
+                
+                let retryConfigured = checkPostgresRemoteConfigured output credential
+                if retryConfigured then
+                    "✓ 配置验证通过" |> green |> output
+                else
+                    "⚠ 配置仍未生效，请手动检查" |> yellow |> output
+            
+            // 检查端口
+            let portAccessible = checkPostgresPortAccessible output credential
+            if not portAccessible then
+                "⚠ 端口不可访问，尝试自动修复防火墙..." |> yellow |> output
+                autoFixFirewall output credential
+                
+                let retryAccessible = checkPostgresPortAccessible output credential
+                if retryAccessible then
+                    "✓ 端口已开放" |> green |> output
+                else
+                    "⚠ 端口仍不可访问，请手动检查防火墙设置" |> yellow |> output
+            else
+                "✓ 端口可访问" |> green |> output
+            
+            // 打印连接信息
+            let conn = $"Host={server};Port=5432;Username=postgres;Password={postgresPwd};Database=postgres;SSL Mode=Disable"
+            "📋 PostgreSQL 连接信息:" |> cyan |> output
+            "========================================" |> cyan |> output
+            $"  Host: {server}" |> green |> output
+            $"  Port: 5432" |> green |> output
+            $"  Username: postgres" |> green |> output
+            $"  Password: {postgresPwd}" |> green |> output
+            $"  Database: postgres" |> green |> output
+            $"  SSL Mode: Disable" |> green |> output
+            "========================================" |> cyan |> output
             "⚠ 注意: 如果从外部连接，请确保防火墙允许端口 5432" |> yellow |> output
+            conn
     with ex ->
         $"\nConfiguration error: {ex.Message}" |> red |> output
         "Please check remote server status" |> yellow |> output
+        ""

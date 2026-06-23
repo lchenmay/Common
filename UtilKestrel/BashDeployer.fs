@@ -15,22 +15,21 @@ open UtilKestrel.Types
 
 // ==================== Git 推送函数 ====================
 
-/// 推送本地仓库变更（单个仓库）
+/// 推送本地仓库变更（单个仓库）- 使用分号分隔，兼容 Windows PowerShell
 let pushLocalRepo output (repoPath: string) (gitName: string) (gitEmail: string) =
     $"\n--- 推送 {repoPath} 仓库变更 ---" |> cyan |> output
     
-    let cmds = [|
-        $"cd {repoPath}"
-        $"git config user.name \"{gitName}\""
-        $"git config user.email \"{gitEmail}\""
-        "git add ."
-        "git commit -m \"auto-deploy\" || echo '没有变更需要提交'"
+    // PowerShell 使用分号分隔命令，不支持 &&
+    let cmd = 
+        $"cd {repoPath}; " +
+        $"git config user.name \"{gitName}\"; " +
+        $"git config user.email \"{gitEmail}\"; " +
+        "git add .; " +
+        "git commit -m \"auto-deploy\"; " +
         "git push"
-    |]
     
-    for cmd in cmds do
-        let result = exec output repoPath "powershell" cmd
-        result |> output
+    let result = exec output repoPath "powershell" cmd
+    result |> output
     
     "✓ 推送完成" |> green |> output
 
@@ -45,7 +44,10 @@ let pushAllLocalRepos output (code: string) (gitName: string) (gitEmail: string)
     ]
     
     for (name, path) in repos do
-        pushLocalRepo output path gitName gitEmail |> ignore
+        if Directory.Exists(path) then
+            pushLocalRepo output path gitName gitEmail |> ignore
+        else
+            $"⚠ 目录不存在: {path}" |> yellow |> output
         "\n" |> output
     
     "=== 所有本地仓库推送完成 ===" |> yellow |> output
@@ -169,6 +171,14 @@ let buildBackend output credential (code: string) =
         true
 
 
+/// 获取仓库 URL
+let getRepoUrl (code: string) =
+    match code with
+    | "Aiarwa" -> "https://github.com/lchenmay/Aiarwa.git"
+    | "Common" -> "https://github.com/lchenmay/Common.git"
+    | "JCS" -> "https://github.com/lchenmay/JCS.git"
+    | _ -> $"https://github.com/siduochen/{code}.git"
+
 /// 部署代码（从 GitHub 更新所有仓库）- 逐条执行
 let exeDeployCode
     output
@@ -209,21 +219,21 @@ let exeDeployCode
         // ========================================
         "2. 从 GitHub 更新主项目仓库..." |> cyan |> output
         updateSingleRepo output credential 
-            code $"https://github.com/siduochen/{code}.git" key__dir["code"] |> ignore
+            code (getRepoUrl code) key__dir["code"] |> ignore
         
         // ========================================
         // 3. 更新 Common 仓库
         // ========================================
         "3. 从 GitHub 更新 Common 仓库..." |> cyan |> output
         updateSingleRepo output credential 
-            "Common" "https://github.com/lchenmay/Common.git" key__dir["Common"] |> ignore
+            "Common" (getRepoUrl "Common") key__dir["Common"] |> ignore
         
         // ========================================
         // 4. 更新 JCS 仓库
         // ========================================
         "4. 从 GitHub 更新 JCS 仓库..." |> cyan |> output
         updateSingleRepo output credential 
-            "JCS" "https://github.com/lchenmay/JCS.git" key__dir["JCS"] |> ignore
+            "JCS" (getRepoUrl "JCS") key__dir["JCS"] |> ignore
         
         // ========================================
         // 5. 显示所有仓库状态
@@ -313,10 +323,11 @@ let routine
 
     // 5. 配置 PostgreSQL 远程访问（仅当未配置时）
     "5. 配置 PostgreSQL 远程访问..." |> cyan |> output
-    exeRemoteConfigurePSQL output host.deploy.credential host.deploy.postgresPwd
+    let conn = exeRemoteConfigurePSQL output host.deploy.credential host.deploy.postgresPwd
 
     // 6. 部署代码（从 GitHub 更新）
     "6. 部署代码..." |> cyan |> output
     exeDeployCode output host.deploy.credential code
         
-    "\n✅ 部署流程完成!" |> green |> output
+    $"\n✅ {conn}" |> green |> output
+    "\n✅ 部署流程完成 " |> green |> output

@@ -477,7 +477,7 @@ let routine
         
     // 2. 检查 SSH 免密登录是否已配置
     "2. 检查 SSH 免密登录状态..." |> cyan |> output
-    checkSSHAuth output credential (host.disk + runtime.projectCode, host.deploy.gitEmail)
+    checkSSHAuth output credential (host.disk + "Dev/" + runtime.projectCode, host.deploy.gitEmail)
     
     // 3. 推送本地所有仓库变更到 GitHub
     "3. 推送本地所有仓库变更到 GitHub..." |> cyan |> output

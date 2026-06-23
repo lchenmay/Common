@@ -262,7 +262,7 @@ type ApiDbCtx<'Data,'p> = {
 marshall:MarshallTypes<'Data>
 metadata:MetadataTypes<'p>
 __items: unit -> 'Data[]
-listFilter: 'Data -> bool
+listFilter: Json -> 'Data -> bool
 key__sortingo: (int -> string -> ('Data[] -> 'Data[]) option) option
 searching: string -> 'Data -> bool
 rcd__existing: Rcd<'p> -> bool
@@ -338,7 +338,7 @@ let apiBuilder
 
     | "ls" ->  
         adx.__items()
-        |> Array.filter adx.listFilter
+        |> Array.filter (adx.listFilter json)
         |> sorting
         |> paging adx.marshall.data__json json 
         |> InternalEr.Ok

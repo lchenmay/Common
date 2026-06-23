@@ -132,6 +132,22 @@ let autoFixFirewall output credential =
     
     "✓ 防火墙配置完成" |> green |> output
 
+/// 检查 PostgreSQL 实际监听地址
+let checkPostgresActualListening output credential =
+    let cmd = "ss -tlnp 2>/dev/null | grep 5432 || netstat -tlnp 2>/dev/null | grep 5432"
+    let result = bash output credential cmd
+    result |> output
+    
+    if result.Contains("0.0.0.0:5432") || result.Contains("*:5432") || result.Contains(":::5432") then
+        "✓ PostgreSQL 正在监听所有接口 (0.0.0.0:5432)" |> green |> output
+        true
+    elif result.Contains("127.0.0.1:5432") then
+        "⚠ PostgreSQL 只监听本地 (127.0.0.1:5432)" |> yellow |> output
+        false
+    else
+        "⚠ 无法确定 PostgreSQL 监听地址" |> yellow |> output
+        false
+
 /// 验证 PostgreSQL 状态的 SQL 语句
 let sqls_Validate psqlPath  = 
 
@@ -293,7 +309,26 @@ let exeRemoteConfigurePSQL
         if alreadyConfigured then
             "✓ PostgreSQL 已配置远程访问，跳过配置步骤" |> green |> output
             
-            // 2. 检查端口是否可访问
+            // 2. 检查实际监听地址
+            let listeningOk = checkPostgresActualListening output credential
+            
+            if not listeningOk then
+                "⚠ PostgreSQL 未监听所有接口，尝试修复..." |> yellow |> output
+                // 修改配置
+                let psqlPath = loadPathPSQL output credential
+                let fixCmd1 = $"sed -i 's@^listen_addresses = .*@listen_addresses = '\\''*'\\''@' /var/lib/pgsql/14/data/postgresql.conf"
+                let fixCmd2 = $"grep -q '^listen_addresses' /var/lib/pgsql/14/data/postgresql.conf || echo \"listen_addresses = '*'\" >> /var/lib/pgsql/14/data/postgresql.conf"
+                bash output credential fixCmd1 |> ignore
+                bash output credential fixCmd2 |> ignore
+                // 重启
+                let restartCmd = "sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data restart -w -t 30"
+                bash output credential restartCmd |> ignore
+                bash output credential "sleep 3" |> ignore
+                "✓ 配置已修复" |> green |> output
+            // 注意：这里删除了 fi，因为 F# 不需要
+            // 如果不需要额外的 else 分支，直接结束 if 块
+            
+            // 3. 检查端口是否可访问
             let portAccessible = checkPostgresPortAccessible output credential
             
             if not portAccessible then
@@ -306,6 +341,7 @@ let exeRemoteConfigurePSQL
                     "✓ 端口已开放" |> green |> output
                 else
                     "⚠ 端口仍不可访问，请手动检查防火墙设置" |> yellow |> output
+                    "提示: 可能需要在云服务商控制台开放 5432 端口" |> yellow |> output
             else
                 "✓ 端口可访问" |> green |> output
             
@@ -320,6 +356,8 @@ let exeRemoteConfigurePSQL
             $"  Database: postgres" |> green |> output
             $"  SSL Mode: Disable" |> green |> output
             "========================================" |> cyan |> output
+            "⚠ 注意: 如果从外部连接，请确保防火墙允许端口 5432" |> yellow |> output
+            "⚠ 如果使用云服务器，请在安全组/防火墙规则中开放 5432 端口" |> yellow |> output
             conn
         else
             "⚠ PostgreSQL 未配置远程访问，开始配置..." |> yellow |> output
@@ -347,6 +385,10 @@ let exeRemoteConfigurePSQL
                     "✓ 配置验证通过" |> green |> output
                 else
                     "⚠ 配置仍未生效，请手动检查" |> yellow |> output
+            // 注意：这里删除了 fi
+            
+            // 检查实际监听
+            checkPostgresActualListening output credential |> ignore
             
             // 检查端口
             let portAccessible = checkPostgresPortAccessible output credential
@@ -359,6 +401,7 @@ let exeRemoteConfigurePSQL
                     "✓ 端口已开放" |> green |> output
                 else
                     "⚠ 端口仍不可访问，请手动检查防火墙设置" |> yellow |> output
+                    "提示: 可能需要在云服务商控制台开放 5432 端口" |> yellow |> output
             else
                 "✓ 端口可访问" |> green |> output
             
@@ -374,6 +417,7 @@ let exeRemoteConfigurePSQL
             $"  SSL Mode: Disable" |> green |> output
             "========================================" |> cyan |> output
             "⚠ 注意: 如果从外部连接，请确保防火墙允许端口 5432" |> yellow |> output
+            "⚠ 如果使用云服务器，请在安全组/防火墙规则中开放 5432 端口" |> yellow |> output
             conn
     with ex ->
         $"\nConfiguration error: {ex.Message}" |> red |> output

@@ -75,7 +75,7 @@ let updateDbStructure runtime conn =
             | Rdbms.PostgreSql -> "sqlPostgreSQL.sql"
             
         // C:\Dev\XXX\XXX.Server\bin\Debug\net8.0
-        Path.Combine(runtime.host.VsDirSolution,runtime.projectCode + ".Shared",file)
+        runtime.host.disk + "Dev/" + runtime.projectCode + "/" + runtime.projectCode + ".Shared/" + file
 
 
     match

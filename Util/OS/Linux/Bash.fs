@@ -1,4 +1,4 @@
-﻿module Util.Bash
+﻿module Util.Linux.Bash
 
 open System
 open System.Runtime.InteropServices
@@ -112,6 +112,13 @@ let bashMultiple output credential cmds =
     |> String.concat " && "
     |> bash output credential
 
+let execute output credential cmd =
+    $"\n--- Executing: {cmd} ---" |> cyan |> output
+    let result = bash output credential cmd
+    if not (String.IsNullOrEmpty result) then
+        result |> output
+    result
+
 /// 检查 SSH 免密登录是否已配置成功（带超时）
 let checkSshKeyConfiguredWithTimeout output credential (timeoutMs: int) : bool =
     let porto, user, server = credential
@@ -222,3 +229,12 @@ let checkPubkeyAuthentication output credential =
     else
         "⚠ 服务器未启用公钥认证" |> yellow |> output
         false
+
+
+// 构建 psql 命令 - 使用单引号包裹 SQL 避免 SSH 解析问题
+let psqlpath__Cmd (psqlPath:string) (sql:string) = 
+    let cleanPath = psqlPath.Trim().Replace("\n", "").Replace("\r", "")
+    // 使用单引号代替双引号，避免 shell 解析
+    // 转义 SQL 中的单引号
+    let escapedSql = sql.Replace("'", "'\\''")
+    $"sudo -u postgres {cleanPath} -h /var/run/postgresql -p 5432 -c '{escapedSql}'"

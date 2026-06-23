@@ -25,20 +25,28 @@ open Util.Http
 
 type ApiReturn = (string * Json)[]
 
+type Deploy = {
+mutable credential: Util.Linux.Bash.Credential
+mutable postgresPwd: string
+mutable gitName: string
+mutable gitEmail: string }
+
 type Host<'Data> = {
 mutable data: 'Data
+
 mutable port: int
 mutable rdbms: Util.Db.Rdbms
 mutable conn: string
 mutable url: string
+
 mutable cert: string
 mutable certpwd: string
 
+mutable deploy: Deploy
+
 mutable updateDatabase: bool
 
-mutable VsDirSolution: string
-mutable req__vueDeployDir: string
-mutable fsDir: string }
+mutable disk: string }
 
 type SessionTemplate<'User,'Data> = { 
 since: DateTime
@@ -50,6 +58,8 @@ session: string }
 type SessionsTemplate<'User,'Data> = ConcurrentDictionary<string,SessionTemplate<'User,'Data>>
 
 type RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData> = {
+since: DateTime
+mutable inited: bool
 host: Host<'HostData>
 data: 'RuntimeData
 mutable langs: string[]

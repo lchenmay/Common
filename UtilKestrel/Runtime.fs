@@ -26,6 +26,8 @@ let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
     (host:Host<'HostData>)
     (data:'RuntimeData):RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData> =
     {
+        since = DateTime.UtcNow
+        inited = false
         host = host
         data = data 
         langs = [| en |]

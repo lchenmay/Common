@@ -16,15 +16,14 @@ open Microsoft.Extensions.FileProviders
 open Microsoft.Extensions.Logging
 open System.Net.WebSockets
 
-open Util.Bash
+open Util.Linux.Bash
 
+open UtilKestrel.Types
 open UtilKestrel.Ctx
 
 let runServer 
-    runtime
-    vueDistPath
+    (runtime:RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData>)
     (incomingFile,fileid__bin,id__thumbnail)
-    (cert,certpwd)
     (apiEngine,wsEngineo)
     (port80, port443)
     output
@@ -71,11 +70,11 @@ let runServer
 
         options.ListenAnyIP(port80)
         options.ListenAnyIP(port443, fun listenOptions ->
-            if File.Exists cert then
-                listenOptions.UseHttps(cert,certpwd) |> ignore
-                "SSL Certificate loaded from: " + cert |> green |> output
+            if File.Exists runtime.host.cert then
+                listenOptions.UseHttps(runtime.host.cert,runtime.host.certpwd) |> ignore
+                "SSL Certificate loaded from: " + runtime.host.cert |> green |> output
             else
-                "Warning: SSL certificate not found at " + cert + ". HTTPS may not work." |> red |> output
+                "Warning: SSL certificate not found at " + runtime.host.cert + ". HTTPS may not work." |> red |> output
         )
     ) |> ignore
 
@@ -114,7 +113,8 @@ let runServer
     ) |> ignore
 
     // Vue 静态文件托管
-    if Directory.Exists(vueDistPath) then
+    let vueDistPath = runtime.host.disk + "Dev/" + runtime.projectCode + "/vscode/dist"
+    if Directory.Exists vueDistPath then
         let fileServerOptions = StaticFileOptions()
         fileServerOptions.FileProvider <- new PhysicalFileProvider(vueDistPath)
         app.UseStaticFiles(fileServerOptions) |> ignore

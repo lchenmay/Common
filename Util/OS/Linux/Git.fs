@@ -114,7 +114,7 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
             
             true
 
-/// 显示单个仓库状态（逐条执行）
+/// 显示单个仓库状态（逐条执行）- 修复 cd 命令问题
 let showRepoStatus output credential (repoName: string) (targetDir: string) =
     $"\n📁 {repoName} 状态:" |> cyan |> output
     
@@ -132,24 +132,21 @@ let showRepoStatus output credential (repoName: string) (targetDir: string) =
         if isGit.Contains("NOT_GIT") then
             $"⚠ ~/{targetDir} 不是 Git 仓库" |> yellow |> output
         else
-            // 切换到目标目录
-            let cdCmd = $"cd ~/{targetDir}"
-            bash output credential cdCmd |> ignore
-            
+            // 使用 && 连接命令，确保在正确目录下执行
             // 获取分支
             "  Branch:" |> cyan |> output
-            let branchCmd = "git branch --show-current 2>/dev/null || echo 'N/A'"
+            let branchCmd = $"cd ~/{targetDir} && git branch --show-current 2>/dev/null || echo 'N/A'"
             let branchResult = bash output credential branchCmd
             branchResult |> output
             
             // 获取提交哈希
             "  Commit:" |> cyan |> output
-            let commitCmd = "git rev-parse --short HEAD 2>/dev/null || echo 'N/A'"
+            let commitCmd = $"cd ~/{targetDir} && git rev-parse --short HEAD 2>/dev/null || echo 'N/A'"
             let commitResult = bash output credential commitCmd
             commitResult |> output
             
             // 获取提交信息
             "  Message:" |> cyan |> output
-            let msgCmd = "git log -1 --pretty=%s 2>/dev/null || echo 'N/A'"
+            let msgCmd = "cd ~/" + targetDir + " && git log -1 --pretty=%s 2>/dev/null || echo 'N/A'"
             let msgResult = bash output credential msgCmd
             msgResult |> output

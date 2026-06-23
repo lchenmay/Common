@@ -53,6 +53,98 @@ let pushAllLocalRepos output (code: string) (gitName: string) (gitEmail: string)
     "=== 所有本地仓库推送完成 ===" |> yellow |> output
 
 
+// ==================== 环境检查函数 ====================
+
+/// 检查并安装 Node.js
+let ensureNodeInstalled output credential =
+    "\n--- 检查 Node.js ---" |> cyan |> output
+    
+    // 检查 node 是否已安装
+    let checkNodeCmd = "command -v node > /dev/null 2>&1 && echo 'INSTALLED' || echo 'NOT_INSTALLED'"
+    let nodeStatus = bash output credential checkNodeCmd
+    
+    if nodeStatus.Contains("INSTALLED") then
+        // 显示版本
+        let versionCmd = "node --version 2>/dev/null || echo 'unknown'"
+        let version = bash output credential versionCmd
+        $"✓ Node.js 已安装: {version.Trim()}" |> green |> output
+        true
+    else
+        "⚠ Node.js 未安装，正在安装..." |> yellow |> output
+        
+        // 使用 nodesource 安装 Node.js 18.x
+        let installCmds = [|
+            "curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -"
+            "yum install -y nodejs || dnf install -y nodejs"
+        |]
+        
+        for cmd in installCmds do
+            let result = bash output credential cmd
+            result |> output
+        
+        // 验证安装
+        let verifyCmd = "command -v node > /dev/null 2>&1 && echo 'INSTALLED' || echo 'NOT_INSTALLED'"
+        let verifyResult = bash output credential verifyCmd
+        
+        if verifyResult.Contains("INSTALLED") then
+            let versionCmd = "node --version 2>/dev/null || echo 'unknown'"
+            let version = bash output credential versionCmd
+            $"✓ Node.js 安装成功: {version.Trim()}" |> green |> output
+            true
+        else
+            "❌ Node.js 安装失败" |> red |> output
+            false
+
+/// 检查并安装 Bun
+let ensureBunInstalled output credential =
+    "\n--- 检查 Bun ---" |> cyan |> output
+    
+    // 检查 bun 是否已安装
+    let checkBunCmd = "if [ -f /root/.bun/bin/bun ]; then echo 'INSTALLED'; else echo 'NOT_INSTALLED'; fi"
+    let bunStatus = bash output credential checkBunCmd
+    
+    if bunStatus.Contains("INSTALLED") then
+        // 显示版本
+        let versionCmd = "/root/.bun/bin/bun --version 2>/dev/null || echo 'unknown'"
+        let version = bash output credential versionCmd
+        $"✓ Bun 已安装: {version.Trim()}" |> green |> output
+        true
+    else
+        "⚠ Bun 未安装，正在安装..." |> yellow |> output
+        
+        // 安装 bun
+        let installCmd = "curl -fsSL https://bun.sh/install | bash"
+        let installResult = bash output credential installCmd
+        installResult |> output
+        
+        // 验证安装
+        let verifyCmd = "if [ -f /root/.bun/bin/bun ]; then echo 'INSTALLED'; else echo 'NOT_INSTALLED'; fi"
+        let verifyResult = bash output credential verifyCmd
+        
+        if verifyResult.Contains("INSTALLED") then
+            let versionCmd = "/root/.bun/bin/bun --version 2>/dev/null || echo 'unknown'"
+            let version = bash output credential versionCmd
+            $"✓ Bun 安装成功: {version.Trim()}" |> green |> output
+            true
+        else
+            "❌ Bun 安装失败" |> red |> output
+            false
+
+/// 确保环境就绪（Node.js + Bun）
+let ensureEnvironment output credential =
+    "\n=== 确保环境就绪 ===" |> cyan |> output
+    
+    let nodeOk = ensureNodeInstalled output credential
+    let bunOk = ensureBunInstalled output credential
+    
+    if nodeOk && bunOk then
+        "✓ 环境就绪" |> green |> output
+        true
+    else
+        "⚠ 部分环境安装失败" |> yellow |> output
+        false
+
+
 // ==================== 目录管理函数 ====================
 
 /// 删除所有仓库目录
@@ -236,29 +328,68 @@ let exeDeployCode
             "JCS" (getRepoUrl "JCS") key__dir["JCS"] |> ignore
         
         // ========================================
-        // 5. 显示所有仓库状态
+        // 5. 确保环境就绪（Node.js + Bun）
         // ========================================
-        "5. 显示所有仓库状态..." |> cyan |> output
+        "5. 确保环境就绪..." |> cyan |> output
+        ensureEnvironment output credential |> ignore
+        
+        // ========================================
+        // 6. 更新项目依赖（在 git pull 之后）
+        // ========================================
+        "6. 更新项目依赖..." |> cyan |> output
+        
+        // 前端依赖
+        let vscodeDir = key__dir["code"] + "/vscode"
+        let updateFrontendCmd = $"""
+cd ~/{vscodeDir}
+if [ -f package.json ]; then
+    /root/.bun/bin/bun install
+    echo '前端依赖更新完成'
+else
+    echo '未找到 package.json，跳过'
+fi
+"""
+        let updateResult = bash output credential updateFrontendCmd
+        updateResult |> output
+        
+        // 后端依赖
+        let serverDir = key__dir["code"] + "/Server"
+        let updateBackendCmd = $"""
+cd ~/{serverDir}
+if [ -f *.fsproj ]; then
+    dotnet restore
+    echo '后端依赖更新完成'
+else
+    echo '未找到 .fsproj，跳过'
+fi
+"""
+        let updateBackendResult = bash output credential updateBackendCmd
+        updateBackendResult |> output
+        
+        // ========================================
+        // 7. 显示所有仓库状态
+        // ========================================
+        "7. 显示所有仓库状态..." |> cyan |> output
         showRepoStatus output credential code key__dir["code"]
         showRepoStatus output credential "Common" key__dir["Common"]
         showRepoStatus output credential "JCS" key__dir["JCS"]
         
         // ========================================
-        // 6. 构建前端 - 使用 code 参数
+        // 8. 构建前端 - 使用 code 参数
         // ========================================
-        "6. 构建前端..." |> cyan |> output
+        "8. 构建前端..." |> cyan |> output
         buildFrontend output credential code |> ignore
         
         // ========================================
-        // 7. 构建后端 - 使用 code 参数
+        // 9. 构建后端 - 使用 code 参数
         // ========================================
-        "7. 构建后端..." |> cyan |> output
+        "9. 构建后端..." |> cyan |> output
         buildBackend output credential code |> ignore
         
         // ========================================
-        // 8. 启动服务 - 使用 code 参数
+        // 10. 启动服务 - 使用 code 参数
         // ========================================
-        "8. 启动服务..." |> cyan |> output
+        "10. 启动服务..." |> cyan |> output
         let serviceRunning = checkDotNetServiceRunning output credential code
         if serviceRunning then
             $"✓ {code} 服务已在运行" |> green |> output
@@ -267,7 +398,7 @@ let exeDeployCode
             startServiceVerbose output credential code |> ignore
         
         // ========================================
-        // 9. 显示部署摘要
+        // 11. 显示部署摘要
         // ========================================
         let summary = $"""
 ========================================

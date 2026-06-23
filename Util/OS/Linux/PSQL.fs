@@ -29,7 +29,7 @@ let loadPathPSQL
     // 验证路径是否有效 - 去除空白字符
     let cleanPath = psqlPath.Trim().Replace("\n", "").Replace("\r", "")
     
-    if String.IsNullOrEmpty cleanPath || not (cleanPath.Contains("psql")) then
+    if String.IsNullOrEmpty cleanPath || cleanPath.Contains("psql") |> not then
         "❌ psql not found on server" |> red |> output
         "请检查 PostgreSQL 是否已安装" |> yellow |> output
         // 尝试使用默认路径
@@ -42,26 +42,21 @@ let loadPathPSQL
             "/usr/pgsql-12/bin/psql"
         |]
         
-        let mutable found = false
-        let mutable foundPath = ""
-        for defaultPath in defaultPaths do
-            if not found then
+        let tryPath = 
+            defaultPaths 
+            |> Array.tryFind (fun defaultPath ->
                 $"尝试默认路径: {defaultPath}" |> yellow |> output
                 let checkCmd = $"if [ -f {defaultPath} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
                 let checkResult = bash output credential checkCmd
                 if checkResult.Contains("EXISTS") then
                     $"✅ 找到 psql: {defaultPath}" |> green |> output
-                    found <- true
-                    foundPath <- defaultPath
+                    true
                 else
-                    ()
-        done
+                    false)
         
-        // 如果仍然找不到，抛出异常
-        if not found then
-            failwith "psql not found on server. Please install PostgreSQL."
-        else
-            foundPath
+        match tryPath with
+        | Some foundPath -> foundPath
+        | None -> failwith "psql not found on server. Please install PostgreSQL."
     else
         $"✅ psql found: {cleanPath}" |> green |> output
         cleanPath
@@ -102,10 +97,8 @@ let checkPostgresPortAccessible output credential =
         "✓ PostgreSQL 端口 5432 可从外部访问" |> green |> output
         true
     else
-        // 使用 bash /dev/tcp 测试
-        let bashTestCmd = $"""
-timeout 3 bash -c "echo >/dev/tcp/{server}/5432" 2>/dev/null && echo 'OPEN' || echo 'CLOSED'
-"""
+        // 使用 bash /dev/tcp 测试（内层用单引号避免SSH引号冲突）
+        let bashTestCmd = $"timeout 3 bash -c 'echo >/dev/tcp/{server}/5432' 2>/dev/null && echo 'OPEN' || echo 'CLOSED'"
         let bashResult = bash output credential bashTestCmd
         
         if bashResult.Contains("OPEN") then
@@ -142,9 +135,9 @@ let autoFixFirewall output credential =
         "echo '如果以上命令执行后仍无法连接，请检查云服务商安全组/防火墙规则'"
     |]
     
-    for cmd in cmds do
+    cmds |> Array.iter (fun cmd ->
         let result = bash output credential cmd
-        result |> output
+        result |> output)
     
     "✓ 防火墙配置完成" |> green |> output
     
@@ -300,7 +293,7 @@ let sqls_ConfigureRemote psqlPath (password: string) =
 
 /// 检测远程服务器是否位于云 NAT 网关之后（5432 端口未转发）
 /// 判断逻辑: 服务器本地监听 5432 但自身无法通过公网 IP 访问自己
-let exeCheckIfBehindNAT output credential : bool =
+let exeCheckIfBehindNAT output credential =
     let porto,user,server,target,portArg = credentialExpand credential
     
     "\n--- 检测云 NAT 环境 ---" |> cyan |> output
@@ -310,7 +303,7 @@ let exeCheckIfBehindNAT output credential : bool =
         "ss -tlnp 2>/dev/null | grep -q ':5432' && echo 'LISTENING' || echo 'NOT_LISTENING'"
     let localResult = bash output credential localListenCmd
     
-    if not (localResult.Contains("LISTENING")) then
+    if localResult.Contains("LISTENING") |> not then
         "PostgreSQL 未在本地监听 5432，跳过 NAT 检测" |> yellow |> output
         false
     else
@@ -338,7 +331,7 @@ let exeCheckIfBehindNAT output credential : bool =
 
 /// 为 PostgreSQL 建立 SSH 隧道（用于 NAT 环境绕过云防火墙）
 /// 返回 (localPort, tunnelConnString) option
-let exeSetupPSQLTunnel output credential (postgresPwd:string) : (int * string) option =
+let exeSetupPSQLTunnel output credential postgresPwd =
     let porto,user,server,target,portArg = credentialExpand credential
     
     "\n--- 建立 PostgreSQL SSH 隧道 ---" |> cyan |> output
@@ -385,7 +378,7 @@ let exeSetupPSQLTunnel output credential (postgresPwd:string) : (int * string) o
 let execCommand output credential cmd =
     $"\n--- Executing: {cmd} ---" |> cyan |> output
     let result = bash output credential cmd
-    if not (String.IsNullOrEmpty result) then
+    if result |> String.IsNullOrEmpty |> not then
         result |> output
     result
 
@@ -407,13 +400,13 @@ let exeRemoteValidatePSQL
         "Please check remote server status" |> yellow |> output
 
 /// 解析端口可达性: 防火墙修复 → NAT检测 → SSH隧道，返回最终连接字符串
-let private resolvePortAndConnection output credential (postgresPwd:string) : string =
+let private resolvePortAndConnection output credential postgresPwd =
     let porto,user,server,target,portArg = credentialExpand credential
     
     // 检查端口是否可访问
     let mutable portAccessible = checkPostgresPortAccessible output credential
     
-    if not portAccessible then
+    if portAccessible |> not then
         "⚠ 端口不可访问，尝试自动修复防火墙..." |> yellow |> output
         autoFixFirewall output credential
         
@@ -489,8 +482,8 @@ let private resolvePortAndConnection output credential (postgresPwd:string) : st
 /// 配置 PostgreSQL 允许远程连接（仅当需要时）- 包含自动修复 + NAT检测 + SSH隧道
 let exeRemoteConfigurePSQL
     output
-    (credential: Credential)
-    (postgresPwd: string) =
+    credential
+    postgresPwd =
 
     let porto,user,server,target,portArg = credentialExpand credential
 
@@ -504,7 +497,7 @@ let exeRemoteConfigurePSQL
             // 2. 检查实际监听地址
             let listeningOk = checkPostgresActualListening output credential
             
-            if not listeningOk then
+            if listeningOk |> not then
                 "⚠ PostgreSQL 未监听所有接口，尝试修复..." |> yellow |> output
                 // 修改配置
                 let psqlPath = loadPathPSQL output credential

@@ -132,7 +132,7 @@ let checkSSHAuth
 
 
 /// 检查并创建目录（如果不存在）- 修复逻辑
-let ensureDirectory output credential (targetDir: string) =
+let ensureDirectory output credential targetDir =
     $"\n--- 检查目录 ~/{targetDir} ---" |> cyan |> output
     
     // 检查目录是否存在 - 使用简单的 if 语句避免多行问题
@@ -179,7 +179,7 @@ let ensureDirectory output credential (targetDir: string) =
 
 
 /// 确保多个目录存在
-let ensureDirectories output credential (dirs: (string * string) []) =
+let ensureDirectories output credential dirs =
     $"\n=== 确保所有目录存在 ===" |> cyan |> output
     
     let results = 
@@ -193,9 +193,10 @@ let ensureDirectories output credential (dirs: (string * string) []) =
         results 
         |> Array.forall (fun (_, _, success) -> success)
     
-    for (name, path, success) in results do
+    results 
+    |> Array.iter (fun (name, path, success) ->
         let status = if success then "✓" else "❌"
-        $"{status} {name}: ~/{path}" |> output
+        $"{status} {name}: ~/{path}" |> output)
     
     if allSuccess then
         "✓ 所有目录检查通过" |> green |> output
@@ -205,7 +206,7 @@ let ensureDirectories output credential (dirs: (string * string) []) =
     allSuccess
 
 /// 删除远程目录（用于清理）
-let deleteRemoteDir output credential (targetDir: string) =
+let deleteRemoteDir output credential targetDir =
     $"\n--- 删除目录 ~/{targetDir} ---" |> yellow |> output
     
     let checkCmd = $"if [ -d ~/{targetDir} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
@@ -238,14 +239,15 @@ let checkDotNetServiceRunning
     let checkCmd = $"ps aux | grep -q '[d]otnet.*{code}' && echo 'RUNNING' || echo 'NOT_RUNNING'"
     let result = bash output credential checkCmd
     
-    if result.Contains("RUNNING") then
+    // "NOT_RUNNING".Contains("RUNNING") = true，必须精确匹配
+    if result.Trim() = "RUNNING" then
         $"✓ {code} .NET 服务正在运行" |> green |> output
         true
     else
         $"⚠ {code} .NET 服务未运行" |> yellow |> output
         false
 
-let startDotNetService output credential (code:string) =
+let startDotNetService output credential (code: string) =
     $"\n--- 启动 Aiarwa 服务 ---" |> cyan |> output
     
     let cmds = [|
@@ -270,7 +272,7 @@ let startDotNetService output credential (code:string) =
     running
 
 /// 启动服务（逐条执行）
-let startServiceVerbose output credential (code:string) =
+let startServiceVerbose output credential (code: string) =
     "\n--- 启动服务 ---" |> cyan |> output
     
     let serverDir = $"Dev/{code}/Server"
@@ -283,9 +285,9 @@ let startServiceVerbose output credential (code:string) =
         "sudo fuser -k 80/tcp || echo '端口 80 未被占用'"
         "sudo fuser -k 443/tcp || echo '端口 443 未被占用'"
     |]
-    for cmd in stopCmds do
+    stopCmds |> Array.iter (fun cmd ->
         let result = bash output credential cmd
-        result |> output
+        result |> output)
     
     // 2. 启动服务
     "  2. 启动服务..." |> cyan |> output

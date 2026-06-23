@@ -16,7 +16,7 @@ open UtilKestrel.Types
 // ==================== Git 推送函数 ====================
 
 /// 推送本地仓库变更（单个仓库）- 使用分号分隔，兼容 Windows PowerShell
-let pushLocalRepo output (repoPath: string) (gitName: string) (gitEmail: string) =
+let pushLocalRepo output repoPath gitName gitEmail =
     $"\n--- 推送 {repoPath} 仓库变更 ---" |> cyan |> output
     
     // PowerShell 使用分号分隔命令，不支持 &&
@@ -34,21 +34,21 @@ let pushLocalRepo output (repoPath: string) (gitName: string) (gitEmail: string)
     "✓ 推送完成" |> green |> output
 
 /// 推送所有本地仓库变更
-let pushAllLocalRepos output (code: string) (gitName: string) (gitEmail: string) (disk: string) =
+let pushAllLocalRepos output code gitName gitEmail disk =
     $"\n=== 开始推送所有本地仓库变更 ===" |> yellow |> output
     
-    let repos = [
+    let repos = [|
         ("主项目", $"{disk}Dev/{code}")
         ("Common", $"{disk}Dev/Common")
         ("JCS", $"{disk}Dev/JCS")
-    ]
+    |]
     
-    for (name, path) in repos do
+    repos |> Array.iter (fun (name, path) ->
         if Directory.Exists(path) then
             pushLocalRepo output path gitName gitEmail |> ignore
         else
             $"⚠ 目录不存在: {path}" |> yellow |> output
-        "\n" |> output
+        "\n" |> output)
     
     "=== 所有本地仓库推送完成 ===" |> yellow |> output
 
@@ -78,9 +78,9 @@ let ensureNodeInstalled output credential =
             "yum install -y nodejs || dnf install -y nodejs"
         |]
         
-        for cmd in installCmds do
+        installCmds |> Array.iter (fun cmd ->
             let result = bash output credential cmd
-            result |> output
+            result |> output)
         
         // 验证安装
         let verifyCmd = "command -v node > /dev/null 2>&1 && echo 'INSTALLED' || echo 'NOT_INSTALLED'"
@@ -168,18 +168,18 @@ let ensureEnvironment output credential =
 // ==================== 目录管理函数 ====================
 
 /// 删除所有仓库目录
-let deleteAllRepos output credential (code: string) =
+let deleteAllRepos output credential code =
     $"\n=== 开始删除所有仓库目录 ===" |> yellow |> output
     
-    let repos = [
+    let repos = [|
         ("主项目", $"Dev/{code}")
         ("Common", "Dev/Common")
         ("JCS", "Dev/JCS")
         ("Dev 根目录", "Dev")
-    ]
+    |]
     
-    for (name, path) in repos do
-        deleteRemoteDir output credential path |> ignore
+    repos |> Array.iter (fun (name, path) ->
+        deleteRemoteDir output credential path |> ignore)
     
     "=== 所有仓库目录删除完成 ===" |> yellow |> output
 
@@ -187,7 +187,7 @@ let deleteAllRepos output credential (code: string) =
 // ==================== 构建函数 ====================
 
 /// 构建前端（逐条执行）- 使用 code 参数
-let buildFrontend output credential (code: string) =
+let buildFrontend output credential code =
     "\n--- 构建前端 ---" |> cyan |> output
     
     let vscodeDir = $"Dev/{code}/vscode"
@@ -203,99 +203,104 @@ let buildFrontend output credential (code: string) =
     else
         "✓ package.json 存在" |> green |> output
         
-        // 切换到 vscode 目录
-        $"cd ~/{vscodeDir}" |> bash output credential |> ignore
-        
-        // 使用 bun 或 npm 作为备用
+        // 检查 bun 是否存在，如果不存在则使用 npm
         "  - 安装依赖..." |> cyan |> output
         
-        // 检查 bun 是否存在，如果不存在则使用 npm
         let checkBunCmd = "if [ -f /root/.bun/bin/bun ]; then echo 'BUN_EXISTS'; else echo 'BUN_NOT_EXISTS'; fi"
         let bunExists = bash output credential checkBunCmd
         
         if bunExists.Contains("BUN_EXISTS") then
             "  使用 Bun 安装..." |> cyan |> output
-            let installResult = bash output credential "/root/.bun/bin/bun install"
+            let installResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun install"
             installResult |> output
             
             // bun add vite 插件
-            let addResult = bash output credential "/root/.bun/bin/bun add vite @vitejs/plugin-vue @vitejs/plugin-vue-jsx @vitejs/plugin-basic-ssl -D || true"
+            let addResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun add vite @vitejs/plugin-vue @vitejs/plugin-vue-jsx @vitejs/plugin-basic-ssl -D || true"
             addResult |> output
             
             // bun generateRoutes.cjs
-            let generateResult = bash output credential "/root/.bun/bin/bun generateRoutes.cjs 2>/dev/null || true"
+            let generateResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun generateRoutes.cjs 2>/dev/null || true"
             generateResult |> output
             
             // bun vite build
-            let buildResult = bash output credential "/root/.bun/bin/bunx --/root/.bun/bin/bun vite build --emptyOutDir || true"
+            let buildResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bunx --/root/.bun/bin/bun vite build --emptyOutDir || true"
             buildResult |> output
         else
             "  使用 npm 安装..." |> cyan |> output
-            let npmResult = bash output credential "npm install"
+            let npmResult = bash output credential $"cd ~/{vscodeDir} && npm install"
             npmResult |> output
             
-            let buildResult = bash output credential "npm run build 2>/dev/null || echo 'npm run build 不存在，跳过'"
+            let buildResult = bash output credential $"cd ~/{vscodeDir} && npm run build 2>/dev/null || echo 'npm run build 不存在，跳过'"
             buildResult |> output
         
         "✓ 前端构建完成" |> green |> output
         true
 
 /// 构建后端（逐条执行）- 使用 code 参数
-let buildBackend output credential (code: string) =
+let buildBackend output credential code =
     "\n--- 构建后端 ---" |> cyan |> output
     
     let serverDir = $"Dev/{code}/Server"
     
-    // 检查 .fsproj 是否存在
-    "检查项目文件..." |> cyan |> output
-    let checkProjCmd = $"if ls ~/{serverDir}/*.fsproj 1> /dev/null 2>&1; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
-    let projExists = bash output credential checkProjCmd
+    // 检查 dotnet SDK 是否安装
+    "检查 .NET SDK..." |> cyan |> output
+    let dotnetCheckCmd = "command -v dotnet > /dev/null 2>&1 && dotnet --version 2>/dev/null || echo 'NOT_INSTALLED'"
+    let dotnetVersion = bash output credential dotnetCheckCmd
     
-    if projExists.Contains("NOT_EXISTS") then
-        "⚠ 未找到 .fsproj 文件，跳过后端构建" |> yellow |> output
+    if dotnetVersion.Contains("NOT_INSTALLED") then
+        "⚠ .NET SDK 未安装，跳过后端构建" |> yellow |> output
+        "请在远程服务器上安装 .NET SDK 后重新部署" |> yellow |> output
         false
     else
-        "✓ 项目文件存在" |> green |> output
+        $"✓ .NET SDK 已安装: {dotnetVersion.Trim()}" |> green |> output
         
-        // 切换到 server 目录
-        $"cd ~/{serverDir}" |> bash output credential |> ignore
+        // 检查 .fsproj 是否存在
+        "检查项目文件..." |> cyan |> output
+        let checkProjCmd = $"if ls ~/{serverDir}/*.fsproj 1> /dev/null 2>&1; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
+        let projExists = bash output credential checkProjCmd
         
-        // 1. dotnet restore（忽略 GLIBCXX 错误）
-        "  - dotnet restore" |> cyan |> output
-        let restoreResult = bash output credential "dotnet restore 2>/dev/null || echo 'dotnet restore 跳过'"
-        restoreResult |> output
-        
-        // 2. 添加 Common 引用
-        "  - 检查并添加 Common 引用..." |> cyan |> output
-        let commonCheckCmd = $"if [ -d ~/Dev/Common ]; then echo 'Common 存在'; else echo 'Common 不存在，跳过'; fi"
-        let commonCheckResult = bash output credential commonCheckCmd
-        commonCheckResult |> output
-        
-        let commonRefCmd = "dotnet add reference ~/Dev/Common/Common.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-        let commonRefResult = bash output credential commonRefCmd
-        commonRefResult |> output
-        
-        // 3. 添加 JCS 引用
-        "  - 检查并添加 JCS 引用..." |> cyan |> output
-        let jcsCheckCmd = $"if [ -d ~/Dev/JCS ]; then echo 'JCS 存在'; else echo 'JCS 不存在，跳过'; fi"
-        let jcsCheckResult = bash output credential jcsCheckCmd
-        jcsCheckResult |> output
-        
-        let jcsRefCmd = "dotnet add reference ~/Dev/JCS/JCS.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-        let jcsRefResult = bash output credential jcsRefCmd
-        jcsRefResult |> output
-        
-        // 4. dotnet build（忽略 GLIBCXX 错误）
-        "  - dotnet build --configuration Release" |> cyan |> output
-        let buildResult = bash output credential "dotnet build --configuration Release 2>/dev/null || echo 'dotnet build 跳过'"
-        buildResult |> output
-        
-        "✓ 后端构建完成" |> green |> output
-        true
+        if projExists.Contains("NOT_EXISTS") then
+            "⚠ 未找到 .fsproj 文件，跳过后端构建" |> yellow |> output
+            false
+        else
+            "✓ 项目文件存在" |> green |> output
+            
+            // 1. dotnet restore
+            "  - dotnet restore" |> cyan |> output
+            let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore 2>/dev/null || echo 'dotnet restore 失败'"
+            restoreResult |> output
+            
+            // 2. 添加 Common 引用
+            "  - 检查并添加 Common 引用..." |> cyan |> output
+            let commonCheckCmd = $"if [ -d ~/Dev/Common ]; then echo 'Common 存在'; else echo 'Common 不存在，跳过'; fi"
+            let commonCheckResult = bash output credential commonCheckCmd
+            commonCheckResult |> output
+            
+            let commonRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Common.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+            let commonRefResult = bash output credential commonRefCmd
+            commonRefResult |> output
+            
+            // 3. 添加 JCS 引用
+            "  - 检查并添加 JCS 引用..." |> cyan |> output
+            let jcsCheckCmd = $"if [ -d ~/Dev/JCS ]; then echo 'JCS 存在'; else echo 'JCS 不存在，跳过'; fi"
+            let jcsCheckResult = bash output credential jcsCheckCmd
+            jcsCheckResult |> output
+            
+            let jcsRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+            let jcsRefResult = bash output credential jcsRefCmd
+            jcsRefResult |> output
+            
+            // 4. dotnet build
+            "  - dotnet build --configuration Release" |> cyan |> output
+            let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release 2>/dev/null || echo 'dotnet build 失败'"
+            buildResult |> output
+            
+            "✓ 后端构建完成" |> green |> output
+            true
 
 
 /// 获取仓库 URL
-let getRepoUrl (code: string) =
+let getRepoUrl code =
     match code with
     | "Aiarwa" -> "https://github.com/lchenmay/Aiarwa.git"
     | "Common" -> "https://github.com/lchenmay/Common.git"
@@ -306,7 +311,7 @@ let getRepoUrl (code: string) =
 let exeDeployCode
     output
     credential
-    (code: string) =
+    code =
 
     let porto,user,server,target,portArg = credentialExpand credential
     let devRoot = "Dev"
@@ -334,7 +339,7 @@ let exeDeployCode
         
         let allDirsExist = ensureDirectories output credential dirs
         
-        if not allDirsExist then
+        if allDirsExist |> not then
             "⚠ 部分目录创建失败，尝试继续..." |> yellow |> output
         
         // ========================================
@@ -495,5 +500,9 @@ let routine
     "6. 部署代码..." |> cyan |> output
     exeDeployCode output host.deploy.credential code
         
+    // 7. 清理 SSH 隧道
+    "7. 清理 SSH 隧道..." |> cyan |> output
+    stopAllSshTunnels output
+    
     $"\n✅ {conn}" |> green |> output
     "\n✅ 部署流程完成 " |> green |> output

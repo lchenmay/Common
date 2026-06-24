@@ -223,7 +223,7 @@ let buildFrontend output credential code =
             generateResult |> output
             
             // bun vite build
-            let buildResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bunx --/root/.bun/bin/bun vite build --emptyOutDir || true"
+            let buildResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bunx vite build --emptyOutDir || true"
             buildResult |> output
         else
             "  使用 npm 安装..." |> cyan |> output
@@ -248,9 +248,70 @@ let buildBackend output credential code =
     let dotnetVersion = bash output credential dotnetCheckCmd
     
     if dotnetVersion.Contains("NOT_INSTALLED") then
-        "⚠ .NET SDK 未安装，跳过后端构建" |> yellow |> output
-        "请在远程服务器上安装 .NET SDK 后重新部署" |> yellow |> output
-        false
+        "⚠ .NET SDK 未安装，尝试自动安装..." |> yellow |> output
+        
+        // 自动检测 Ubuntu 版本并安装 .NET 10.0 SDK
+        let installDotnetCmds = [|
+            "UBUNTU_VERSION=$(lsb_release -rs) && wget https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb"
+            "dpkg -i /tmp/packages-microsoft-prod.deb"
+            "apt update"
+            "apt install -y dotnet-sdk-10.0"
+            "rm /tmp/packages-microsoft-prod.deb"
+        |]
+        let installResult = bashMultiple output credential installDotnetCmds
+        installResult |> output
+        
+        // 重新验证
+        let retryCheckCmd = "command -v dotnet > /dev/null 2>&1 && dotnet --version 2>/dev/null || echo 'NOT_INSTALLED'"
+        let retryVersion = bash output credential retryCheckCmd
+        
+        if retryVersion.Contains("NOT_INSTALLED") then
+            "❌ .NET SDK 自动安装失败，请手动安装后重新部署" |> red |> output
+            "手动安装命令: UBUNTU_VERSION=$(lsb_release -rs) && wget https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb && dpkg -i /tmp/packages-microsoft-prod.deb && apt update && apt install -y dotnet-sdk-10.0" |> yellow |> output
+            false
+        else
+            $"✓ .NET SDK 自动安装成功: {retryVersion.Trim()}" |> green |> output
+            // 继续执行后续构建
+            let projCheckCmd = $"if ls ~/{serverDir}/*.fsproj 1> /dev/null 2>&1; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
+            let projExists = bash output credential projCheckCmd
+            if projExists.Contains("NOT_EXISTS") then
+                "⚠ 未找到 .fsproj 文件，跳过后端构建" |> yellow |> output
+                false
+            else
+                "✓ 项目文件存在" |> green |> output
+                
+                // 1. dotnet restore
+                "  - dotnet restore" |> cyan |> output
+                let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore"
+                restoreResult |> output
+                
+                // 2. 添加正确的 Common 子项目引用
+                "  - 检查并添加 Common/Util 引用..." |> cyan |> output
+                let utilRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Util/Util.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+                let utilRefResult = bash output credential utilRefCmd
+                utilRefResult |> output
+                
+                let kestrelRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/UtilKestrel/UtilKestrel.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+                let kestrelRefResult = bash output credential kestrelRefCmd
+                kestrelRefResult |> output
+                
+                // 3. 添加正确的 JCS 子项目引用
+                "  - 检查并添加 JCS.Shared 引用..." |> cyan |> output
+                let jcsSharedRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.Shared/JCS.Shared.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+                let jcsSharedRefResult = bash output credential jcsSharedRefCmd
+                jcsSharedRefResult |> output
+                
+                let jcsBizRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.BizLogics/JCS.BizLogics.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+                let jcsBizRefResult = bash output credential jcsBizRefCmd
+                jcsBizRefResult |> output
+                
+                // 4. dotnet build
+                "  - dotnet build --configuration Release" |> cyan |> output
+                let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release"
+                buildResult |> output
+                
+                "✓ 后端构建完成" |> green |> output
+                true
     else
         $"✓ .NET SDK 已安装: {dotnetVersion.Trim()}" |> green |> output
         
@@ -265,34 +326,34 @@ let buildBackend output credential code =
         else
             "✓ 项目文件存在" |> green |> output
             
-            // 1. dotnet restore
+            // 1. dotnet restore（保留错误输出，不吞噬）
             "  - dotnet restore" |> cyan |> output
-            let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore 2>/dev/null || echo 'dotnet restore 失败'"
+            let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore"
             restoreResult |> output
             
-            // 2. 添加 Common 引用
-            "  - 检查并添加 Common 引用..." |> cyan |> output
-            let commonCheckCmd = $"if [ -d ~/Dev/Common ]; then echo 'Common 存在'; else echo 'Common 不存在，跳过'; fi"
-            let commonCheckResult = bash output credential commonCheckCmd
-            commonCheckResult |> output
+            // 2. 添加 Common 子项目引用（Util + UtilKestrel）
+            "  - 检查并添加 Common/Util 引用..." |> cyan |> output
+            let utilRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Util/Util.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+            let utilRefResult = bash output credential utilRefCmd
+            utilRefResult |> output
             
-            let commonRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Common.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-            let commonRefResult = bash output credential commonRefCmd
-            commonRefResult |> output
+            let kestrelRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/UtilKestrel/UtilKestrel.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+            let kestrelRefResult = bash output credential kestrelRefCmd
+            kestrelRefResult |> output
             
-            // 3. 添加 JCS 引用
-            "  - 检查并添加 JCS 引用..." |> cyan |> output
-            let jcsCheckCmd = $"if [ -d ~/Dev/JCS ]; then echo 'JCS 存在'; else echo 'JCS 不存在，跳过'; fi"
-            let jcsCheckResult = bash output credential jcsCheckCmd
-            jcsCheckResult |> output
+            // 3. 添加 JCS 子项目引用（JCS.Shared + JCS.BizLogics）
+            "  - 检查并添加 JCS.Shared 引用..." |> cyan |> output
+            let jcsSharedRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.Shared/JCS.Shared.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+            let jcsSharedRefResult = bash output credential jcsSharedRefCmd
+            jcsSharedRefResult |> output
             
-            let jcsRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-            let jcsRefResult = bash output credential jcsRefCmd
-            jcsRefResult |> output
+            let jcsBizRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.BizLogics/JCS.BizLogics.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
+            let jcsBizRefResult = bash output credential jcsBizRefCmd
+            jcsBizRefResult |> output
             
-            // 4. dotnet build
+            // 4. dotnet build（保留错误输出）
             "  - dotnet build --configuration Release" |> cyan |> output
-            let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release 2>/dev/null || echo 'dotnet build 失败'"
+            let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release"
             buildResult |> output
             
             "✓ 后端构建完成" |> green |> output
@@ -409,7 +470,7 @@ fi
         let serverDir = key__dir["code"] + "/Server"
         let updateBackendCmd = $"""
 cd ~/{serverDir}
-if [ -f *.fsproj ]; then
+if ls *.fsproj 1>/dev/null 2>&1; then
     dotnet restore 2>/dev/null || echo 'dotnet restore 跳过'
     echo '后端依赖更新完成'
 else

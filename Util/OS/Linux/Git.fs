@@ -57,7 +57,7 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
             // 然后 fetch 和 reset
             $"从远程拉取..." |> cyan |> output
             let fetchCmd = $"cd ~/{targetDir} && git fetch --all"
-            let fetchResult = bash output credential fetchCmd
+            let fetchResult = bashWithTimeout output credential fetchCmd 60000
             fetchResult |> output
             
             let resetCmd = $"cd ~/{targetDir} && git reset --hard origin/main"
@@ -87,28 +87,20 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
             // 是 git 仓库 → git pull 更新
             $"更新 {repoName} 仓库..." |> cyan |> output
             
-            // 1. fetch
+            // 1. fetch（增加超时到 60s 适应慢速 GitHub 连接）
             "  - git fetch --all" |> cyan |> output
             let fetchCmd = $"cd ~/{targetDir} && git fetch --all"
-            let fetchResult = bash output credential fetchCmd
+            let fetchResult = bashWithTimeout output credential fetchCmd 60000
             fetchResult |> output
             
-            // 2. reset --hard 确保与远程同步
+            // 2. reset --hard 确保与远程同步（fetch 后 reset 即可，无需单独 pull）
             "  - git reset --hard origin/main" |> cyan |> output
             let resetCmd = $"cd ~/{targetDir} && git reset --hard origin/main"
             let resetResult = bash output credential resetCmd
             resetResult |> output
             
-            // 3. pull
-            "  - git pull origin main" |> cyan |> output
-            let pullCmd = $"cd ~/{targetDir} && git pull origin main"
-            let pullResult = bash output credential pullCmd
-            pullResult |> output
-            
-            if pullResult.Contains("Already up to date") then
-                $"{repoName} 已是最新" |> green |> output
-            elif pullResult.Contains("fast-forward") || pullResult.Contains("Updated") then
-                $"{repoName} 更新成功" |> green |> output
+            if resetResult.Contains("HEAD is now at") then
+                $"{repoName} 已更新到最新" |> green |> output
             else
                 $"⚠ {repoName} 更新完成（请检查输出）" |> yellow |> output
             

@@ -282,7 +282,7 @@ let buildBackend output credential code =
                 
                 // 1. dotnet restore (suppress NU1603 FSharp.Core version warnings)
                 "  - dotnet restore" |> cyan |> output
-                let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet"
+                let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603"
                 if restoreResult.Trim().Length > 0 then restoreResult |> output
                 
                 // 2. 添加正确的 Common 子项目引用 (suppress stderr noise)
@@ -293,7 +293,7 @@ let buildBackend output credential code =
                 
                 // 3. dotnet build (suppress NU1603 warnings)
                 "  - dotnet build --configuration Release" |> cyan |> output
-                let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity normal /nowarn:NU1603"
+                let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity minimal /nowarn:NU1603"
                 buildResult |> output
                 
                 "✓ 后端构建完成" |> green |> output
@@ -314,7 +314,7 @@ let buildBackend output credential code =
             
             // 1. dotnet restore (suppress NU1603)
             "  - dotnet restore" |> cyan |> output
-            let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet"
+            let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603"
             if restoreResult.Trim().Length > 0 then restoreResult |> output
             
             // 2. 添加项目引用 (suppress stderr noise)
@@ -325,7 +325,7 @@ let buildBackend output credential code =
             
             // 3. dotnet build (suppress NU1603)
             "  - dotnet build --configuration Release" |> cyan |> output
-            let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity normal /nowarn:NU1603"
+            let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity minimal /nowarn:NU1603"
             buildResult |> output
             
             "✓ 后端构建完成" |> green |> output
@@ -443,7 +443,7 @@ fi
         let updateBackendCmd = $"""
 cd ~/{serverDir}
 if ls *.fsproj 1>/dev/null 2>&1; then
-    dotnet restore --verbosity quiet 2>/dev/null || echo 'dotnet restore 跳过'
+    dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>/dev/null || echo 'dotnet restore 跳过'
     echo '后端依赖更新完成'
 else
     echo '未找到 .fsproj，跳过'

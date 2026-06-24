@@ -236,6 +236,11 @@ let checkDotNetServiceRunning
     credential
     code =
 
+    // 先列出所有 dotnet 相关进程（调试用）
+    let debugCmd = $"ps aux | grep -i '[d]otnet' || echo '(没有 dotnet 进程)'"
+    let debugResult = bash output credential debugCmd
+    $"  [DEBUG] ps aux | grep dotnet:\n{debugResult}" |> cyan |> output
+    
     let checkCmd = $"ps aux | grep -q '[d]otnet.*Server' && echo 'RUNNING' || echo 'NOT_RUNNING'"
     let result = bash output credential checkCmd
     
@@ -245,37 +250,111 @@ let checkDotNetServiceRunning
         true
     else
         $"⚠ {code} .NET 服务未运行" |> yellow |> output
+        // 额外调试：检查 Server.dll 是否存在
+        $"  [DEBUG] 检查 build 产物:" |> cyan |> output
+        let checkBuildCmd = $"ls -la ~/Dev/{code}/Server/bin/Release/net10.0/ 2>/dev/null | head -20 || echo '(build 输出目录不存在)'"
+        bash output credential checkBuildCmd |> output
         false
 
 let startDotNetService output credential (code: string) =
     $"\n--- 启动 {code} 服务 ---" |> cyan |> output
     
-    let cmds = [|
-        $"cd ~/Dev/{code}/Server"
-        "sudo killall -9 dotnet || true"
-        "sudo fuser -k 80/tcp || true"
-        "sudo fuser -k 443/tcp || true"
-        $"sudo nohup dotnet run --configuration Release > /tmp/{code.ToLower()}.log 2>&1 &"
-        "sleep 3"
-    |]
+    let serverDir = $"~/Dev/{code}/Server"
+    let logFile = $"/tmp/{code.ToLower()}.log"
     
-    cmds |> String.concat " && " |> bash output credential |> ignore
+    // 调试：检查 Server 目录内容
+    "  [DEBUG] Server 目录内容:" |> cyan |> output
+    let lsCmd = $"ls -la {serverDir}/"
+    bash output credential lsCmd |> output
+    
+    // 调试：检查 build 产物
+    "  [DEBUG] Build 输出目录:" |> cyan |> output
+    let buildOutCmd = $"ls -la {serverDir}/bin/Release/net10.0/ 2>/dev/null || echo '(build 输出目录不存在)'"
+    bash output credential buildOutCmd |> output
+    
+    // 调试：检查 .fsproj 配置
+    "  [DEBUG] 项目文件 OutputType:" |> cyan |> output
+    let projCmd = $"grep -i 'OutputType\\|TargetFramework' {serverDir}/*.fsproj 2>/dev/null || echo '(无法读取)'"
+    bash output credential projCmd |> output
+    
+    // 调试：启动前检查端口
+    "  [DEBUG] 端口占用情况（启动前）:" |> cyan |> output
+    let portCheckCmd = $"sudo ss -tlnp | grep -E ':80 |:443 ' || echo '端口 80/443 未被占用'"
+    bash output credential portCheckCmd |> output
+    
+    // 调试：检查 dotnet 进程
+    "  [DEBUG] dotnet 进程（启动前）:" |> cyan |> output
+    let psCmd = $"ps aux | grep -i '[d]otnet' || echo '没有运行中的 dotnet 进程'"
+    bash output credential psCmd |> output
+    
+    // 停止现有服务
+    "  [DEBUG] 停止现有 dotnet 进程..." |> cyan |> output
+    bash output credential "sudo killall -9 dotnet 2>/dev/null; echo 'killall done'" |> output
+    
+    // 清理端口
+    bash output credential "sudo fuser -k 80/tcp 2>/dev/null; sudo fuser -k 443/tcp 2>/dev/null; echo 'port cleanup done'" |> output
+    
+    // 启动服务 - 用 nohup 并记录 PID
+    "  [DEBUG] 启动 dotnet run..." |> cyan |> output
+    let startCmd = $"cd {serverDir} && sudo nohup dotnet run --configuration Release > {logFile} 2>&1 & echo \"PID:$!\""
+    let startResult = bash output credential startCmd
+    "  [DEBUG] 启动结果:" |> cyan |> output
+    startResult |> output
+    
+    // 等待
+    "  [DEBUG] 等待 3 秒..." |> cyan |> output
+    bash output credential "sleep 3" |> ignore
+    
+    // 调试：启动后检查进程
+    "  [DEBUG] dotnet 进程（启动后）:" |> cyan |> output
+    let psAfterCmd = $"ps aux | grep -i '[d]otnet' || echo '没有运行中的 dotnet 进程'"
+    bash output credential psAfterCmd |> output
+    
+    // 调试：启动后检查端口
+    "  [DEBUG] 端口占用情况（启动后）:" |> cyan |> output
+    let portAfterCmd = $"sudo ss -tlnp | grep -E ':80 |:443 ' || echo '端口 80/443 未被占用'"
+    bash output credential portAfterCmd |> output
+    
+    // 调试：打印服务日志
+    "  [DEBUG] 服务日志内容:" |> cyan |> output
+    let logCmd = $"cat {logFile} 2>/dev/null || echo '(日志文件不存在或为空)'"
+    bash output credential logCmd |> output
     
     // 验证服务是否启动
     let running = checkDotNetServiceRunning output credential code
     if running then
         $"✓ {code} 服务启动成功" |> green |> output
-        $"日志文件: /tmp/{code.ToLower()}.log" |> yellow |> output
+        $"日志文件: {logFile}" |> yellow |> output
     else
-        $"❌ {code} 服务启动失败，请检查日志" |> red |> output
+        $"❌ {code} 服务启动失败" |> red |> output
+        "--- 完整调试信息 ---" |> yellow |> output
     
     running
 
-/// 启动服务（逐条执行）
+/// 启动服务（逐条执行，详细调试）
 let startServiceVerbose output credential (code: string) =
-    "\n--- 启动服务 ---" |> cyan |> output
+    "\n--- 启动服务 (Verbose Debug) ---" |> cyan |> output
     
-    let serverDir = $"Dev/{code}/Server"
+    let serverDir = $"~/Dev/{code}/Server"
+    let logFile = $"/tmp/{code.ToLower()}.log"
+    
+    // 0. 启动前诊断
+    "  0. 启动前诊断..." |> cyan |> output
+    
+    "    - Server 目录内容:" |> cyan |> output
+    bash output credential $"ls -la {serverDir}/" |> output
+    
+    "    - Build 输出目录:" |> cyan |> output
+    bash output credential $"ls -la {serverDir}/bin/Release/net10.0/ 2>/dev/null || echo '(build 输出目录不存在)'" |> output
+    
+    "    - .fsproj OutputType/TargetFramework:" |> cyan |> output
+    bash output credential $"grep -i 'OutputType\\|TargetFramework' {serverDir}/*.fsproj 2>/dev/null || echo '(无法读取)'" |> output
+    
+    "    - 启动前 dotnet 进程:" |> cyan |> output
+    bash output credential $"ps aux | grep -i '[d]otnet' || echo '(没有运行中的 dotnet 进程)'" |> output
+    
+    "    - 启动前端口占用:" |> cyan |> output
+    bash output credential $"sudo ss -tlnp | grep -E ':80 |:443 ' || echo '(端口 80/443 未被占用)'" |> output
     
     // 1. 停止现有服务
     "  1. 停止现有服务..." |> cyan |> output
@@ -289,28 +368,41 @@ let startServiceVerbose output credential (code: string) =
         let result = bash output credential cmd
         result |> output)
     
-    // 2. 启动服务
+    "    - 停止后 dotnet 进程:" |> cyan |> output
+    bash output credential $"ps aux | grep -i '[d]otnet' || echo '(没有运行中的 dotnet 进程)'" |> output
+    
+    // 2. 启动服务（捕获 PID）
     "  2. 启动服务..." |> cyan |> output
-    let startCmd = $"cd ~/{serverDir} && sudo nohup dotnet run --configuration Release > /tmp/{code.ToLower()}.log 2>&1 &"
+    let startCmd = $"cd {serverDir} && sudo nohup dotnet run --configuration Release > {logFile} 2>&1 & echo \"启动PID:$!\""
     let startResult = bash output credential startCmd
+    "    启动命令输出:" |> cyan |> output
     startResult |> output
     
     // 3. 等待启动
     "  3. 等待服务启动（3秒）..." |> cyan |> output
     bash output credential "sleep 3" |> ignore
     
-    // 4. 验证服务是否运行
-    "  4. 验证服务状态..." |> cyan |> output
+    // 4. 启动后诊断
+    "  4. 启动后诊断..." |> cyan |> output
+    
+    "    - 启动后 dotnet 进程:" |> cyan |> output
+    bash output credential $"ps aux | grep -i '[d]otnet' || echo '(没有运行中的 dotnet 进程)'" |> output
+    
+    "    - 启动后端口占用:" |> cyan |> output
+    bash output credential $"sudo ss -tlnp | grep -E ':80 |:443 ' || echo '(端口 80/443 未被占用)'" |> output
+    
+    "    - 服务日志完整内容:" |> cyan |> output
+    bash output credential $"cat {logFile} 2>/dev/null || echo '(日志文件不存在或为空)'" |> output
+    
+    // 5. 验证服务状态
+    "  5. 验证服务状态..." |> cyan |> output
     let running = checkDotNetServiceRunning output credential code
     
     if running then
         "✓ 服务启动成功" |> green |> output
-        $"日志文件: /tmp/{code.ToLower()}.log" |> yellow |> output
+        $"日志文件: {logFile}" |> yellow |> output
     else
-        "❌ 服务启动失败，请检查日志" |> red |> output
-        "--- 日志末尾 ---" |> yellow |> output
-        let logCmd = $"tail -20 /tmp/{code.ToLower()}.log 2>/dev/null || echo '日志文件不存在'"
-        let logResult = bash output credential logCmd
-        logResult |> output
+        "❌ 服务启动失败" |> red |> output
+        "--- 完整调试信息已在上方输出 ---" |> yellow |> output
     
     running

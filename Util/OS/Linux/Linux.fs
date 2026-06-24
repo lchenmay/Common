@@ -236,7 +236,7 @@ let checkDotNetServiceRunning
     credential
     code =
 
-    let checkCmd = $"ps aux | grep -q '[d]otnet.*{code}' && echo 'RUNNING' || echo 'NOT_RUNNING'"
+    let checkCmd = $"ps aux | grep -q '[d]otnet.*Server' && echo 'RUNNING' || echo 'NOT_RUNNING'"
     let result = bash output credential checkCmd
     
     // "NOT_RUNNING".Contains("RUNNING") = true，必须精确匹配
@@ -248,14 +248,14 @@ let checkDotNetServiceRunning
         false
 
 let startDotNetService output credential (code: string) =
-    $"\n--- 启动 Aiarwa 服务 ---" |> cyan |> output
+    $"\n--- 启动 {code} 服务 ---" |> cyan |> output
     
     let cmds = [|
         $"cd ~/Dev/{code}/Server"
         "sudo killall -9 dotnet || true"
         "sudo fuser -k 80/tcp || true"
         "sudo fuser -k 443/tcp || true"
-        $"sudo nohup dotnet run > /tmp/{code.ToLower()}.log 2>&1 &"
+        $"sudo nohup dotnet run --configuration Release > /tmp/{code.ToLower()}.log 2>&1 &"
         "sleep 3"
     |]
     
@@ -291,7 +291,7 @@ let startServiceVerbose output credential (code: string) =
     
     // 2. 启动服务
     "  2. 启动服务..." |> cyan |> output
-    let startCmd = $"cd ~/{serverDir} && sudo nohup dotnet run > /tmp/{code.ToLower()}.log 2>&1 &"
+    let startCmd = $"cd ~/{serverDir} && sudo nohup dotnet run --configuration Release > /tmp/{code.ToLower()}.log 2>&1 &"
     let startResult = bash output credential startCmd
     startResult |> output
     

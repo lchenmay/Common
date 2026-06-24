@@ -280,34 +280,20 @@ let buildBackend output credential code =
             else
                 "✓ 项目文件存在" |> green |> output
                 
-                // 1. dotnet restore
+                // 1. dotnet restore (suppress NU1603 FSharp.Core version warnings)
                 "  - dotnet restore" |> cyan |> output
-                let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore"
-                restoreResult |> output
+                let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet"
+                if restoreResult.Trim().Length > 0 then restoreResult |> output
                 
-                // 2. 添加正确的 Common 子项目引用
-                "  - 检查并添加 Common/Util 引用..." |> cyan |> output
-                let utilRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Util/Util.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-                let utilRefResult = bash output credential utilRefCmd
-                utilRefResult |> output
+                // 2. 添加正确的 Common 子项目引用 (suppress stderr noise)
+                "  - 添加项目引用..." |> cyan |> output
+                let utilRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Util/Util.fsproj 2>/dev/null; dotnet add reference ~/Dev/Common/UtilKestrel/UtilKestrel.fsproj 2>/dev/null; dotnet add reference ~/Dev/JCS/JCS.Shared/JCS.Shared.fsproj 2>/dev/null; dotnet add reference ~/Dev/JCS/JCS.BizLogics/JCS.BizLogics.fsproj 2>/dev/null; echo '✓ 项目引用检查完成'"
+                let refResult = bash output credential utilRefCmd
+                refResult |> output
                 
-                let kestrelRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/UtilKestrel/UtilKestrel.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-                let kestrelRefResult = bash output credential kestrelRefCmd
-                kestrelRefResult |> output
-                
-                // 3. 添加正确的 JCS 子项目引用
-                "  - 检查并添加 JCS.Shared 引用..." |> cyan |> output
-                let jcsSharedRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.Shared/JCS.Shared.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-                let jcsSharedRefResult = bash output credential jcsSharedRefCmd
-                jcsSharedRefResult |> output
-                
-                let jcsBizRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.BizLogics/JCS.BizLogics.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-                let jcsBizRefResult = bash output credential jcsBizRefCmd
-                jcsBizRefResult |> output
-                
-                // 4. dotnet build
+                // 3. dotnet build (suppress NU1603 warnings)
                 "  - dotnet build --configuration Release" |> cyan |> output
-                let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release"
+                let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity normal /nowarn:NU1603"
                 buildResult |> output
                 
                 "✓ 后端构建完成" |> green |> output
@@ -326,34 +312,20 @@ let buildBackend output credential code =
         else
             "✓ 项目文件存在" |> green |> output
             
-            // 1. dotnet restore（保留错误输出，不吞噬）
+            // 1. dotnet restore (suppress NU1603)
             "  - dotnet restore" |> cyan |> output
-            let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore"
-            restoreResult |> output
+            let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet"
+            if restoreResult.Trim().Length > 0 then restoreResult |> output
             
-            // 2. 添加 Common 子项目引用（Util + UtilKestrel）
-            "  - 检查并添加 Common/Util 引用..." |> cyan |> output
-            let utilRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Util/Util.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-            let utilRefResult = bash output credential utilRefCmd
-            utilRefResult |> output
+            // 2. 添加项目引用 (suppress stderr noise)
+            "  - 添加项目引用..." |> cyan |> output
+            let refCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Util/Util.fsproj 2>/dev/null; dotnet add reference ~/Dev/Common/UtilKestrel/UtilKestrel.fsproj 2>/dev/null; dotnet add reference ~/Dev/JCS/JCS.Shared/JCS.Shared.fsproj 2>/dev/null; dotnet add reference ~/Dev/JCS/JCS.BizLogics/JCS.BizLogics.fsproj 2>/dev/null; echo '✓ 项目引用检查完成'"
+            let refResult = bash output credential refCmd
+            refResult |> output
             
-            let kestrelRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/UtilKestrel/UtilKestrel.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-            let kestrelRefResult = bash output credential kestrelRefCmd
-            kestrelRefResult |> output
-            
-            // 3. 添加 JCS 子项目引用（JCS.Shared + JCS.BizLogics）
-            "  - 检查并添加 JCS.Shared 引用..." |> cyan |> output
-            let jcsSharedRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.Shared/JCS.Shared.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-            let jcsSharedRefResult = bash output credential jcsSharedRefCmd
-            jcsSharedRefResult |> output
-            
-            let jcsBizRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/JCS/JCS.BizLogics/JCS.BizLogics.fsproj 2>/dev/null || echo '引用已存在或添加失败'"
-            let jcsBizRefResult = bash output credential jcsBizRefCmd
-            jcsBizRefResult |> output
-            
-            // 4. dotnet build（保留错误输出）
+            // 3. dotnet build (suppress NU1603)
             "  - dotnet build --configuration Release" |> cyan |> output
-            let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release"
+            let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity normal /nowarn:NU1603"
             buildResult |> output
             
             "✓ 后端构建完成" |> green |> output
@@ -471,7 +443,7 @@ fi
         let updateBackendCmd = $"""
 cd ~/{serverDir}
 if ls *.fsproj 1>/dev/null 2>&1; then
-    dotnet restore 2>/dev/null || echo 'dotnet restore 跳过'
+    dotnet restore --verbosity quiet 2>/dev/null || echo 'dotnet restore 跳过'
     echo '后端依赖更新完成'
 else
     echo '未找到 .fsproj，跳过'

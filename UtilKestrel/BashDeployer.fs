@@ -311,10 +311,23 @@ let getRepoUrl code =
 let exeDeployCode
     output
     credential
-    code =
+    code
+    (logPath: string option) =
 
     let porto,user,server,target,portArg = credentialExpand credential
     let devRoot = "Dev"
+
+    // 如果指定了日志路径，创建双输出函数（同时写控制台和日志文件）
+    let output =
+        match logPath with
+        | Some path ->
+            let dir = Path.GetDirectoryName(path)
+            if not (String.IsNullOrEmpty(dir)) && not (Directory.Exists(dir)) then
+                Directory.CreateDirectory(dir) |> ignore
+            fun (msg: string) ->
+                output msg
+                try File.AppendAllText(path, msg + Environment.NewLine) with _ -> ()
+        | None -> output
 
     try
         // ========================================
@@ -440,6 +453,10 @@ fi
         // ========================================
         // 11. 显示部署摘要
         // ========================================
+        let logFileInfo = 
+            match logPath with
+            | Some p -> $"📋 部署日志: {p}"
+            | None -> $"📋 服务日志: /tmp/{code.ToLower()}.log"
         let summary = $"""
 ========================================
 ✅ {server} 代码部署完成
@@ -449,7 +466,7 @@ fi
    - Common: ~/{key__dir["Common"]}
    - JCS: ~/{key__dir["JCS"]}
 🔗 PostgreSQL: Host={server};Port=5432;Username=postgres;Password=***
-📋 日志文件: /tmp/{code.ToLower()}.log
+{logFileInfo}
 ========================================
 """
         summary |> cyan |> output
@@ -461,7 +478,8 @@ fi
 // ==================== 主流程 ====================
 
 let routine 
-    runtime =
+    (runtime: RuntimeTemplate<_,_,_,_>)
+    (deployLogPath: string option) =
 
     let host = runtime.host
     let credential = host.deploy.credential
@@ -498,7 +516,7 @@ let routine
 
     // 6. 部署代码（从 GitHub 更新）
     "6. 部署代码..." |> cyan |> output
-    exeDeployCode output host.deploy.credential code
+    exeDeployCode output host.deploy.credential code deployLogPath
         
     // 7. 清理 SSH 隧道
     "7. 清理 SSH 隧道..." |> cyan |> output

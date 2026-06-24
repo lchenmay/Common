@@ -15,7 +15,24 @@ open UtilKestrel.Types
 
 // ==================== Git 推送函数 ====================
 
+/// 获取仓库本地 HEAD 和远程 origin/main 的 commit hash
+let private getRepoHeadAndRemote output repoPath =
+    try
+        let localCmd = $"cd {repoPath}; git rev-parse HEAD"
+        let remoteCmd = $"cd {repoPath}; git rev-parse origin/main"
+        let localHash = exec output repoPath "powershell" localCmd
+        let remoteHash = exec output repoPath "powershell" remoteCmd
+        let local = localHash.Trim()
+        let remote = remoteHash.Trim()
+        $"  本地 HEAD:  {local}" |> output
+        $"  远程 origin/main: {remote}" |> output
+        Some (local, remote)
+    with _ ->
+        $"⚠ 无法获取仓库 {repoPath} 的 hash" |> yellow |> output
+        None
+
 /// 推送本地仓库变更（单个仓库）- 使用分号分隔，兼容 Windows PowerShell
+/// 返回是否推送成功（远程已包含本地最新提交）
 let pushLocalRepo output repoPath gitName gitEmail =
     $"\n--- 推送 {repoPath} 仓库变更 ---" |> cyan |> output
     
@@ -31,9 +48,48 @@ let pushLocalRepo output repoPath gitName gitEmail =
     let result = exec output repoPath "powershell" cmd
     result |> output
     
-    "✓ 推送完成" |> green |> output
+    // 验证 push 是否成功：本地 HEAD 应等于 origin/main
+    match getRepoHeadAndRemote output repoPath with
+    | Some (local, remote) ->
+        if local = remote then
+            "✓ 推送成功 (本地 HEAD == origin/main)" |> green |> output
+            true
+        else
+            "⚠ 推送后本地 HEAD 与 origin/main 不一致，可能需要重试" |> yellow |> output
+            false
+    | None ->
+        "⚠ 无法验证推送结果" |> yellow |> output
+        false
 
-/// 推送所有本地仓库变更
+/// 推送单个仓库（带重试机制）
+let private pushLocalRepoWithRetry output repoPath gitName gitEmail (maxRetries: int) =
+    let mutable success = false
+    let mutable attempt = 0
+    
+    while not success && attempt < maxRetries do
+        attempt <- attempt + 1
+        if attempt > 1 then
+            $"\n--- 重试推送 (第 {attempt}/{maxRetries} 次) ---" |> yellow |> output
+            // 等待一段时间再重试（避免 GitHub 限速）
+            System.Threading.Thread.Sleep(3000)
+        
+        success <- pushLocalRepo output repoPath gitName gitEmail
+    
+    if not success then
+        $"❌ 推送失败，已重试 {maxRetries} 次" |> red |> output
+        $"仓库: {repoPath}" |> red |> output
+        "请手动执行 git push 后再重新部署，或检查网络连接" |> yellow |> output
+        "是否继续部署？(y/n): " |> yellow |> output
+        let response = Console.ReadLine()
+        if response <> "y" && response <> "Y" then
+            "用户取消部署" |> red |> output
+            failwith "Git push 失败，用户取消部署"
+        else
+            "⚠ 跳过 push 验证，继续部署（远程仓库可能不是最新）" |> yellow |> output
+    
+    success
+
+/// 推送所有本地仓库变更（带验证和重试）
 let pushAllLocalRepos output code gitName gitEmail disk =
     $"\n=== 开始推送所有本地仓库变更 ===" |> yellow |> output
     
@@ -45,7 +101,7 @@ let pushAllLocalRepos output code gitName gitEmail disk =
     
     repos |> Array.iter (fun (name, path) ->
         if Directory.Exists(path) then
-            pushLocalRepo output path gitName gitEmail |> ignore
+            pushLocalRepoWithRetry output path gitName gitEmail 3 |> ignore
         else
             $"⚠ 目录不存在: {path}" |> yellow |> output
         "\n" |> output)
@@ -546,6 +602,25 @@ let routine
     // 5. 配置 PostgreSQL 远程访问（仅当未配置时）
     "5. 配置 PostgreSQL 远程访问..." |> cyan |> output
     let conn = exeRemoteConfigurePSQL output host.deploy.credential host.deploy.postgresPwd
+
+    // 5b. 检查并创建项目数据库用户（新装数据库必须检查）
+    "5b. 检查项目数据库用户..." |> cyan |> output
+    // 从 runtime.host.conn 解析出用户名、密码和数据库名
+    let dbParts = 
+        let connStr = host.conn
+        let pairs = 
+            connStr.Split(';') 
+            |> Array.map (fun s -> 
+                let parts = s.Trim().Split('=')
+                if parts.Length >= 2 then (parts[0].Trim(), parts[1].Trim()) 
+                else ("", ""))
+            |> Map.ofArray
+        (pairs |> Map.tryFind "Username" |> Option.defaultValue "postgres",
+         pairs |> Map.tryFind "Password" |> Option.defaultValue "",
+         pairs |> Map.tryFind "Database" |> Option.defaultValue "postgres")
+    let dbUser, dbPwd, dbName = dbParts
+    $"  项目数据库用户: {dbUser}, 数据库: {dbName}" |> cyan |> output
+    Util.Linux.PSQL.exeEnsureDatabaseUser output host.deploy.credential dbUser dbPwd dbName |> ignore
 
     // 6. 部署代码（从 GitHub 更新）
     "6. 部署代码..." |> cyan |> output

@@ -436,6 +436,78 @@ let exeSetupPSQLTunnel output credential postgresPwd =
         $"❌ SSH 隧道建立失败" |> red |> output
         None
 
+// ==================== 数据库用户存在性检查 ====================
+
+/// 检查 PostgreSQL 数据库用户是否存在，不存在则创建
+/// 参数: output, credential, dbUsername, dbPassword, databaseName
+let exeEnsureDatabaseUser output credential (dbUsername: string) (dbPassword: string) (databaseName: string) =
+    "\n--- 检查数据库用户 ---" |> cyan |> output
+    
+    try
+        let psqlPath = loadPathPSQL output credential
+        let psql__cmd = psqlpath__Cmd psqlPath
+        
+        // 检查用户是否存在
+        $"  检查用户 '{dbUsername}' 是否存在..." |> cyan |> output
+        let checkUserSql = $"SELECT 1 FROM pg_roles WHERE rolname='{dbUsername}';" |> psql__cmd
+        let userExists = bash output credential checkUserSql
+        
+        if userExists.Contains("1") then
+            $"✓ 用户 '{dbUsername}' 已存在" |> green |> output
+        else
+            $"⚠ 用户 '{dbUsername}' 不存在，正在创建..." |> yellow |> output
+            
+            // 创建用户
+            let createUserSql = $"CREATE USER \"{dbUsername}\" WITH PASSWORD '{dbPassword}';" |> psql__cmd
+            let createResult = bash output credential createUserSql
+            createResult |> output
+            
+            // 验证创建结果
+            let verifySql = $"SELECT 1 FROM pg_roles WHERE rolname='{dbUsername}';" |> psql__cmd
+            let verifyResult = bash output credential verifySql
+            
+            if verifyResult.Contains("1") then
+                $"✓ 用户 '{dbUsername}' 创建成功" |> green |> output
+                
+                // 授予 CREATEDB 权限（用于 updateDbStructure 创建数据库）
+                let grantSql = $"ALTER USER \"{dbUsername}\" CREATEDB;" |> psql__cmd
+                bash output credential grantSql |> ignore
+                $"✓ 已授予 CREATEDB 权限" |> green |> output
+            else
+                $"❌ 用户 '{dbUsername}' 创建失败" |> red |> output
+                false
+                |> ignore
+        
+        // 检查数据库是否存在
+        $"  检查数据库 '{databaseName}' 是否存在..." |> cyan |> output
+        let checkDbSql = $"SELECT 1 FROM pg_database WHERE datname='{databaseName}';" |> psql__cmd
+        let dbExists = bash output credential checkDbSql
+        
+        if dbExists.Contains("1") then
+            $"✓ 数据库 '{databaseName}' 已存在" |> green |> output
+        else
+            $"⚠ 数据库 '{databaseName}' 不存在，正在创建..." |> yellow |> output
+            let createDbSql = $"CREATE DATABASE \"{databaseName}\" OWNER \"{dbUsername}\";" |> psql__cmd
+            let createDbResult = bash output credential createDbSql
+            createDbResult |> output
+            
+            let verifyDbSql = $"SELECT 1 FROM pg_database WHERE datname='{databaseName}';" |> psql__cmd
+            let verifyDbResult = bash output credential verifyDbSql
+            if verifyDbResult.Contains("1") then
+                $"✓ 数据库 '{databaseName}' 创建成功" |> green |> output
+            else
+                $"⚠ 数据库 '{databaseName}' 创建可能失败，请手动检查" |> yellow |> output
+        
+        // 授予用户对数据库的所有权限
+        let grantAllSql = $"GRANT ALL PRIVILEGES ON DATABASE \"{databaseName}\" TO \"{dbUsername}\";" |> psql__cmd
+        bash output credential grantAllSql |> ignore
+        
+        true
+    with ex ->
+        $"⚠ 数据库用户检查失败: {ex.Message}" |> yellow |> output
+        "将跳过用户创建，如遇认证失败请手动创建用户" |> yellow |> output
+        false
+
 // ==================== 执行函数 ====================
 
 /// 执行单个命令的辅助函数

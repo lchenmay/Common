@@ -289,8 +289,8 @@ let sqls_ConfigureRemote psqlPath dataDir pgCtlPath (password: string) =
         
         // 1. 备份配置文件
         "echo '--- Backing up config files ---'"
-        $"cp {dataDir}/postgresql.conf {dataDir}/postgresql.conf.bak.$(date +%Y%m%d_%H%M%S)"
-        $"cp {dataDir}/pg_hba.conf {dataDir}/pg_hba.conf.bak.$(date +%Y%m%d_%H%M%S)"
+        "cp " + dataDir + "/postgresql.conf " + dataDir + "/postgresql.conf.bak.$(date +%Y%m%d_%H%M%S)"
+        "cp " + dataDir + "/pg_hba.conf " + dataDir + "/pg_hba.conf.bak.$(date +%Y%m%d_%H%M%S)"
         
         // 2. 修改 postgresql.conf - 设置 listen_addresses（使用 @ 分隔符避免引号问题）
         "echo '--- Setting listen_addresses to * ---'"

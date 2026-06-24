@@ -62,6 +62,70 @@ let loadPathPSQL
         cleanPath
 
 
+/// 动态检测 PostgreSQL 数据目录路径
+/// 支持 Ubuntu/Debian (/etc/postgresql/<ver>/main/) 和 CentOS/RHEL (/var/lib/pgsql/<ver>/data/)
+let loadPSQLDataDir output credential =
+    let detectCmd = 
+        // 方法1: 从 postmaster 进程获取数据目录
+        "DATA_DIR=$(ps aux | grep '[p]ostgres' | grep -oP -- '-D\\s+\\S+' | head -1 | awk '{print $2}'); " +
+        // 方法2: 通过 pg_config 获取
+        "if [ -z \"$DATA_DIR\" ]; then " +
+        "  PG_VER=$(psql --version 2>/dev/null | grep -oP '\\d+' | head -1); " +
+        "  if [ -d \"/etc/postgresql/$PG_VER/main\" ]; then DATA_DIR=\"/etc/postgresql/$PG_VER/main\"; " +
+        "  elif [ -d \"/var/lib/pgsql/$PG_VER/data\" ]; then DATA_DIR=\"/var/lib/pgsql/$PG_VER/data\"; " +
+        "  fi; " +
+        "fi; " +
+        // 方法3: 通过 SQL 查询 data_directory
+        "if [ -z \"$DATA_DIR\" ]; then " +
+        "  DATA_DIR=$(sudo -u postgres psql -h /var/run/postgresql -p 5432 -tAc 'SHOW data_directory;' 2>/dev/null); " +
+        "fi; " +
+        // 方法4: 遍历常见路径
+        "if [ -z \"$DATA_DIR\" ]; then " +
+        "  for d in /etc/postgresql/*/main /var/lib/pgsql/*/data /var/lib/postgresql/*/main; do " +
+        "    if [ -f \"$d/postgresql.conf\" ]; then DATA_DIR=\"$d\"; break; fi; " +
+        "  done; " +
+        "fi; " +
+        "echo \"$DATA_DIR\""
+    
+    let dataDir = (bash output credential detectCmd).Trim()
+    if String.IsNullOrEmpty dataDir then
+        "⚠ 无法自动检测 PostgreSQL 数据目录，使用默认路径 /var/lib/pgsql/14/data" |> yellow |> output
+        "/var/lib/pgsql/14/data"
+    else
+        $"✅ PostgreSQL 数据目录: {dataDir}" |> green |> output
+        dataDir
+
+
+/// 动态检测 pg_ctl 路径
+let loadPgCtlPath output credential =
+    let detectCmd =
+        // 方法1: 从 postmaster 进程获取 bin 目录
+        "PG_CTL=$(ps aux | grep '[p]ostgres' | grep -v grep | head -1 | awk '{print $11}'); " +
+        "if [ -n \"$PG_CTL\" ]; then " +
+        "  PG_BIN_DIR=$(dirname \"$PG_CTL\"); " +
+        "  if [ -f \"$PG_BIN_DIR/pg_ctl\" ]; then echo \"$PG_BIN_DIR/pg_ctl\"; exit 0; fi; " +
+        "fi; " +
+        // 方法2: which pg_ctl
+        "PG_CTL=$(which pg_ctl 2>/dev/null); " +
+        "if [ -n \"$PG_CTL\" ]; then echo \"$PG_CTL\"; exit 0; fi; " +
+        // 方法3: 遍历常见路径
+        "for p in /usr/lib/postgresql/*/bin/pg_ctl /usr/pgsql-*/bin/pg_ctl; do " +
+        "  if [ -f \"$p\" ]; then echo \"$p\"; exit 0; fi; " +
+        "done; " +
+        // 方法4: sudo -u postgres which
+        "PG_CTL=$(sudo -u postgres which pg_ctl 2>/dev/null); " +
+        "if [ -n \"$PG_CTL\" ]; then echo \"$PG_CTL\"; exit 0; fi; " +
+        "echo ''"
+    
+    let pgCtlPath = (bash output credential detectCmd).Trim()
+    if String.IsNullOrEmpty pgCtlPath then
+        "⚠ 无法自动检测 pg_ctl，使用默认路径 /usr/pgsql-14/bin/pg_ctl" |> yellow |> output
+        "/usr/pgsql-14/bin/pg_ctl"
+    else
+        $"✅ pg_ctl 路径: {pgCtlPath}" |> green |> output
+        pgCtlPath
+
+
 /// 检查 PostgreSQL 是否已配置远程访问
 let checkPostgresRemoteConfigured output credential =
     try
@@ -163,7 +227,7 @@ let checkPostgresActualListening output credential =
         false
 
 /// 验证 PostgreSQL 状态的 SQL 语句
-let sqls_Validate psqlPath  = 
+let sqls_Validate psqlPath dataDir pgCtlPath = 
 
     let psql__cmd = psqlpath__Cmd psqlPath
 
@@ -172,11 +236,11 @@ let sqls_Validate psqlPath  =
         
         // 尝试启动 PostgreSQL（使用 pg_ctl 替代 systemctl）
         "echo '=== Ensuring PostgreSQL is running ==='"
-        "sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data status > /dev/null 2>&1 || sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data start -w -t 30"
+        $"sudo -u postgres {pgCtlPath} -D {dataDir} status > /dev/null 2>&1 || sudo -u postgres {pgCtlPath} -D {dataDir} start -w -t 30"
         "sleep 2"
         
-        "echo '=== PostgreSQL 14 Status ==='"
-        "ps aux | grep -q '[p]ostmaster.*14/data' && echo '[OK] PostgreSQL 14 is running' || echo '[FAIL] PostgreSQL 14 is not running'"
+        "echo '=== PostgreSQL Status ==='"
+        $"ps aux | grep -q '[p]ostgres' && echo '[OK] PostgreSQL is running' || echo '[FAIL] PostgreSQL is not running'"
         "cd /tmp"
         
         // 显示 PostgreSQL 版本
@@ -205,11 +269,11 @@ let sqls_Validate psqlPath  =
         
         // 检查 pg_hba.conf 配置
         "echo '--- Current pg_hba.conf (filtered) ---'"
-        "cat /var/lib/pgsql/14/data/pg_hba.conf | grep -v '^#' | grep -v '^$' | head -10" 
+        $"cat {dataDir}/pg_hba.conf | grep -v '^#' | grep -v '^$' | head -10" 
     |]
 
 /// 配置 PostgreSQL 允许远程连接的 SQL 语句（仅当未配置时执行）
-let sqls_ConfigureRemote psqlPath (password: string) =
+let sqls_ConfigureRemote psqlPath dataDir pgCtlPath (password: string) =
 
     let psql__cmd = psqlpath__Cmd psqlPath
 
@@ -218,37 +282,37 @@ let sqls_ConfigureRemote psqlPath (password: string) =
         
         // 确保 PostgreSQL 正在运行（使用 pg_ctl 替代 systemctl）
         "echo '=== Ensuring PostgreSQL is running ==='"
-        "sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data status > /dev/null 2>&1 || sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data start -w -t 30"
+        $"sudo -u postgres {pgCtlPath} -D {dataDir} status > /dev/null 2>&1 || sudo -u postgres {pgCtlPath} -D {dataDir} start -w -t 30"
         "sleep 2"
         
         "echo '=== Configuring PostgreSQL for remote access ==='"
         
         // 1. 备份配置文件
         "echo '--- Backing up config files ---'"
-        "cp /var/lib/pgsql/14/data/postgresql.conf /var/lib/pgsql/14/data/postgresql.conf.bak.$(date +%Y%m%d_%H%M%S)"
-        "cp /var/lib/pgsql/14/data/pg_hba.conf /var/lib/pgsql/14/data/pg_hba.conf.bak.$(date +%Y%m%d_%H%M%S)"
+        $"cp {dataDir}/postgresql.conf {dataDir}/postgresql.conf.bak.$(date +%Y%m%d_%H%M%S)"
+        $"cp {dataDir}/pg_hba.conf {dataDir}/pg_hba.conf.bak.$(date +%Y%m%d_%H%M%S)"
         
         // 2. 修改 postgresql.conf - 设置 listen_addresses（使用 @ 分隔符避免引号问题）
         "echo '--- Setting listen_addresses to * ---'"
-        "sed -i 's@^#listen_addresses = .*@listen_addresses = '\\''*'\\''@' /var/lib/pgsql/14/data/postgresql.conf"
-        "sed -i 's@^listen_addresses = .*@listen_addresses = '\\''*'\\''@' /var/lib/pgsql/14/data/postgresql.conf"
+        $"sed -i 's@^#listen_addresses = .*@listen_addresses = '\\''*'\\''@' {dataDir}/postgresql.conf"
+        $"sed -i 's@^listen_addresses = .*@listen_addresses = '\\''*'\\''@' {dataDir}/postgresql.conf"
         // 如果没有 listen_addresses 行，追加
-        "grep -q '^listen_addresses' /var/lib/pgsql/14/data/postgresql.conf || echo \"listen_addresses = '*'\" >> /var/lib/pgsql/14/data/postgresql.conf"
-        "grep '^listen_addresses' /var/lib/pgsql/14/data/postgresql.conf"
+        $"grep -q '^listen_addresses' {dataDir}/postgresql.conf || echo \"listen_addresses = '*'\" >> {dataDir}/postgresql.conf"
+        $"grep '^listen_addresses' {dataDir}/postgresql.conf"
         
         // 3. 修改 postgresql.conf - 确保端口正确
         "echo '--- Setting port to 5432 ---'"
-        "sed -i 's@^#port = .*@port = 5432@' /var/lib/pgsql/14/data/postgresql.conf"
-        "sed -i 's@^port = .*@port = 5432@' /var/lib/pgsql/14/data/postgresql.conf"
-        "grep '^port' /var/lib/pgsql/14/data/postgresql.conf"
+        $"sed -i 's@^#port = .*@port = 5432@' {dataDir}/postgresql.conf"
+        $"sed -i 's@^port = .*@port = 5432@' {dataDir}/postgresql.conf"
+        $"grep '^port' {dataDir}/postgresql.conf"
         
         // 4. 修改 pg_hba.conf - 允许远程连接
         "echo '--- Adding remote access to pg_hba.conf ---'"
-        "grep -q 'host.*all.*all.*0.0.0.0/0.*md5' /var/lib/pgsql/14/data/pg_hba.conf || echo 'host    all             all             0.0.0.0/0            md5' >> /var/lib/pgsql/14/data/pg_hba.conf"
+        $"grep -q 'host.*all.*all.*0.0.0.0/0.*md5' {dataDir}/pg_hba.conf || echo 'host    all             all             0.0.0.0/0            md5' >> {dataDir}/pg_hba.conf"
         
         // 5. 显示更新后的 pg_hba.conf
         "echo '--- Updated pg_hba.conf ---'"
-        "cat /var/lib/pgsql/14/data/pg_hba.conf | grep -v '^#' | grep -v '^$'"
+        $"cat {dataDir}/pg_hba.conf | grep -v '^#' | grep -v '^$'"
         
         // 6. 设置 postgres 用户密码
         $"echo '--- Setting postgres user password ---'"
@@ -265,7 +329,7 @@ let sqls_ConfigureRemote psqlPath (password: string) =
         
         // 8. 重启 PostgreSQL 服务（使用 pg_ctl）
         "echo '--- Restarting PostgreSQL ---'"
-        "sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data restart -w -t 30"
+        $"sudo -u postgres {pgCtlPath} -D {dataDir} restart -w -t 30"
         
         // 9. 等待服务重启完成
         "sleep 3"
@@ -391,7 +455,9 @@ let exeRemoteValidatePSQL
 
     try
         let psqlPath = loadPathPSQL output credential
-        sqls_Validate psqlPath 
+        let dataDir = loadPSQLDataDir output credential
+        let pgCtlPath = loadPgCtlPath output credential
+        sqls_Validate psqlPath dataDir pgCtlPath
         |> Array.iter (execCommand output credential >> ignore)
 
         $"\n>>> {server} PostgreSQL validation completed." |> cyan |> output
@@ -488,6 +554,10 @@ let exeRemoteConfigurePSQL
     let porto,user,server,target,portArg = credentialExpand credential
 
     try
+        // 0. 先检测数据目录和 pg_ctl 路径
+        let dataDir = loadPSQLDataDir output credential
+        let pgCtlPath = loadPgCtlPath output credential
+        
         // 1. 检查是否已配置
         let alreadyConfigured = checkPostgresRemoteConfigured output credential
         
@@ -501,12 +571,12 @@ let exeRemoteConfigurePSQL
                 "⚠ PostgreSQL 未监听所有接口，尝试修复..." |> yellow |> output
                 // 修改配置
                 let psqlPath = loadPathPSQL output credential
-                let fixCmd1 = $"sed -i 's@^listen_addresses = .*@listen_addresses = '\\''*'\\''@' /var/lib/pgsql/14/data/postgresql.conf"
-                let fixCmd2 = $"grep -q '^listen_addresses' /var/lib/pgsql/14/data/postgresql.conf || echo \"listen_addresses = '*'\" >> /var/lib/pgsql/14/data/postgresql.conf"
+                let fixCmd1 = $"sed -i 's@^listen_addresses = .*@listen_addresses = '\\''*'\\''@' {dataDir}/postgresql.conf"
+                let fixCmd2 = $"grep -q '^listen_addresses' {dataDir}/postgresql.conf || echo \"listen_addresses = '*'\" >> {dataDir}/postgresql.conf"
                 bash output credential fixCmd1 |> ignore
                 bash output credential fixCmd2 |> ignore
                 // 重启
-                let restartCmd = "sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data restart -w -t 30"
+                let restartCmd = $"sudo -u postgres {pgCtlPath} -D {dataDir} restart -w -t 30"
                 bash output credential restartCmd |> ignore
                 bash output credential "sleep 3" |> ignore
                 "✓ 配置已修复" |> green |> output
@@ -518,7 +588,7 @@ let exeRemoteConfigurePSQL
             
             let psqlPath = loadPathPSQL output credential
 
-            sqls_ConfigureRemote psqlPath postgresPwd
+            sqls_ConfigureRemote psqlPath dataDir pgCtlPath postgresPwd
             |> Array.iter (execCommand output credential >> ignore)
 
             $"\n>>> {server} PostgreSQL remote configuration completed." |> cyan |> output
@@ -529,7 +599,7 @@ let exeRemoteConfigurePSQL
                 "✓ 配置验证通过" |> green |> output
             else
                 "⚠ 配置可能未生效，尝试重启 PostgreSQL..." |> yellow |> output
-                let restartCmd = "sudo -u postgres /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data restart -w -t 30"
+                let restartCmd = $"sudo -u postgres {pgCtlPath} -D {dataDir} restart -w -t 30"
                 bash output credential restartCmd |> ignore
                 // 等待重启完成
                 bash output credential "sleep 3" |> ignore

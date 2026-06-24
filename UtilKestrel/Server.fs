@@ -17,6 +17,7 @@ open Microsoft.Extensions.Logging
 open System.Net.WebSockets
 
 open Util.Linux.Bash
+open UtilOpen
 
 open UtilKestrel.Types
 open UtilKestrel.Ctx
@@ -26,6 +27,7 @@ let runServer
     (incomingFile,fileid__bin,id__thumbnail)
     (apiEngine,wsEngineo)
     (port80, port443)
+    (ollamaCfg: UtilOpen.Ollama.OllamaCfg)
     output
     (args: string[]) =
 
@@ -82,6 +84,13 @@ let runServer
 
     // 必须第一步
     app.UseCors() |> ignore 
+
+    // Ollama 反向代理中间件（可启用/禁用）
+    if ollamaCfg.enabled then
+        ("Ollama proxy enabled: " + ollamaCfg.url) |> green |> output
+        app.Use(fun (httpx: HttpContext) (next: RequestDelegate) ->
+            UtilOpen.Ollama.proxyMiddleware ollamaCfg httpx next
+        ) |> ignore
 
     // 强力拦截：保持原有逻辑
     app.Use(fun (httpx: HttpContext) (next: RequestDelegate) ->

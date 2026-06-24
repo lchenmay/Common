@@ -1,0 +1,151 @@
+module UtilOpen.Ollama
+
+open System
+open System.Net.Http
+open System.Text
+open System.IO
+open System.Threading.Tasks
+
+open Microsoft.AspNetCore.Http
+
+open Util.Json
+open Util.Text
+
+
+// ---- 配置 ----
+
+type OllamaCfg = {
+    url: string
+    enabled: bool
+}
+
+let empty__OllamaCfg() = {
+    url = "http://127.0.0.1:11434"
+    enabled = false
+}
+
+let client = 
+    let c = new System.Net.Http.HttpClient()
+    c.Timeout <- TimeSpan.FromSeconds 300.0
+    c
+
+
+// ---- 核心 API ----
+
+/// 列出所有模型
+let listModels cfg =
+    async {
+        if not cfg.enabled then 
+            return "[]"
+        else
+            try
+                let! res = client.GetStringAsync(cfg.url + "/api/tags") |> Async.AwaitTask
+                return res
+            with ex ->
+                return "{\"error\":\"" + ex.Message + "\"}"
+    }
+
+
+/// OpenAI 兼容 chat completions（流式）
+let chatStream cfg model (messages: string) output =
+    async {
+        if not cfg.enabled then
+            output "data: {\"error\":\"Ollama disabled\"}\n\ndata: [DONE]\n"
+            return ()
+        try
+            let payload = "{\"model\":\"" + model + "\",\"messages\":" + messages + ",\"stream\":true}"
+            let req = new HttpRequestMessage(HttpMethod.Post, cfg.url + "/v1/chat/completions")
+            req.Content <- new StringContent(payload, Encoding.UTF8, "application/json")
+            let! res = client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead) |> Async.AwaitTask
+            use! stream = res.Content.ReadAsStreamAsync() |> Async.AwaitTask
+            use reader = new StreamReader(stream)
+            let mutable line = reader.ReadLine()
+            while line <> null do
+                if line.StartsWith("data: ") then output (line + "\n")
+                line <- reader.ReadLine()
+        with ex ->
+            output ("data: {\"error\":\"" + ex.Message + "\"}\n\ndata: [DONE]\n")
+    }
+
+
+/// OpenAI 兼容 chat completions（非流式，返回完整 JSON）
+let chatSync cfg model (messages: string) =
+    async {
+        if not cfg.enabled then 
+            return "{\"error\":\"Ollama disabled\"}"
+        else
+            try
+                let payload = "{\"model\":\"" + model + "\",\"messages\":" + messages + ",\"stream\":false}"
+                let content = new StringContent(payload, Encoding.UTF8, "application/json")
+                let! res = client.PostAsync(cfg.url + "/v1/chat/completions", content) |> Async.AwaitTask
+                let! body = res.Content.ReadAsStringAsync() |> Async.AwaitTask
+                return body
+            with ex ->
+                return "{\"error\":\"" + ex.Message + "\"}"
+    }
+
+
+/// OpenAI 兼容 embeddings
+let embeddings cfg model (input: string) =
+    async {
+        if not cfg.enabled then 
+            return "{\"error\":\"Ollama disabled\"}"
+        else
+            try
+                let payload = "{\"model\":\"" + model + "\",\"input\":\"" + input.Replace("\"", "\\\"") + "\"}"
+                let content = new StringContent(payload, Encoding.UTF8, "application/json")
+                let! res = client.PostAsync(cfg.url + "/v1/embeddings", content) |> Async.AwaitTask
+                let! body = res.Content.ReadAsStringAsync() |> Async.AwaitTask
+                return body
+            with ex ->
+                return "{\"error\":\"" + ex.Message + "\"}"
+    }
+
+
+// ---- 反向代理中间件 ----
+
+/// 将 /ollama/... 路径代理到 Ollama 服务
+/// 支持流式和非流式请求
+let proxyMiddleware (cfg: OllamaCfg) (context: Microsoft.AspNetCore.Http.HttpContext) (next: RequestDelegate) =
+    let t = task {
+        let path = context.Request.Path.Value
+        if not cfg.enabled || not (path.StartsWith("/ollama/", StringComparison.OrdinalIgnoreCase)) then
+            do! next.Invoke(context)
+            return ()
+        
+        let targetPath = path.Substring("/ollama".Length)
+        let targetUrl = cfg.url + targetPath + context.Request.QueryString.Value
+        
+        try
+            use req = new HttpRequestMessage()
+            req.RequestUri <- Uri(targetUrl)
+            req.Method <- HttpMethod(context.Request.Method)
+            
+            // 复制请求体
+            if context.Request.Method = "POST" || context.Request.Method = "PUT" then
+                context.Request.EnableBuffering()
+                use reader = new StreamReader(context.Request.Body, Encoding.UTF8, leaveOpen=true)
+                let! body = reader.ReadToEndAsync()
+                context.Request.Body.Position <- 0L
+                req.Content <- new StringContent(body, Encoding.UTF8, "application/json")
+            
+            // 转发到 Ollama
+            let! res = client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead)
+            
+            context.Response.StatusCode <- int res.StatusCode
+            
+            // 复制响应头
+            for h in res.Content.Headers do
+                context.Response.Headers[h.Key] <- Microsoft.Extensions.Primitives.StringValues(h.Value |> Seq.toArray)
+            
+            // 复制响应体
+            use! stream = res.Content.ReadAsStreamAsync()
+            do! stream.CopyToAsync(context.Response.Body)
+            
+        with ex ->
+            context.Response.StatusCode <- 502
+            let err = "{\"error\":\"Ollama proxy: " + ex.Message + "\"}"
+            let bin = Encoding.UTF8.GetBytes(err)
+            do! context.Response.Body.WriteAsync(ReadOnlyMemory bin)
+    }
+    t :> Task

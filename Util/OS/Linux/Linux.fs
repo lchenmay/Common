@@ -294,16 +294,16 @@ let startDotNetService output credential (code: string) =
     // 清理端口
     bash output credential "sudo fuser -k 80/tcp 2>/dev/null; sudo fuser -k 443/tcp 2>/dev/null; echo 'port cleanup done'" |> output
     
-    // 启动服务 - 用 nohup 并记录 PID
-    "  [DEBUG] 启动 dotnet run..." |> cyan |> output
-    let startCmd = $"cd {serverDir} && sudo nohup dotnet run --configuration Release > {logFile} 2>&1 & echo \"PID:$!\""
+    // 启动服务 - 直接用 dotnet Server.dll 运行已编译产物（跳过编译）
+    "  [DEBUG] 启动 dotnet Server.dll..." |> cyan |> output
+    let startCmd = $"cd {serverDir} && sudo nohup dotnet bin/Release/net10.0/Server.dll > {logFile} 2>&1 & echo \"启动PID:$!\""
     let startResult = bash output credential startCmd
     "  [DEBUG] 启动结果:" |> cyan |> output
     startResult |> output
     
     // 等待
-    "  [DEBUG] 等待 3 秒..." |> cyan |> output
-    bash output credential "sleep 3" |> ignore
+    "  [DEBUG] 等待 5 秒..." |> cyan |> output
+    bash output credential "sleep 5" |> ignore
     
     // 调试：启动后检查进程
     "  [DEBUG] dotnet 进程（启动后）:" |> cyan |> output
@@ -371,16 +371,16 @@ let startServiceVerbose output credential (code: string) =
     "    - 停止后 dotnet 进程:" |> cyan |> output
     bash output credential $"ps aux | grep -i '[d]otnet' || echo '(没有运行中的 dotnet 进程)'" |> output
     
-    // 2. 启动服务（捕获 PID）
+    // 2. 启动服务（直接用 Server.dll，跳过编译）
     "  2. 启动服务..." |> cyan |> output
-    let startCmd = $"cd {serverDir} && sudo nohup dotnet run --configuration Release > {logFile} 2>&1 & echo \"启动PID:$!\""
+    let startCmd = $"cd {serverDir} && sudo nohup dotnet bin/Release/net10.0/Server.dll > {logFile} 2>&1 & echo \"启动PID:$!\""
     let startResult = bash output credential startCmd
     "    启动命令输出:" |> cyan |> output
     startResult |> output
     
     // 3. 等待启动
-    "  3. 等待服务启动（3秒）..." |> cyan |> output
-    bash output credential "sleep 3" |> ignore
+    "  3. 等待服务启动（5秒）..." |> cyan |> output
+    bash output credential "sleep 5" |> ignore
     
     // 4. 启动后诊断
     "  4. 启动后诊断..." |> cyan |> output

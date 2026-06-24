@@ -230,113 +230,138 @@ let deleteRemoteDir output credential targetDir =
             $"❌ 目录 ~/{targetDir} 删除失败" |> red |> output
             false
 
-/// 检查服务是否运行
+/// 获取服务的 systemd 单元名称
+let private getServiceName (code: string) = code.ToLower()
+
+/// 检查 systemd 服务是否处于 active (running) 状态
 let checkDotNetServiceRunning 
     output 
     credential
     code =
 
-    // 先列出所有 dotnet 相关进程（调试用）
-    let debugCmd = $"ps aux | grep -i '[d]otnet' || echo '(没有 dotnet 进程)'"
-    let debugResult = bash output credential debugCmd
-    $"  [DEBUG] ps aux | grep dotnet:\n{debugResult}" |> cyan |> output
-    
-    let checkCmd = $"ps aux | grep -q '[d]otnet.*Server' && echo 'RUNNING' || echo 'NOT_RUNNING'"
+    let svcName = getServiceName code
+    // 用 systemctl is-active 精确判断
+    let checkCmd = $"systemctl is-active {svcName} 2>/dev/null || echo 'inactive'"
     let result = bash output credential checkCmd
     
-    // "NOT_RUNNING".Contains("RUNNING") = true，必须精确匹配
-    if result.Trim() = "RUNNING" then
-        $"✓ {code} .NET 服务正在运行" |> green |> output
+    $"  [DEBUG] systemctl is-active {svcName}: {result.Trim()}" |> cyan |> output
+    
+    if result.Trim() = "active" then
+        $"✓ {code} systemd 服务正在运行" |> green |> output
         true
     else
-        $"⚠ {code} .NET 服务未运行" |> yellow |> output
-        // 额外调试：检查 Server.dll 是否存在
+        $"⚠ {code} systemd 服务未运行" |> yellow |> output
+        // 额外调试
+        $"  [DEBUG] systemctl status {svcName}:" |> cyan |> output
+        bash output credential $"systemctl status {svcName} 2>/dev/null || echo '(无状态信息)'" |> output
         $"  [DEBUG] 检查 build 产物:" |> cyan |> output
         let checkBuildCmd = $"ls -la ~/Dev/{code}/Server/bin/Release/net10.0/ 2>/dev/null | head -20 || echo '(build 输出目录不存在)'"
         bash output credential checkBuildCmd |> output
         false
 
-let startDotNetService output credential (code: string) =
-    $"\n--- 启动 {code} 服务 ---" |> cyan |> output
+/// 创建或更新 systemd 服务单元文件，并启用/启动服务
+/// 参数: output, credential, code, 端口列表（用于依赖 postgresql 和 network-online）
+let private createOrUpdateSystemdService output credential (code: string) =
+    let svcName = getServiceName code
+    let serverDir = $"/root/Dev/{code}/Server"
+    let workingDir = serverDir
+    let dllPath = $"{serverDir}/bin/Release/net10.0/Server.dll"
+    let logFile = $"/var/log/{svcName}.log"
     
-    let serverDir = $"~/Dev/{code}/Server"
-    let logFile = $"/tmp/{code.ToLower()}.log"
+    // systemd unit 文件内容
+    let unitContent = 
+        "[Unit]\n" +
+        $"Description={code} Kestrel HTTP Service\n" +
+        "After=network-online.target postgresql.service\n" +
+        "Wants=network-online.target postgresql.service\n" +
+        "\n" +
+        "[Service]\n" +
+        "Type=simple\n" +
+        $"WorkingDirectory={workingDir}\n" +
+        $"ExecStart=/usr/bin/dotnet {dllPath}\n" +
+        "Restart=always\n" +
+        "RestartSec=10\n" +
+        $"StandardOutput=append:{logFile}\n" +
+        $"StandardError=append:{logFile}\n" +
+        "Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false\n" +
+        "Environment=ASPNETCORE_ENVIRONMENT=Production\n" +
+        "TimeoutStopSec=30\n" +
+        "KillSignal=SIGTERM\n" +
+        "MemoryMax=512M\n" +
+        "CPUQuota=200%\n" +
+        "\n" +
+        "[Install]\n" +
+        "WantedBy=multi-user.target"
+    // 写入 unit 文件
+    let writeCmd = $"cat > /etc/systemd/system/{svcName}.service << 'UNIT_EOF'\n{unitContent}\nUNIT_EOF"
+    bash output credential writeCmd |> output
     
-    // 调试：检查 Server 目录内容
-    "  [DEBUG] Server 目录内容:" |> cyan |> output
-    let lsCmd = $"ls -la {serverDir}/"
-    bash output credential lsCmd |> output
+    $"  systemd unit 文件已写入: /etc/systemd/system/{svcName}.service" |> green |> output
     
-    // 调试：检查 build 产物
-    "  [DEBUG] Build 输出目录:" |> cyan |> output
-    let buildOutCmd = $"ls -la {serverDir}/bin/Release/net10.0/ 2>/dev/null || echo '(build 输出目录不存在)'"
-    bash output credential buildOutCmd |> output
-    
-    // 调试：检查 .fsproj 配置
-    "  [DEBUG] 项目文件 OutputType:" |> cyan |> output
-    let projCmd = $"grep -i 'OutputType\\|TargetFramework' {serverDir}/*.fsproj 2>/dev/null || echo '(无法读取)'"
-    bash output credential projCmd |> output
-    
-    // 调试：启动前检查端口
-    "  [DEBUG] 端口占用情况（启动前）:" |> cyan |> output
-    let portCheckCmd = $"sudo ss -tlnp | grep -E ':80 |:443 ' || echo '端口 80/443 未被占用'"
-    bash output credential portCheckCmd |> output
-    
-    // 调试：检查 dotnet 进程
-    "  [DEBUG] dotnet 进程（启动前）:" |> cyan |> output
-    let psCmd = $"ps aux | grep -i '[d]otnet' || echo '没有运行中的 dotnet 进程'"
-    bash output credential psCmd |> output
-    
-    // 停止现有服务
-    "  [DEBUG] 停止现有 dotnet 进程..." |> cyan |> output
-    bash output credential "sudo killall -9 dotnet 2>/dev/null; echo 'killall done'" |> output
-    
-    // 清理端口
-    bash output credential "sudo fuser -k 80/tcp 2>/dev/null; sudo fuser -k 443/tcp 2>/dev/null; echo 'port cleanup done'" |> output
-    
-    // 启动服务 - 直接用 dotnet Server.dll 运行已编译产物（跳过编译）
-    "  [DEBUG] 启动 dotnet Server.dll..." |> cyan |> output
-    let startCmd = $"cd {serverDir} && sudo nohup dotnet bin/Release/net10.0/Server.dll > {logFile} 2>&1 & echo \"启动PID:$!\""
-    let startResult = bash output credential startCmd
-    "  [DEBUG] 启动结果:" |> cyan |> output
-    startResult |> output
-    
-    // 等待
-    "  [DEBUG] 等待 5 秒..." |> cyan |> output
-    bash output credential "sleep 5" |> ignore
-    
-    // 调试：启动后检查进程
-    "  [DEBUG] dotnet 进程（启动后）:" |> cyan |> output
-    let psAfterCmd = $"ps aux | grep -i '[d]otnet' || echo '没有运行中的 dotnet 进程'"
-    bash output credential psAfterCmd |> output
-    
-    // 调试：启动后检查端口
-    "  [DEBUG] 端口占用情况（启动后）:" |> cyan |> output
-    let portAfterCmd = $"sudo ss -tlnp | grep -E ':80 |:443 ' || echo '端口 80/443 未被占用'"
-    bash output credential portAfterCmd |> output
-    
-    // 调试：打印服务日志
-    "  [DEBUG] 服务日志内容:" |> cyan |> output
-    let logCmd = $"cat {logFile} 2>/dev/null || echo '(日志文件不存在或为空)'"
-    bash output credential logCmd |> output
-    
-    // 验证服务是否启动
-    let running = checkDotNetServiceRunning output credential code
-    if running then
-        $"✓ {code} 服务启动成功" |> green |> output
-        $"日志文件: {logFile}" |> yellow |> output
-    else
-        $"❌ {code} 服务启动失败" |> red |> output
-        "--- 完整调试信息 ---" |> yellow |> output
-    
-    running
+    // daemon-reload
+    bash output credential "systemctl daemon-reload" |> ignore
+    "  systemctl daemon-reload 完成" |> green |> output
 
-/// 启动服务（逐条执行，详细调试）
-let startServiceVerbose output credential (code: string) =
-    "\n--- 启动服务 (Verbose Debug) ---" |> cyan |> output
+/// 通过 systemd 启动服务（简单版）
+let startDotNetService output credential (code: string) =
+    $"\n--- 启动 {code} 服务 (systemd) ---" |> cyan |> output
     
+    let svcName = getServiceName code
     let serverDir = $"~/Dev/{code}/Server"
-    let logFile = $"/tmp/{code.ToLower()}.log"
+    
+    // 1. 检查 build 产物
+    "  1. 检查 build 产物..." |> cyan |> output
+    let buildOutCmd = $"ls -la {serverDir}/bin/Release/net10.0/Server.dll 2>/dev/null && echo 'EXISTS' || echo 'NOT_EXISTS'"
+    let buildCheck = bash output credential buildOutCmd
+    if buildCheck.Contains("NOT_EXISTS") then
+        "❌ Server.dll 不存在，请先 build" |> red |> output
+        false
+    else
+        $"✓ Server.dll 存在: {serverDir}/bin/Release/net10.0/Server.dll" |> green |> output
+        
+        // 2. 创建/更新 systemd unit
+        "  2. 创建 systemd 服务单元..." |> cyan |> output
+        createOrUpdateSystemdService output credential code
+        
+        // 3. 启用开机自启
+        "  3. 启用开机自启..." |> cyan |> output
+        bash output credential $"systemctl enable {svcName}" |> output
+        
+        // 4. 重启服务（或启动）
+        "  4. 启动/重启服务..." |> cyan |> output
+        // 先检查是否已在运行
+        let isActive = bash output credential $"systemctl is-active {svcName} 2>/dev/null || echo 'inactive'"
+        if isActive.Trim() = "active" then
+            bash output credential $"systemctl restart {svcName}" |> output
+            $"  已重启 {svcName} 服务" |> green |> output
+        else
+            bash output credential $"systemctl start {svcName}" |> output
+            $"  已启动 {svcName} 服务" |> green |> output
+        
+        // 5. 等待启动
+        "  5. 等待服务启动..." |> cyan |> output
+        bash output credential "sleep 5" |> ignore
+        
+        // 6. 检查状态
+        "  6. 检查服务状态..." |> cyan |> output
+        let status = bash output credential $"systemctl is-active {svcName} 2>/dev/null || echo 'inactive'"
+        let journal = bash output credential $"journalctl -u {svcName} --no-pager -n 20 2>/dev/null || echo '(无日志)'"
+        $"  systemctl is-active: {status.Trim()}" |> output
+        $"  最近日志:\n{journal}" |> output
+        
+        let running = status.Trim() = "active"
+        if running then
+            $"✓ {code} systemd 服务运行中" |> green |> output
+        else
+            $"❌ {code} systemd 服务未运行" |> red |> output
+        running
+
+/// 启动服务（逐条执行，详细调试）- systemd 版本
+let startServiceVerbose output credential (code: string) =
+    "\n--- 启动服务 (systemd) ---" |> cyan |> output
+    
+    let svcName = getServiceName code
+    let serverDir = $"~/Dev/{code}/Server"
     
     // 0. 启动前诊断
     "  0. 启动前诊断..." |> cyan |> output
@@ -347,60 +372,53 @@ let startServiceVerbose output credential (code: string) =
     "    - Build 输出目录:" |> cyan |> output
     bash output credential $"ls -la {serverDir}/bin/Release/net10.0/ 2>/dev/null || echo '(build 输出目录不存在)'" |> output
     
-    "    - .fsproj OutputType/TargetFramework:" |> cyan |> output
-    bash output credential $"grep -i 'OutputType\\|TargetFramework' {serverDir}/*.fsproj 2>/dev/null || echo '(无法读取)'" |> output
+    "    - 当前 systemd 服务状态:" |> cyan |> output
+    bash output credential $"systemctl status {svcName} 2>/dev/null || echo '(服务尚未注册)'" |> output
     
-    "    - 启动前 dotnet 进程:" |> cyan |> output
-    bash output credential $"ps aux | grep -i '[d]otnet' || echo '(没有运行中的 dotnet 进程)'" |> output
+    // 1. 停止现有进程（兼容旧版 nohup 方式）
+    "  1. 清理旧版 nohup 进程..." |> cyan |> output
+    bash output credential "sudo killall -9 dotnet 2>/dev/null; echo 'cleanup done'" |> output
     
-    "    - 启动前端口占用:" |> cyan |> output
-    bash output credential $"sudo ss -tlnp | grep -E ':80 |:443 ' || echo '(端口 80/443 未被占用)'" |> output
+    // 2. 创建/更新 systemd unit
+    "  2. 创建 systemd 服务单元..." |> cyan |> output
+    createOrUpdateSystemdService output credential code
     
-    // 1. 停止现有服务
-    "  1. 停止现有服务..." |> cyan |> output
+    // 3. 启用开机自启
+    "  3. 启用开机自启..." |> cyan |> output
+    bash output credential $"systemctl enable {svcName} 2>&1" |> output
     
-    let stopCmds = [|
-        "sudo killall -9 dotnet || echo '没有运行中的 dotnet 进程'"
-        "sudo fuser -k 80/tcp || echo '端口 80 未被占用'"
-        "sudo fuser -k 443/tcp || echo '端口 443 未被占用'"
-    |]
-    stopCmds |> Array.iter (fun cmd ->
-        let result = bash output credential cmd
-        result |> output)
+    // 4. 重启服务
+    "  4. 启动/重启服务..." |> cyan |> output
+    let isActive = bash output credential $"systemctl is-active {svcName} 2>/dev/null || echo 'inactive'"
+    if isActive.Trim() = "active" then
+        bash output credential $"systemctl restart {svcName} 2>&1" |> output
+    else
+        bash output credential $"systemctl start {svcName} 2>&1" |> output
     
-    "    - 停止后 dotnet 进程:" |> cyan |> output
-    bash output credential $"ps aux | grep -i '[d]otnet' || echo '(没有运行中的 dotnet 进程)'" |> output
-    
-    // 2. 启动服务（直接用 Server.dll，跳过编译）
-    "  2. 启动服务..." |> cyan |> output
-    let startCmd = $"cd {serverDir} && sudo nohup dotnet bin/Release/net10.0/Server.dll > {logFile} 2>&1 & echo \"启动PID:$!\""
-    let startResult = bash output credential startCmd
-    "    启动命令输出:" |> cyan |> output
-    startResult |> output
-    
-    // 3. 等待启动
-    "  3. 等待服务启动（5秒）..." |> cyan |> output
+    // 5. 等待启动
+    "  5. 等待服务启动（5秒）..." |> cyan |> output
     bash output credential "sleep 5" |> ignore
     
-    // 4. 启动后诊断
-    "  4. 启动后诊断..." |> cyan |> output
+    // 6. 启动后诊断
+    "  6. 启动后诊断..." |> cyan |> output
     
-    "    - 启动后 dotnet 进程:" |> cyan |> output
-    bash output credential $"ps aux | grep -i '[d]otnet' || echo '(没有运行中的 dotnet 进程)'" |> output
+    "    - systemd 服务状态:" |> cyan |> output
+    bash output credential $"systemctl status {svcName} --no-pager -l 2>&1 | head -30" |> output
     
-    "    - 启动后端口占用:" |> cyan |> output
+    "    - 端口占用:" |> cyan |> output
     bash output credential $"sudo ss -tlnp | grep -E ':80 |:443 ' || echo '(端口 80/443 未被占用)'" |> output
     
-    "    - 服务日志完整内容:" |> cyan |> output
-    bash output credential $"cat {logFile} 2>/dev/null || echo '(日志文件不存在或为空)'" |> output
+    "    - 服务日志（最近 30 行）:" |> cyan |> output
+    bash output credential $"journalctl -u {svcName} --no-pager -n 30 2>/dev/null || echo '(无日志)'" |> output
     
-    // 5. 验证服务状态
-    "  5. 验证服务状态..." |> cyan |> output
+    // 7. 验证服务状态
+    "  7. 验证服务状态..." |> cyan |> output
     let running = checkDotNetServiceRunning output credential code
     
     if running then
         "✓ 服务启动成功" |> green |> output
-        $"日志文件: {logFile}" |> yellow |> output
+        $"管理命令: systemctl {{start|stop|restart|status}} {svcName}" |> yellow |> output
+        $"日志命令: journalctl -u {svcName} -f" |> yellow |> output
     else
         "❌ 服务启动失败" |> red |> output
         "--- 完整调试信息已在上方输出 ---" |> yellow |> output

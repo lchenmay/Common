@@ -534,8 +534,8 @@ fi
         "10. 启动服务..." |> cyan |> output
         let serviceRunning = checkDotNetServiceRunning output credential code
         if serviceRunning then
-            $"✓ {code} 服务已在运行" |> green |> output
-            $"如需重启，请手动执行: sudo systemctl restart {code.ToLower()}" |> yellow |> output
+            $"✓ {code} systemd 服务已在运行" |> green |> output
+            $"如需重启，请手动执行: systemctl restart {code.ToLower()}" |> yellow |> output
         else
             startServiceVerbose output credential code |> ignore
         

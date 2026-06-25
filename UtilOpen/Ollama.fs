@@ -94,7 +94,7 @@ let embeddings cfg model (input: string) =
             return "{\"error\":\"Ollama disabled\"}"
         else
             try
-                let payload = "{\"model\":\"" + model + "\",\"input\":\"" + input.Replace("\"", "\\\"") + "\"}"
+                let payload = "{\"model\":\"" + model + "\",\"input\":\"" + encode input + "\"}"
                 let content = new StringContent(payload, Encoding.UTF8, "application/json")
                 let! res = client.PostAsync(cfg.url + "/v1/embeddings", content) |> Async.AwaitTask
                 let! body = res.Content.ReadAsStringAsync() |> Async.AwaitTask
@@ -156,34 +156,56 @@ let proxyMiddleware (cfg: OllamaCfg) (context: Microsoft.AspNetCore.Http.HttpCon
 // ---- API Handler（供 Web 路由调用） ----
 
 /// 处理 ollama API 请求，返回 (string * Json)[] 供 wrapOk/er 包装
-let handleApi (json:Json) =
+let handleApi (json: Json) =
     let cfg = { empty__OllamaCfg() with url = "http://127.0.0.1:11434"; enabled = true }
-    let act = json |> tryFindStrByAtt "act" |> fun s -> s.Replace("\"","")
+    let act = json |> tryFindStrByAtt "act"
+
     match act with
     | "list" ->
         let raw = listModels cfg |> Async.RunSynchronously
-        "models", Json.Str raw
+        [| "models", Json.Str raw |]
+
     | "scenario" ->
-        let scenarios = 
+        let scenarios =
             jCQT.AI.Model.allScenarios()
             |> Seq.map (fun s ->
                 let model = jCQT.AI.Model.modelName s
                 let label = s.ToString()
-                "{\"id\":\"" + label + "\",\"label\":\"" + label + "\",\"model\":\"" + model + "\"}"
+                [|  "id", Json.Str label
+                    "label", Json.Str label
+                    "model", Json.Str model |]
+                |> Json.Braket
             )
-            |> String.concat ","
-        "scenarios", Json.Str ("[" + scenarios + "]")
+            |> Array.ofSeq
+            |> Json.Ary
+        [| "scenarios", scenarios |]
+
     | "msg" ->
-        let model = (json |> tryFindStrByAtt "model").Replace("\"","")
-        let message = (json |> tryFindStrByAtt "message").Replace("\"","")
-        let sessionId = (json |> tryFindStrByAtt "sessionId").Replace("\"","")
+        let model = json |> tryFindStrByAtt "model"
+        let message = json |> tryFindStrByAtt "message"
+        let sessionId = json |> tryFindStrByAtt "sessionId"
+
         let mgr = empty__SessionManager()
         mgr.current <- loadSession sessionId
         addMessage mgr { empty__Message() with role = User; content = message }
-        let msgs = buildMessages mgr |> Seq.map (fun m -> "{\"role\":\"" + m.role.ToString().ToLower() + "\",\"content\":\"" + m.content.Replace("\"","\\\"") + "\"}") |> String.concat ","
-        let raw = chatSync cfg model ("[" + msgs + "]") |> Async.RunSynchronously
+
+        let msgs =
+            buildMessages mgr
+            |> Seq.map (fun m ->
+                [|  "role", Json.Str (m.role.ToString().ToLower())
+                    "content", Json.Str (encode m.content) |]
+                |> Json.Braket
+            )
+            |> Array.ofSeq
+            |> Json.Ary
+
+        let msgsStr = msgs |> json__strFinal
+        let raw = chatSync cfg model msgsStr |> Async.RunSynchronously
+
         addMessage mgr { empty__Message() with role = Assistant; content = raw }
         saveSession mgr.current
         updateProfile mgr
-        "reply", Json.Str raw
-    | _ -> "", Json.Str ""
+
+        [| "reply", Json.Str raw |]
+
+    | _ -> [| "error", Json.Str "unknown act" |]

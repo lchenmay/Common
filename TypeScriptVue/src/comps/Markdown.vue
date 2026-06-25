@@ -6,8 +6,7 @@
     </div>
     <div v-else-if="renderedHtml" class="markdown-content" v-html="renderedHtml"></div>
     <div v-else class="markdown-empty">
-      <span class="empty-icon">📝</span>
-      <span>暂无内容</span>
+      <pre style="white-space:pre-wrap;font-family:inherit;margin:0;">{{ markdown }}</pre>
     </div>
   </div>
 </template>
@@ -69,12 +68,8 @@ const renderMarkdown = async () => {
     renderedHtml.value = html
   } catch (error) {
     console.error('Markdown 渲染失败:', error)
-    renderedHtml.value = `
-      <div class="render-error">
-        <span>⚠️</span>
-        <span>渲染失败: ${error instanceof Error ? error.message : String(error)}</span>
-      </div>
-    `
+    // fallback: 显示原始文本（用 <pre> 保留换行）
+    renderedHtml.value = `<pre style="white-space:pre-wrap;font-family:inherit;">${props.markdown.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`
   } finally {
     loading.value = false
   }

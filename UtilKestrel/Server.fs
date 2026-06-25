@@ -71,6 +71,8 @@ let runServer
         options.Limits.MinRequestBodyDataRate <- null
         options.Limits.KeepAliveTimeout <- TimeSpan.FromMinutes(5.0)
         options.Limits.RequestHeadersTimeout <- TimeSpan.FromMinutes(5.0)
+        // 禁用 response buffering，强制使用 Content-Length 而非 chunked
+        options.AllowSynchronousIO <- true
 
         options.ConfigureEndpointDefaults(fun ep ->
             // 强制 HTTP/1.1，避免 HTTP/2 Content-Length 帧与 body 不匹配问题
@@ -274,7 +276,9 @@ let runServer
            not (httpx.Request.Path.Value.StartsWith("/api", StringComparison.OrdinalIgnoreCase)) then
             let indexPath = Path.Combine(vueDistPath, "index.html")
             if File.Exists(indexPath) then
+                let fileInfo = FileInfo(indexPath)
                 httpx.Response.ContentType <- "text/html"
+                httpx.Response.ContentLength <- fileInfo.Length
                 do! httpx.Response.SendFileAsync(indexPath)
         else
             httpx.Response.StatusCode <- 404

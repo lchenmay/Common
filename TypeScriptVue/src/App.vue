@@ -55,7 +55,7 @@ import * as vue from 'vue'
 
 import { Crud } from '@lchenmay/jcs-common'
 import Markdown from './comps/Markdown.vue'
-import { amt__2digitDollar } from './lib/text'
+import { amt__2digitDollar } from './lib/util/text'
 
 const md = String.raw`
 1. 基准为线性参考模型 $y(x) = ax + b$

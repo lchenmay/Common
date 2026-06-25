@@ -1,6 +1,6 @@
 {
   "name": "@lchenmay/jcs-common",
-  "version": "1.0.115",
+  "version": "1.0.126",
   "type": "module",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -21,11 +21,13 @@
   "scripts": {
     "build": "vue-tsc --noEmit && vite build",
     "dev": "vite --open",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "release": "npm version patch --no-git-tag-version && npm run build && npm publish"
   },
   "peerDependencies": {
     "vue": "^3.5.0",
-    "vue-router": "^4.0.0"
+    "vue-router": "^4.0.0",
+    "pixi.js": "^8.0.0"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
@@ -35,6 +37,7 @@
     "axios": "^1.7.9",
     "katex": "^0.17.0",
     "marked": "^18.0.5",
+    "pixi.js": "^8.0.0",
     "typescript": "^5.4.5",
     "vite": "^8.0.16",
     "vite-plugin-dts": "^4.0.0",

@@ -70,6 +70,11 @@ let runServer
         options.Limits.MaxRequestBodySize <- Nullable(10L * 1024L * 1024L * 1024L) 
         options.Limits.MinRequestBodyDataRate <- null 
 
+        options.ConfigureEndpointDefaults(fun ep ->
+            // 强制 HTTP/1.1，避免 HTTP/2 Content-Length 帧与 body 不匹配问题
+            ep.Protocols <- Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1
+        ) |> ignore
+
         options.ListenAnyIP(port80)
         options.ListenAnyIP(port443, fun listenOptions ->
             if File.Exists runtime.host.cert then
@@ -232,6 +237,8 @@ let runServer
             httpx.Response.ContentType <- "application/json; charset=utf-8"
 
         httpx.Response.Headers.["Content-Security-Policy"] <- ""
+        // 显式设置 Content-Length 避免浏览器 Content-Length 不匹配错误
+        httpx.Response.ContentLength <- int64 x.Struct.rep.Length
         x
 
     // 1.2 GET 型 API 分发

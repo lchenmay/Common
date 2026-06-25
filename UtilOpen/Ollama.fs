@@ -11,6 +11,8 @@ open Microsoft.AspNetCore.Http
 open Util.Json
 open Util.Text
 
+open jCQT.AI.LLM
+
 
 // ---- 配置 ----
 
@@ -149,3 +151,39 @@ let proxyMiddleware (cfg: OllamaCfg) (context: Microsoft.AspNetCore.Http.HttpCon
             do! context.Response.Body.WriteAsync(ReadOnlyMemory bin)
     }
     t :> Task
+
+
+// ---- API Handler（供 Web 路由调用） ----
+
+/// 处理 ollama API 请求，返回 (string * Json)[] 供 wrapOk/er 包装
+let handleApi (json:Json) =
+    let cfg = { empty__OllamaCfg() with url = "http://127.0.0.1:11434"; enabled = true }
+    let act = json |> tryFindStrByAtt "act" |> fun s -> s.Replace("\"","")
+    match act with
+    | "list" ->
+        let raw = listModels cfg |> Async.RunSynchronously
+        "models", Json.Str raw
+    | "scenario" ->
+        let scenarios = 
+            jCQT.AI.Model.allScenarios()
+            |> Seq.map (fun s ->
+                let model = jCQT.AI.Model.modelName s
+                let label = s.ToString()
+                "{\"id\":\"" + label + "\",\"label\":\"" + label + "\",\"model\":\"" + model + "\"}"
+            )
+            |> String.concat ","
+        "scenarios", Json.Str ("[" + scenarios + "]")
+    | "msg" ->
+        let model = (json |> tryFindStrByAtt "model").Replace("\"","")
+        let message = (json |> tryFindStrByAtt "message").Replace("\"","")
+        let sessionId = (json |> tryFindStrByAtt "sessionId").Replace("\"","")
+        let mgr = empty__SessionManager()
+        mgr.current <- loadSession sessionId
+        addMessage mgr { empty__Message() with role = User; content = message }
+        let msgs = buildMessages mgr |> Seq.map (fun m -> "{\"role\":\"" + m.role.ToString().ToLower() + "\",\"content\":\"" + m.content.Replace("\"","\\\"") + "\"}") |> String.concat ","
+        let raw = chatSync cfg model ("[" + msgs + "]") |> Async.RunSynchronously
+        addMessage mgr { empty__Message() with role = Assistant; content = raw }
+        saveSession mgr.current
+        updateProfile mgr
+        "reply", Json.Str raw
+    | _ -> "", Json.Str ""

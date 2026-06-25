@@ -387,82 +387,137 @@ vue.onMounted(async () => {
 
 /* 原有样式 */
 .table-container {
-  @apply w-full;
+  width: 100%;
 }
 
 .table-card {
-  @apply bg-white rounded-lg shadow overflow-hidden;
+  background-color: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
 .table-wrapper {
-  @apply overflow-x-auto;
+  overflow-x: auto;
 }
 
 .table {
-  @apply w-full text-sm;
+  width: 100%;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
 }
 
 .table-header {
-  @apply bg-gray-50;
+  background-color: #f9fafb;
 }
 
 .table-header-cell {
-  @apply px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .table-header-cell-sortable {
-  @apply cursor-pointer hover:bg-gray-100;
+  cursor: pointer;
+}
+.table-header-cell-sortable:hover {
+  background-color: #f3f4f6;
 }
 
 .table-row-border {
-  @apply border-b border-gray-200;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .table-row {
-  @apply hover:bg-gray-50 transition-colors duration-150;
+  transition-property: color, background-color;
+  transition-duration: 150ms;
+}
+.table-row:hover {
+  background-color: #f9fafb;
 }
 
 .table-cell {
-  @apply px-4 py-3 text-sm text-gray-900;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #111827;
 }
 
 .table-pagination {
-  @apply px-4 py-3 bg-white border-t border-gray-200;
+  padding: 0.75rem 1rem;
+  background-color: #fff;
+  border-top: 1px solid #e5e7eb;
 }
 
 .table-pagination-inner {
-  @apply flex items-center justify-between flex-wrap gap-2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .table-page-size {
-  @apply flex items-center gap-2;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .table-page-size-select {
-  @apply border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.table-page-size-select:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #3b82f6;
 }
 
 .table-page-size-label {
-  @apply text-sm text-gray-600;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #4b5563;
 }
 
 .table-pagination-buttons {
-  @apply flex items-center gap-1;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .table-page-btn {
-  @apply px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  transition-property: color, background-color;
+  transition-duration: 150ms;
 }
-
+.table-page-btn:hover {
+  background-color: #f9fafb;
+}
 .table-page-btn:disabled {
-  @apply cursor-not-allowed opacity-50;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .table-stats {
-  @apply text-sm text-gray-600;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #4b5563;
 }
 
 .table-stats-number {
-  @apply font-medium text-gray-800;
+  font-weight: 500;
+  color: #1f2937;
 }
 </style>

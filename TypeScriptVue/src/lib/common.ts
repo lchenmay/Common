@@ -1,12 +1,16 @@
-
+export const checkDomain = (domain:string) => {
+    return [domain].includes(window.location.hostname)
+}
 
 export const buildHost = () => {
 	const hostname = window.location.hostname
 
-	const host: Host = {
+	const host: any = {
 		hostname: hostname,
 		api: `${window.location.protocol}//${hostname}`,
-		wsurl: `wss://${hostname}/ws/`
+		wsurl: `wss://${hostname}/ws/`,
+		discordAPPID: "1254790111913181274",
+		discordRedirect: `${window.location.protocol}//${window.location.host}/redirect/DISCORD`,
 	}
 
 	switch (host.hostname) {
@@ -39,16 +43,4 @@ export const getLocalStorage = (key: string, defaultv: string = '{}') => {
 
 export const setLocalStorage = (key: string, value: any) => {
 	window.localStorage.setItem(key, JSON.stringify(value))
-}
-
-export const empty__Runtime = <User, ClientRuntimeData>(): Runtime<User, ClientRuntimeData> => {
-
-	let runtime = {
-		host: buildHost(),
-		session: getLocalStorage("session", ''),
-		user: {} as User,
-		data: {} as ClientRuntimeData
-	} as Runtime<User, ClientRuntimeData>
-
-	return runtime
 }

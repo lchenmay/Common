@@ -12,3 +12,5 @@
 /Util/obj
 TypeScriptVue/.npmrc
 *.lock
+TypeScriptVue/package-lock.json
+TypeScriptVue/package-lock.json

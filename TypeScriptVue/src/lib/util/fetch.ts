@@ -42,9 +42,9 @@ const request = (method: "POST" | "GET") => async (url: string, data: Record<str
     if (qs) url = `${url}?${qs}`
   }
 
-  // 超时控制 60s
+  // 超时控制 120s（Ollama 大模型首次推理可能较慢）
   const controller = new AbortController()
-  const totalTimeoutId = setTimeout(() => controller.abort(), 60000)
+  const totalTimeoutId = setTimeout(() => controller.abort(), 120000)
   fetchOptions.signal = controller.signal
 
   try {

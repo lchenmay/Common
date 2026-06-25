@@ -68,7 +68,9 @@ let runServer
     // 1. 高性能 Kestrel 配置 (保持你的 10GB 限制)
     builder.WebHost.ConfigureKestrel(fun options ->
         options.Limits.MaxRequestBodySize <- Nullable(10L * 1024L * 1024L * 1024L) 
-        options.Limits.MinRequestBodyDataRate <- null 
+        options.Limits.MinRequestBodyDataRate <- null
+        options.Limits.KeepAliveTimeout <- TimeSpan.FromMinutes(5.0)
+        options.Limits.RequestHeadersTimeout <- TimeSpan.FromMinutes(5.0)
 
         options.ConfigureEndpointDefaults(fun ep ->
             // 强制 HTTP/1.1，避免 HTTP/2 Content-Length 帧与 body 不匹配问题

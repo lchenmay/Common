@@ -1,8 +1,5 @@
 <template>
   <div class="markdown-container">
-    <div>
-      Markdown Component Version 1.0.63
-    </div>
     <div v-if="loading" class="markdown-loading">
       <div class="loading-spinner"></div>
       <span>渲染中...</span>

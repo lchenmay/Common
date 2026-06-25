@@ -430,6 +430,8 @@ let exeDeployCode
         key__dir["code"] <- devRoot + "/" + code
         key__dir["Common"] <- devRoot + "/Common"
         key__dir["JCS"] <- devRoot + "/JCS"
+        key__dir["FsRoot"] <- "FsRoot"
+        key__dir["FsRootCode"] <- "FsRoot/" + code
 
         // 定义需要检查的目录列表
         let dirs = [|
@@ -437,6 +439,8 @@ let exeDeployCode
             ("主项目目录", key__dir["code"])
             ("Common 目录", key__dir["Common"])
             ("JCS 目录", key__dir["JCS"])
+            ("FsRoot 根目录", key__dir["FsRoot"])
+            ("FsRoot 项目目录", key__dir["FsRootCode"])
         |]
         
         let allDirsExist = ensureDirectories output credential dirs

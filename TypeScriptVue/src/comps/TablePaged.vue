@@ -40,7 +40,21 @@
                 </thead>
                 
                 <tbody>
+                    <!-- 加载骨架屏 -->
+                    <template v-if="s.loading">
+                      <tr v-for="n in s.paging.npp" :key="'sk-' + n" class="table-row table-row-border">
+                        <td v-if="props.selected" class="table-cell text-center" style="width: 50px"></td>
+                        <td v-for="f in props.fields" :key="f.key"
+                          :style="[f.width ? { width: f.width } : {}]"
+                          class="table-cell">
+                          <div class="table-skeleton"></div>
+                        </td>
+                      </tr>
+                    </template>
+
+                    <!-- 数据行 -->
                     <tr v-for="(i, index) in s.items"
+                      v-else
                       :key="index"
                       @click="props.onRowClick(i)"
                       class="table-row table-row-border cursor-pointer hover:bg-slate-50">
@@ -184,10 +198,11 @@ const s = vue.shallowReactive({
     pages: 0
   } as Paging,
   items: [] as Data[],
-  sort: '', // 排序字段，格式: '+field' 或 '-field'
-  sortField: '', // 当前排序的字段名
-  sortDirection: '' as '' | 'asc' | 'desc', // 排序方向
-  trigger: 0
+  sort: '',
+  sortField: '',
+  sortDirection: '' as '' | 'asc' | 'desc',
+  trigger: 0,
+  loading: false
 })
 
 const lang__display = (display:string) => {
@@ -334,6 +349,7 @@ const buildStyleTd = (f:TableField) => (row:any) => {
 
 const loadPage = (page:number) => {
   s.paging.page = page
+  s.loading = true
 
   let postdata = {
     paging: s.paging,
@@ -347,6 +363,7 @@ const loadPage = (page:number) => {
   loader(props.api, postdata, (rep: any) => {
     s.items = rep.data as Data[]
     s.paging = rep.paging
+    s.loading = false
     s.trigger++ 
   })
 }
@@ -519,5 +536,19 @@ vue.onMounted(async () => {
 .table-stats-number {
   font-weight: 500;
   color: #1f2937;
+}
+
+/* 骨架屏加载动画 */
+.table-skeleton {
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 </style>

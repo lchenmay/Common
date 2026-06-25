@@ -1,6 +1,6 @@
 {
   "name": "@lchenmay/jcs-common",
-  "version": "1.0.130",
+  "version": "1.0.139",
   "type": "module",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -25,9 +25,9 @@
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish"
   },
   "peerDependencies": {
+    "pixi.js": "^8.0.0",
     "vue": "^3.5.0",
-    "vue-router": "^4.0.0",
-    "pixi.js": "^8.0.0"
+    "vue-router": "^4.0.0"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",

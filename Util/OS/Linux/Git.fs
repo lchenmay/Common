@@ -116,7 +116,7 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
             // 然后 fetch 和 reset
             $"从远程拉取..." |> cyan |> output
             let fetchCmd = $"cd ~/{targetDir} && git fetch --all"
-            let fetchResult = bashWithTimeout output credential fetchCmd 60000
+            let fetchResult = bashWithTimeout output credential fetchCmd 180000
             fetchResult |> output
             
             if isGitFailure fetchResult then
@@ -153,10 +153,10 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
             // 是 git 仓库 → git pull 更新
             $"更新 {repoName} 仓库..." |> cyan |> output
             
-            // 1. fetch（增加超时到 60s 适应慢速 GitHub 连接）
+            // 1. fetch（增加超时到 180s 适应慢速 GitHub 连接和大仓库）
             "  - git fetch --all" |> cyan |> output
             let fetchCmd = $"cd ~/{targetDir} && git fetch --all"
-            let fetchResult = bashWithTimeout output credential fetchCmd 60000
+            let fetchResult = bashWithTimeout output credential fetchCmd 180000
             fetchResult |> output
             
             if isGitFailure fetchResult then

@@ -114,9 +114,9 @@ let bashWithTimeout output credential (cmd: string) (timeoutMs: int) : string =
     
     execWithTimeout output "" "ssh" args timeoutMs
 
-/// SSH 远程执行（默认30秒超时）
+/// SSH 远程执行（默认120秒超时，适应慢速 GitHub 连接和大文件操作）
 let bash output credential cmd : string =
-    bashWithTimeout output credential cmd 30000
+    bashWithTimeout output credential cmd 120000
 
 /// SSH 远程执行多个命令
 let bashMultiple output credential cmds =

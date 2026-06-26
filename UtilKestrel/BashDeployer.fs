@@ -399,9 +399,9 @@ let buildFrontend output credential code =
             debugDistBefore |> output
             
             // ====== 正式构建 ======
-            // 步骤1: bun install
+            // 步骤1: bun install（180s 超时，适应慢速网络和大依赖）
             "[DEBUG] --- 步骤1: bun install ---" |> yellow |> output
-            let installResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1; echo '[DEBUG] bun install exit code:' $?"
+            let installResult = bashWithTimeout output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1; echo '[DEBUG] bun install exit code:' $?" 180000
             installResult |> output
             
             // 步骤2: bun generateRoutes.cjs（生成路由）
@@ -412,7 +412,7 @@ let buildFrontend output credential code =
             // 步骤3: 用系统 node 运行 vite build（不用 bun bd，因 bun 内嵌 Node 版本可能不够 Vite 8 要求）
             // 参考：bun 1.2.15 内嵌 Node 22.6.0，Vite 8 要求 22.12+，导致构建静默失败
             "[DEBUG] --- 步骤3: node vite build ---" |> yellow |> output
-            let buildResult = bash output credential $"cd ~/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?"
+            let buildResult = bashWithTimeout output credential $"cd ~/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 180000
             buildResult |> output
             
             // 调试4: 构建后 dist 目录内容
@@ -509,9 +509,9 @@ let buildBackend output credential code =
                 let refResult = bash output credential utilRefCmd
                 refResult |> output
                 
-                // 3. dotnet build (suppress NU1603 warnings)
+                // 3. dotnet build (suppress NU1603 warnings, 300s timeout for large solution)
                 "  - dotnet build --configuration Release" |> cyan |> output
-                let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity minimal /nowarn:NU1603"
+                let buildResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity minimal /nowarn:NU1603" 300000
                 buildResult |> output
                 
                 "✓ 后端构建完成" |> green |> output
@@ -530,9 +530,9 @@ let buildBackend output credential code =
         else
             "✓ 项目文件存在" |> green |> output
             
-            // 1. dotnet restore (suppress NU1603)
+            // 1. dotnet restore (suppress NU1603, 120s timeout)
             "  - dotnet restore" |> cyan |> output
-            let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603"
+            let restoreResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603" 120000
             if restoreResult.Trim().Length > 0 then restoreResult |> output
             
             // 2. 添加项目引用 (suppress stderr noise)
@@ -541,9 +541,9 @@ let buildBackend output credential code =
             let refResult = bash output credential refCmd
             refResult |> output
             
-            // 3. dotnet build (suppress NU1603)
+            // 3. dotnet build (suppress NU1603, 300s timeout)
             "  - dotnet build --configuration Release" |> cyan |> output
-            let buildResult = bash output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity minimal /nowarn:NU1603"
+            let buildResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity minimal /nowarn:NU1603" 300000
             buildResult |> output
             
             "✓ 后端构建完成" |> green |> output
@@ -668,7 +668,7 @@ else
     echo '未找到 package.json，跳过'
 fi
 """
-        let updateResult = bash output credential updateFrontendCmd
+        let updateResult = bashWithTimeout output credential updateFrontendCmd 180000
         updateResult |> output
         
         // 后端依赖
@@ -682,7 +682,7 @@ else
     echo '未找到 .fsproj，跳过'
 fi
 """
-        let updateBackendResult = bash output credential updateBackendCmd
+        let updateBackendResult = bashWithTimeout output credential updateBackendCmd 120000
         updateBackendResult |> output
         
         // ========================================

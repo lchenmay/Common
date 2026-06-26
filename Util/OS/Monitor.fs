@@ -223,6 +223,34 @@ let gitHashLocal () =
         if hash.Length > 0 then hash else "-"
     with _ -> "-"
 
+// GPU 信息 — 解析 nvidia-smi 输出（Linux 上需要 nvidia-smi 在 PATH 中）
+// 返回每个 GPU 的 (index, name, gpuUtil%, memUsedMB, memTotalMB, temperatureC)
+let gpuInfo () =
+    try
+        let proc = new Process()
+        proc.StartInfo.FileName <- "nvidia-smi"
+        proc.StartInfo.Arguments <- "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits"
+        proc.StartInfo.RedirectStandardOutput <- true
+        proc.StartInfo.UseShellExecute <- false
+        proc.StartInfo.CreateNoWindow <- true
+        proc.Start() |> ignore
+        let output = proc.StandardOutput.ReadToEnd()
+        proc.WaitForExit(3000) |> ignore
+        let lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        lines |> Array.choose (fun line ->
+            let parts = line.Trim().Split(',') |> Array.map (fun s -> s.Trim())
+            if parts.Length >= 6 then
+                let idx = parts[0]
+                let name = parts[1]
+                let gpuUtil = parts[2].Replace(" %","") |> fun s -> s.Trim()
+                let memUsed = parts[3].Replace(" MiB","") |> fun s -> s.Trim()
+                let memTotal = parts[4].Replace(" MiB","") |> fun s -> s.Trim()
+                let temp = parts[5].Trim()
+                Some (idx, name, gpuUtil, memUsed, memTotal, temp)
+            else None)
+    with _ ->
+        [||]
+
 // 版本/编译信息（供前端显示编译号/版本号/git hash）
 let versionInfo (projectCode:string) (buildTime:System.DateTime) =
     let buildTimeStr = buildTime.ToString("yyyy-MM-dd HH:mm:ss") + " UTC"

@@ -756,7 +756,7 @@ fi
         $"  前端构建: {frontendStatus}" |> output
         
         // 11c. 运行时版本（通过 API 查询）
-        let port = "8081"  // Aiarwa HTTP 端口（runServer 8081 8444）
+        let port = "9020"  // Aiarwa HTTP 端口（runServer 9020 9021）
         $"  运行时版本 (API):" |> output
         let versionJson = remoteQueryVersion output credential port code
         $"    {versionJson}" |> output

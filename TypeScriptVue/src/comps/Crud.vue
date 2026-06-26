@@ -5,7 +5,7 @@
     :item__key="props.data__id" 
     :item__text="props.data__desc" 
     :onselect="openTab" />
-  <TabContainer ref="tabRef" :default-tab-type="'dashboard'" :show-add-btn="true"
+  <TabContainer ref="tabRef" :default-tab-type="'dashboard'" :show-add-btn="props.showAddBtn !== false"
     @onClickCreate="openTab(props.empty__data())" />
 
 </template>
@@ -27,6 +27,7 @@ const props = defineProps([
   'hpostdata',
   'component',
   'selected',
+  'showAddBtn',
   'data__title', 'empty__data', 'data__id', 'data__desc'])
 props.lang as string
 props.caption as string
@@ -35,6 +36,7 @@ props.fields as TableField[]
 props.hpostdata as Function
 props.component as Component
 props.selected as Data[]
+props.showAddBtn as boolean | undefined
 props.data__title as Function
 props.empty__data as Function
 props.data__id as Function

@@ -664,62 +664,108 @@ let routine
     sshPrivateKeyPath <- devDir + "/id_rsa"
     
     $">>> 开始部署至 {user}@{server}..." |> cyan |> output
-        
-    // 1. 本地：切换目录
-    "1. 切换到项目目录: " + devDir |> cyan |> output
-    let exeLocal args = exec output devDir "powershell" args |> ignore
-    "cd " + devDir |> exeLocal
-        
-    // 2. 检查 SSH 免密登录是否已配置
-    "2. 检查 SSH 免密登录状态..." |> cyan |> output
-    checkSSHAuth output credential (host.disk + "Dev/" + runtime.projectCode, host.deploy.gitEmail)
-    
-    // 3. 推送本地所有仓库变更到 GitHub
-    "3. 推送本地所有仓库变更到 GitHub..." |> cyan |> output
-    let gitPushOk = pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
-    
-    // 3b. 如果 GitHub push 失败，用 scp 直接把源码推送到目标服务器
-    let scpPushOk =
-        if gitPushOk then
-            true  // GitHub 已成功，不需要 scp
-        else
-            $"\n⚠ GitHub push 失败，启动 scp 直推方案..." |> orange |> output
-            pushSourceViaScp output code credential host.disk
-        
-    // 4. 验证 PostgreSQL（确保服务运行）
-    "4. 验证 PostgreSQL..." |> cyan |> output
-    exeRemoteValidatePSQL output host.deploy.credential
 
-    // 5. 配置 PostgreSQL 远程访问（仅当未配置时）
-    "5. 配置 PostgreSQL 远程访问..." |> cyan |> output
-    let conn = exeRemoteConfigurePSQL output host.deploy.credential host.deploy.postgresPwd
-
-    // 5b. 检查并创建项目数据库用户（新装数据库必须检查）
-    "5b. 检查项目数据库用户..." |> cyan |> output
-    // 从 runtime.host.conn 解析出用户名、密码和数据库名
-    let dbParts = 
-        let connStr = host.conn
-        let pairs = 
-            connStr.Split(';') 
-            |> Array.map (fun s -> 
-                let parts = s.Trim().Split('=')
-                if parts.Length >= 2 then (parts[0].Trim(), parts[1].Trim()) 
-                else ("", ""))
-            |> Map.ofArray
-        (pairs |> Map.tryFind "Username" |> Option.defaultValue "postgres",
-         pairs |> Map.tryFind "Password" |> Option.defaultValue "",
-         pairs |> Map.tryFind "Database" |> Option.defaultValue "postgres")
-    let dbUser, dbPwd, dbName = dbParts
-    $"  项目数据库用户: {dbUser}, 数据库: {dbName}" |> cyan |> output
-    Util.Linux.PSQL.exeEnsureDatabaseUser output host.deploy.credential dbUser dbPwd dbName |> ignore
-
-    // 6. 部署代码（从 GitHub 更新；如果已通过 scp 推送则跳过 git pull）
-    "6. 部署代码..." |> cyan |> output
-    exeDeployCode output host.deploy.credential code deployLogPath scpPushOk
-        
-    // 7. 清理 SSH 隧道
-    "7. 清理 SSH 隧道..." |> cyan |> output
-    stopAllSshTunnels output
+    // 记录服务是否在部署前运行（用于最终恢复）
+    let mutable serviceWasRunning = false
     
-    $"\n✅ {conn}" |> green |> output
-    "\n✅ 部署流程完成 " |> green |> output
+    try
+        // 1. 本地：切换目录
+        "1. 切换到项目目录: " + devDir |> cyan |> output
+        let exeLocal args = exec output devDir "powershell" args |> ignore
+        "cd " + devDir |> exeLocal
+            
+        // 2. 检查 SSH 免密登录是否已配置
+        "2. 检查 SSH 免密登录状态..." |> cyan |> output
+        checkSSHAuth output credential (host.disk + "Dev/" + runtime.projectCode, host.deploy.gitEmail)
+        
+        // 3. 推送本地所有仓库变更到 GitHub
+        "3. 推送本地所有仓库变更到 GitHub..." |> cyan |> output
+        let gitPushOk = pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
+        
+        // 3b. 如果 GitHub push 失败，用 scp 直接把源码推送到目标服务器
+        let scpPushOk =
+            if gitPushOk then
+                true  // GitHub 已成功，不需要 scp
+            else
+                $"\n⚠ GitHub push 失败，启动 scp 直推方案..." |> orange |> output
+                pushSourceViaScp output code credential host.disk
+            
+        // 3.5. 在操作 PostgreSQL 之前，先停止远程服务（防止 PG 重启导致服务 crash）
+        "3.5. 暂停远程服务（保护数据库连接）..." |> cyan |> output
+        serviceWasRunning <- checkDotNetServiceRunning output credential code
+        if serviceWasRunning then
+            $"  停止 {code} 服务..." |> yellow |> output
+            let stopCmd = $"systemctl stop {code.ToLower()}"
+            let stopResult = bash output credential stopCmd
+            $"  停止结果: {stopResult.Trim()}" |> output
+            // 等待服务完全停止
+            System.Threading.Thread.Sleep(2000)
+            let postStopCheck = bash output credential $"systemctl is-active {code.ToLower()}"
+            if postStopCheck.Trim() = "inactive" then
+                $"✓ {code} 服务已停止" |> green |> output
+            else
+                $"⚠ 服务状态: {postStopCheck.Trim()}，继续..." |> yellow |> output
+        
+        // 4. 验证 PostgreSQL（确保服务运行）
+        "4. 验证 PostgreSQL..." |> cyan |> output
+        exeRemoteValidatePSQL output host.deploy.credential
+
+        // 5. 配置 PostgreSQL 远程访问（仅当未配置时）
+        "5. 配置 PostgreSQL 远程访问..." |> cyan |> output
+        let conn = exeRemoteConfigurePSQL output host.deploy.credential host.deploy.postgresPwd
+
+        // 5b. 检查并创建项目数据库用户（新装数据库必须检查）
+        "5b. 检查项目数据库用户..." |> cyan |> output
+        // 从 runtime.host.conn 解析出用户名、密码和数据库名
+        let dbParts = 
+            let connStr = host.conn
+            let pairs = 
+                connStr.Split(';') 
+                |> Array.map (fun s -> 
+                    let parts = s.Trim().Split('=')
+                    if parts.Length >= 2 then (parts[0].Trim(), parts[1].Trim()) 
+                    else ("", ""))
+                |> Map.ofArray
+            (pairs |> Map.tryFind "Username" |> Option.defaultValue "postgres",
+             pairs |> Map.tryFind "Password" |> Option.defaultValue "",
+             pairs |> Map.tryFind "Database" |> Option.defaultValue "postgres")
+        let dbUser, dbPwd, dbName = dbParts
+        $"  项目数据库用户: {dbUser}, 数据库: {dbName}" |> cyan |> output
+        Util.Linux.PSQL.exeEnsureDatabaseUser output host.deploy.credential dbUser dbPwd dbName |> ignore
+
+        // 6. 部署代码（从 GitHub 更新；如果已通过 scp 推送则跳过 git pull）
+        "6. 部署代码..." |> cyan |> output
+        exeDeployCode output host.deploy.credential code deployLogPath scpPushOk
+            
+        // 7. 清理 SSH 隧道
+        "7. 清理 SSH 隧道..." |> cyan |> output
+        stopAllSshTunnels output
+        
+        $"\n✅ {conn}" |> green |> output
+        "\n✅ 部署流程完成 " |> green |> output
+
+    with ex ->
+        $"\n❌ 部署过程中发生错误: {ex.Message}" |> red |> output
+        $"{ex.StackTrace}" |> output
+        "请检查远程服务器状态" |> yellow |> output
+        
+        // 无论如何，尝试恢复服务
+        if serviceWasRunning then
+            $"\n⚠ 尝试恢复 {code} 服务..." |> yellow |> output
+            try
+                let startCmd = $"systemctl start {code.ToLower()}"
+                let startResult = bash output credential startCmd
+                $"  启动结果: {startResult.Trim()}" |> output
+                System.Threading.Thread.Sleep(3000)
+                let postStartCheck = bash output credential $"systemctl is-active {code.ToLower()}"
+                if postStartCheck.Trim() = "active" then
+                    $"✓ {code} 服务已恢复运行" |> green |> output
+                else
+                    $"⚠ 服务恢复失败，状态: {postStartCheck.Trim()}" |> red |> output
+            with ex2 ->
+                $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
+        
+        // 7. 清理 SSH 隧道（即使出错也要清理）
+        try
+            stopAllSshTunnels output
+        with _ -> ()

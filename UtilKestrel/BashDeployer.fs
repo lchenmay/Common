@@ -351,20 +351,18 @@ let buildFrontend output credential code =
         let bunExists = bash output credential checkBunCmd
         
         if bunExists.Contains("BUN_EXISTS") then
-            "  使用 Bun 安装..." |> cyan |> output
+            "  使用 Bun 安装依赖 + 构建前端..." |> cyan |> output
+            // 步骤1: bun install
             let installResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun install"
             installResult |> output
             
-            // bun add vite 插件
-            let addResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun add vite @vitejs/plugin-vue @vitejs/plugin-vue-jsx @vitejs/plugin-basic-ssl -D || true"
-            addResult |> output
+            // 步骤2: bun generateRoutes.cjs（生成路由）
+            let genResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun generateRoutes.cjs 2>&1"
+            genResult |> output
             
-            // bun generateRoutes.cjs
-            let generateResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun generateRoutes.cjs 2>/dev/null || true"
-            generateResult |> output
-            
-            // bun bd (完整构建: generateRoutes + vite build)
-            let buildResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun bd 2>&1"
+            // 步骤3: 用系统 node 运行 vite build（不用 bun bd，因 bun 内嵌 Node 版本可能不够 Vite 8 要求）
+            // 参考：bun 1.2.15 内嵌 Node 22.6.0，Vite 8 要求 22.12+，导致构建静默失败
+            let buildResult = bash output credential $"cd ~/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1"
             buildResult |> output
             
             // 验证 dist 产物是否生成

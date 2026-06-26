@@ -4,8 +4,8 @@ export const checkUrl = (url: string) => {
     if ((globalThis as any).runtime?.host?.api) {
       return (globalThis as any).runtime.host.api
     }
-    if (import.meta.env.DEV) {
-      return "" 
+    if (typeof location !== 'undefined' && location.hostname === 'localhost') {
+      return ""
     }
     return `https://localhost`
   }

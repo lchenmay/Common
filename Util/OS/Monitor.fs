@@ -207,3 +207,31 @@ let healthCheck (inited:bool) =
     [| ("status", if inited then "healthy" else "degraded")
        ("memoryMB", wsMB); ("uptime", up)
        ("cpuPct", sysCpu) |]
+
+// 版本/编译信息（供前端显示编译号/版本号/git hash）
+let versionInfo (projectCode:string) (buildTime:System.DateTime) =
+    let buildTimeStr = buildTime.ToString("yyyy-MM-dd HH:mm:ss") + " UTC"
+    let compileNumber =
+        // 编译号 = 从 2026-01-01 起的天数.当天分钟数（如 176.1205 表示第176天12:05）
+        let origin = DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        let elapsed = buildTime - origin
+        let days = elapsed.TotalDays |> int
+        let minutes = (elapsed.TotalHours - float(days * 24)) * 60.0 |> int
+        sprintf "%d.%04d" days minutes
+    let gitHash =
+        try
+            let proc = new Process()
+            proc.StartInfo.FileName <- if isLinux then "git" else "git"
+            proc.StartInfo.Arguments <- "rev-parse --short=8 HEAD"
+            proc.StartInfo.RedirectStandardOutput <- true
+            proc.StartInfo.UseShellExecute <- false
+            proc.StartInfo.CreateNoWindow <- true
+            proc.Start() |> ignore
+            let hash = proc.StandardOutput.ReadToEnd().Trim()
+            proc.WaitForExit(3000) |> ignore
+            if hash.Length > 0 then hash else "-"
+        with _ -> "-"
+    [| ("projectCode", projectCode)
+       ("compileNumber", compileNumber)
+       ("buildTime", buildTimeStr)
+       ("gitHash", gitHash) |]

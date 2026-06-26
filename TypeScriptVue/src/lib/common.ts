@@ -16,12 +16,12 @@ export const buildHost = () => {
 	switch (host.hostname) {
 		case 'localhost':
 			host.hostname = 'localhost'
-			host.api = 'https://localhost'
+			host.api = ''  // DEV: 空字符串走 Vite proxy
 			host.wsurl = 'wss://localhost/'
 			break
 		case '127.0.0.1':
 			host.hostname = '127.0.0.1'
-			host.api = 'http://localhost'
+			host.api = ''  // DEV: 空字符串走 Vite proxy
 			host.wsurl = 'wss://localhost/'
 			break
 	}

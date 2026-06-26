@@ -208,6 +208,21 @@ let healthCheck (inited:bool) =
        ("memoryMB", wsMB); ("uptime", up)
        ("cpuPct", sysCpu) |]
 
+// 本地获取当前目录的 git hash（纯函数，不依赖 bash）
+let gitHashLocal () =
+    try
+        let proc = new Process()
+        proc.StartInfo.FileName <- "git"
+        proc.StartInfo.Arguments <- "rev-parse --short=8 HEAD"
+        proc.StartInfo.RedirectStandardOutput <- true
+        proc.StartInfo.UseShellExecute <- false
+        proc.StartInfo.CreateNoWindow <- true
+        proc.Start() |> ignore
+        let hash = proc.StandardOutput.ReadToEnd().Trim()
+        proc.WaitForExit(3000) |> ignore
+        if hash.Length > 0 then hash else "-"
+    with _ -> "-"
+
 // 版本/编译信息（供前端显示编译号/版本号/git hash）
 let versionInfo (projectCode:string) (buildTime:System.DateTime) =
     let buildTimeStr = buildTime.ToString("yyyy-MM-dd HH:mm:ss") + " UTC"
@@ -218,19 +233,7 @@ let versionInfo (projectCode:string) (buildTime:System.DateTime) =
         let days = elapsed.TotalDays |> int
         let minutes = (elapsed.TotalHours - float(days * 24)) * 60.0 |> int
         sprintf "%d.%04d" days minutes
-    let gitHash =
-        try
-            let proc = new Process()
-            proc.StartInfo.FileName <- if isLinux then "git" else "git"
-            proc.StartInfo.Arguments <- "rev-parse --short=8 HEAD"
-            proc.StartInfo.RedirectStandardOutput <- true
-            proc.StartInfo.UseShellExecute <- false
-            proc.StartInfo.CreateNoWindow <- true
-            proc.Start() |> ignore
-            let hash = proc.StandardOutput.ReadToEnd().Trim()
-            proc.WaitForExit(3000) |> ignore
-            if hash.Length > 0 then hash else "-"
-        with _ -> "-"
+    let gitHash = gitHashLocal()
     [| ("projectCode", projectCode)
        ("compileNumber", compileNumber)
        ("buildTime", buildTimeStr)

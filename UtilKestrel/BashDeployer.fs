@@ -9,6 +9,7 @@ open Util.Linux.Bash
 open Util.Linux.Linux
 open Util.Linux.PSQL
 open Util.Linux.Git
+open Util.Monitor
 
 open UtilKestrel.Types
 
@@ -298,6 +299,32 @@ let deleteAllRepos output credential code =
     "=== 所有仓库目录删除完成 ===" |> yellow |> output
 
 
+// ==================== 版本检查函数 ====================
+
+/// 远程获取仓库的 git hash
+let remoteGitHash output credential repoPath =
+    try
+        let cmd = $"cd ~/{repoPath} && git rev-parse --short=8 HEAD 2>/dev/null || echo '-'"
+        let result = bash output credential cmd
+        result.Trim()
+    with _ -> "-"
+
+/// 远程检查 dist 目录是否有产物（返回文件数）
+let remoteDistFileCount output credential vscodeDir =
+    try
+        let cmd = $"if [ -d ~/{vscodeDir}/dist ]; then ls ~/{vscodeDir}/dist 2>/dev/null | wc -l; else echo '0'; fi"
+        let result = bash output credential cmd
+        result.Trim()
+    with _ -> "0"
+
+/// 远程通过 curl 查询 monitorVersion API 获取运行时版本
+let remoteQueryVersion output credential port code =
+    try
+        let cmd = $"curl -s -X POST http://localhost:{port}/api/admin/monitorVersion -H 'Content-Type: application/json' -d '{{\"act\":\"monitorversion\"}}' 2>/dev/null || echo '{{\"Er\":\"N/A\"}}'"
+        let result = bash output credential cmd
+        result.Trim()
+    with _ -> "N/A"
+
 // ==================== 构建函数 ====================
 
 /// 构建前端（逐条执行）- 使用 code 参数
@@ -337,18 +364,32 @@ let buildFrontend output credential code =
             generateResult |> output
             
             // bun bd (完整构建: generateRoutes + vite build)
-            let buildResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun bd 2>&1 || true"
+            let buildResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun bd 2>&1"
             buildResult |> output
+            
+            // 验证 dist 产物是否生成
+            let distCount = remoteDistFileCount output credential vscodeDir
+            if distCount <> "0" then
+                $"✓ 前端构建完成 (dist 产物: {distCount} 项)" |> green |> output
+                true
+            else
+                "❌ 前端构建后 dist 目录为空或不存在！" |> red |> output
+                false
         else
             "  使用 npm 安装..." |> cyan |> output
             let npmResult = bash output credential $"cd ~/{vscodeDir} && npm install"
             npmResult |> output
             
-            let buildResult = bash output credential $"cd ~/{vscodeDir} && npm run build 2>/dev/null || echo 'npm run build 不存在，跳过'"
+            let buildResult = bash output credential $"cd ~/{vscodeDir} && npm run build 2>&1"
             buildResult |> output
-        
-        "✓ 前端构建完成" |> green |> output
-        true
+            
+            let distCount = remoteDistFileCount output credential vscodeDir
+            if distCount <> "0" then
+                $"✓ 前端构建完成 (dist 产物: {distCount} 项)" |> green |> output
+                true
+            else
+                "❌ 前端构建后 dist 目录为空或不存在！" |> red |> output
+                false
 
 /// 构建后端（逐条执行）- 使用 code 参数
 let buildBackend output credential code =
@@ -582,9 +623,15 @@ fi
         updateBackendResult |> output
         
         // ========================================
-        // 7. 显示所有仓库状态
+        // 7. 显示所有仓库状态 + 记录构建前 git hash
         // ========================================
-        "7. 显示所有仓库状态..." |> cyan |> output
+        "7. 仓库状态 + 版本快照..." |> cyan |> output
+        let vscodeDir = key__dir["code"] + "/vscode"
+        let preGitHash = remoteGitHash output credential (key__dir["code"])
+        let preCommonHash = remoteGitHash output credential key__dir["Common"]
+        let preJcsHash = remoteGitHash output credential key__dir["JCS"]
+        $"  部署前 Git Hash → {code}: {preGitHash} | Common: {preCommonHash} | JCS: {preJcsHash}" |> cyan |> output
+        
         showRepoStatus output credential code key__dir["code"]
         showRepoStatus output credential "Common" key__dir["Common"]
         showRepoStatus output credential "JCS" key__dir["JCS"]
@@ -593,7 +640,7 @@ fi
         // 8. 构建前端 - 使用 code 参数
         // ========================================
         "8. 构建前端..." |> cyan |> output
-        buildFrontend output credential code |> ignore
+        let frontendOk = buildFrontend output credential code
         
         // ========================================
         // 9. 构建后端 - 使用 code 参数
@@ -623,25 +670,46 @@ fi
             startServiceVerbose output credential code |> ignore
         
         // ========================================
-        // 11. 显示部署摘要
+        // 11. 部署后版本验证 + 汇总报告
         // ========================================
+        "\n========================================" |> cyan |> output
+        "📊 部署结果汇总报告" |> cyan |> output
+        "========================================" |> cyan |> output
+        
+        // 11a. 部署后 git hash
+        let postGitHash = remoteGitHash output credential (key__dir["code"])
+        let postCommonHash = remoteGitHash output credential key__dir["Common"]
+        let postJcsHash = remoteGitHash output credential key__dir["JCS"]
+        
+        let hashChanged pre post = if pre <> "-" && post <> "-" && pre <> post then "✅ 已更新" else if pre = post then "⚠ 未变化" else "—"
+        $"  Git Hash:" |> output
+        $"    {code}:  {preGitHash} → {postGitHash}  {hashChanged preGitHash postGitHash}" |> output
+        $"    Common: {preCommonHash} → {postCommonHash}  {hashChanged preCommonHash postCommonHash}" |> output
+        $"    JCS:    {preJcsHash} → {postJcsHash}  {hashChanged preJcsHash postJcsHash}" |> output
+        
+        // 11b. 前端构建结果
+        let distCount = remoteDistFileCount output credential vscodeDir
+        let frontendStatus = if frontendOk then $"✅ 成功 (dist 产物: {distCount} 项)" else $"❌ 失败 (dist: {distCount} 项)"
+        $"  前端构建: {frontendStatus}" |> output
+        
+        // 11c. 运行时版本（通过 API 查询）
+        let port = "8081"  // Aiarwa HTTP 端口（runServer 8081 8444）
+        $"  运行时版本 (API):" |> output
+        let versionJson = remoteQueryVersion output credential port code
+        $"    {versionJson}" |> output
+        
+        // 11d. 服务状态
+        let serviceStatus = bash output credential $"systemctl is-active {code.ToLower()}"
+        let serviceIcon = if serviceStatus.Trim() = "active" then "✅" else "❌"
+        $"  服务状态: {serviceIcon} {serviceStatus.Trim()}" |> output
+        
         let logFileInfo = 
             match logPath with
             | Some p -> $"📋 部署日志: {p}"
             | None -> $"📋 服务日志: /tmp/{code.ToLower()}.log"
-        let summary = $"""
-========================================
-✅ {server} 代码部署完成
-========================================
-📁 部署目录结构:
-   - {code}: ~/{key__dir["code"]}
-   - Common: ~/{key__dir["Common"]}
-   - JCS: ~/{key__dir["JCS"]}
-🔗 PostgreSQL: Host={server};Port=5432;Username=postgres;Password=***
-{logFileInfo}
-========================================
-"""
-        summary |> cyan |> output
+        let deployDir = key__dir.["code"]
+        $"\n📁 部署目录: ~/{deployDir}  |  {logFileInfo}" |> output
+        "========================================" |> cyan |> output
         
     with ex ->
         $"部署过程中发生错误: {ex.Message}" |> red |> output
@@ -664,6 +732,10 @@ let routine
     sshPrivateKeyPath <- devDir + "/id_rsa"
     
     $">>> 开始部署至 {user}@{server}..." |> cyan |> output
+    
+    // 部署前版本快照（本地）
+    let localGitHash = gitHashLocal()
+    $"  本地 {code} Git Hash: {localGitHash}" |> cyan |> output
 
     // 记录服务是否在部署前运行（用于最终恢复）
     let mutable serviceWasRunning = false

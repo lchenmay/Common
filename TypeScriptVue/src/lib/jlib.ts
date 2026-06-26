@@ -27,7 +27,7 @@ export const createJlib = <T>(
   panel: deps.panel,
   host: deps.host,
   runtime: (globalThis as any).runtime,
-  mor: { studio: mor },
+  mor: { mor },
   post: deps.fetchs.post,
   get: deps.fetchs.get,
   setRT: deps.runtime.setRT,

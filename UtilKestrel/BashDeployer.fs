@@ -336,8 +336,8 @@ let buildFrontend output credential code =
             let generateResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun generateRoutes.cjs 2>/dev/null || true"
             generateResult |> output
             
-            // bun vite build
-            let buildResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bunx vite build --emptyOutDir || true"
+            // bun bd (完整构建: generateRoutes + vite build)
+            let buildResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun bd 2>&1 || true"
             buildResult |> output
         else
             "  使用 npm 安装..." |> cyan |> output
@@ -607,8 +607,18 @@ fi
         "10. 启动服务..." |> cyan |> output
         let serviceRunning = checkDotNetServiceRunning output credential code
         if serviceRunning then
-            $"✓ {code} systemd 服务已在运行" |> green |> output
-            $"如需重启，请手动执行: systemctl restart {code.ToLower()}" |> yellow |> output
+            $"✓ {code} systemd 服务已在运行，自动重启加载新代码..." |> green |> output
+            let restartCmd = $"systemctl restart {code.ToLower()}"
+            let restartResult = bash output credential restartCmd
+            $"  重启结果: {restartResult.Trim()}" |> output
+            // 等待 3 秒让服务完全启动
+            System.Threading.Thread.Sleep(3000)
+            // 验证重启后服务状态
+            let postRestartCheck = bash output credential $"systemctl is-active {code.ToLower()}"
+            if postRestartCheck.Trim() = "active" then
+                $"✓ {code} 服务已成功重启" |> green |> output
+            else
+                $"⚠ 服务重启后状态: {postRestartCheck.Trim()}" |> yellow |> output
         else
             startServiceVerbose output credential code |> ignore
         

@@ -4,15 +4,10 @@
 **/obj/**
 **/bin/**
 **/.vs/**
-/Util/Util/obj/Debug/net8.0/Util.AssemblyInfo.fs
-/Util/Util/obj/Debug/net8.0/Util.AssemblyInfoInputs.cache
-/Util/Util/obj/Debug/net8.0/Util.assets.cache
-/.vs/Common/v17/.wsuo
-/.vs/slnx.sqlite
-/Util/obj
 TypeScriptVue/.npmrc
 *.lock
-TypeScriptVue/package-lock.json
+*.lockb
+node_modules
 
 # AI 调试临时文件
 *.Backup.tmp
@@ -22,4 +17,3 @@ build_err.txt
 build_log.txt
 server-out.txt
 run_log.txt
-*.lockb

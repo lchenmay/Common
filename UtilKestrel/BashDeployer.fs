@@ -90,6 +90,7 @@ let private pushLocalRepoWithRetry output repoPath gitName gitEmail (maxRetries:
     success
 
 /// 推送所有本地仓库变更（带验证和重试）
+/// 返回：所有仓库是否都成功推送
 let pushAllLocalRepos output code gitName gitEmail disk =
     $"\n=== 开始推送所有本地仓库变更 ===" |> yellow |> output
     
@@ -99,14 +100,71 @@ let pushAllLocalRepos output code gitName gitEmail disk =
         ("JCS", $"{disk}Dev/JCS")
     |]
     
+    let mutable allSuccess = true
     repos |> Array.iter (fun (name, path) ->
         if Directory.Exists(path) then
-            pushLocalRepoWithRetry output path gitName gitEmail 3 |> ignore
+            let ok = pushLocalRepoWithRetry output path gitName gitEmail 3
+            if not ok then allSuccess <- false
         else
             $"⚠ 目录不存在: {path}" |> yellow |> output
         "\n" |> output)
     
     "=== 所有本地仓库推送完成 ===" |> yellow |> output
+    allSuccess
+
+/// 通过 scp 直接推送源码到目标服务器（GitHub 不可用时的 fallback）
+/// 将本地 Dev/{code}, Dev/Common, Dev/JCS 目录直接 scp 到远程服务器
+let private pushSourceViaScp output code credential disk =
+    $"\n⚠ GitHub push 失败，改用 scp 直接推送源码到服务器..." |> orange |> output
+    
+    let porto, user, server = credential
+    let portArg = match porto with Some p -> $"-P {p}" | None -> ""
+    let privateKeyArg = getSshPrivateKeyArg()
+    
+    // 源目录 → 目标目录映射
+    let repos = [|
+        (code, $"{disk}Dev/{code}", $"~/Dev/{code}")
+        ("Common", $"{disk}Dev/Common", $"~/Dev/Common")
+        ("JCS", $"{disk}Dev/JCS", $"~/Dev/JCS")
+    |]
+    
+    let mutable allSuccess = true
+    
+    repos |> Array.iter (fun (name, localPath, remotePath) ->
+        if not (Directory.Exists localPath) then
+            $"⚠ 本地目录不存在，跳过: {localPath}" |> yellow |> output
+        else
+            $"\n--- scp 推送 {name}: {localPath} -> {user}@{server}:{remotePath} ---" |> cyan |> output
+            
+            // 先确保远程目录存在
+            let mkdirCmd = $"mkdir -p {remotePath}"
+            bash output credential mkdirCmd |> ignore
+            
+            // Windows 路径需要转换：C:\Dev\Xxx -> /cygdrive/c/Dev/Xxx 或使用原生路径
+            // PowerShell 的 scp 支持 Windows 路径格式
+            let scpArgs = 
+                $"{privateKeyArg} {portArg} -r -o StrictHostKeyChecking=no " +
+                $"\"{localPath}\\*\" {user}@{server}:{remotePath}/"
+            
+            $"  scp {localPath}\\* -> {server}:{remotePath}/" |> cyan |> output
+            let result = execWithTimeout output "" "scp" scpArgs 600000  // 10分钟超时（大文件）
+            
+            let hasError = result.Contains("fatal") || result.Contains("Error") || 
+                           result.Contains("Permission denied") || result.Contains("No such file")
+            if hasError then
+                $"❌ scp 推送 {name} 失败" |> red |> output
+                result |> output
+                allSuccess <- false
+            else
+                $"{name} 通过 scp 推送完成" |> green |> output
+                if not (String.IsNullOrWhiteSpace result) then result |> output)
+    
+    if allSuccess then
+        "✓ 所有仓库通过 scp 推送完成" |> green |> output
+    else
+        "⚠ 部分仓库 scp 推送失败，继续后续流程" |> yellow |> output
+    
+    allSuccess
 
 
 // ==================== 环境检查函数 ====================
@@ -397,11 +455,13 @@ let getRepoUrl code =
     | _ -> $"https://github.com/siduochen/{code}.git"
 
 /// 部署代码（从 GitHub 更新所有仓库）- 逐条执行
+/// scpAlreadyPushed: 如果为 true，git pull 失败时不会报错（因为代码已通过 scp 同步）
 let exeDeployCode
     output
     credential
     code
-    (logPath: string option) =
+    (logPath: string option)
+    (scpAlreadyPushed: bool) =
 
     let porto,user,server,target,portArg = credentialExpand credential
     let devRoot = "Dev"
@@ -451,23 +511,32 @@ let exeDeployCode
         // ========================================
         // 2. 更新主项目仓库
         // ========================================
-        "2. 从 GitHub 更新主项目仓库..." |> cyan |> output
-        updateSingleRepo output credential 
-            code (getRepoUrl code) key__dir["code"] |> ignore
+        if scpAlreadyPushed then
+            $"2. 代码已通过 scp 同步，跳过 git pull（主项目）" |> cyan |> output
+        else
+            "2. 从 GitHub 更新主项目仓库..." |> cyan |> output
+            updateSingleRepo output credential 
+                code (getRepoUrl code) key__dir["code"] |> ignore
         
         // ========================================
         // 3. 更新 Common 仓库
         // ========================================
-        "3. 从 GitHub 更新 Common 仓库..." |> cyan |> output
-        updateSingleRepo output credential 
-            "Common" (getRepoUrl "Common") key__dir["Common"] |> ignore
+        if scpAlreadyPushed then
+            $"3. 代码已通过 scp 同步，跳过 git pull（Common）" |> cyan |> output
+        else
+            "3. 从 GitHub 更新 Common 仓库..." |> cyan |> output
+            updateSingleRepo output credential 
+                "Common" (getRepoUrl "Common") key__dir["Common"] |> ignore
         
         // ========================================
         // 4. 更新 JCS 仓库
         // ========================================
-        "4. 从 GitHub 更新 JCS 仓库..." |> cyan |> output
-        updateSingleRepo output credential 
-            "JCS" (getRepoUrl "JCS") key__dir["JCS"] |> ignore
+        if scpAlreadyPushed then
+            $"4. 代码已通过 scp 同步，跳过 git pull（JCS）" |> cyan |> output
+        else
+            "4. 从 GitHub 更新 JCS 仓库..." |> cyan |> output
+            updateSingleRepo output credential 
+                "JCS" (getRepoUrl "JCS") key__dir["JCS"] |> ignore
         
         // ========================================
         // 5. 确保环境就绪（Node.js + Bun）
@@ -597,7 +666,15 @@ let routine
     
     // 3. 推送本地所有仓库变更到 GitHub
     "3. 推送本地所有仓库变更到 GitHub..." |> cyan |> output
-    pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
+    let gitPushOk = pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
+    
+    // 3b. 如果 GitHub push 失败，用 scp 直接把源码推送到目标服务器
+    let scpPushOk =
+        if gitPushOk then
+            true  // GitHub 已成功，不需要 scp
+        else
+            $"\n⚠ GitHub push 失败，启动 scp 直推方案..." |> orange |> output
+            pushSourceViaScp output code credential host.disk
         
     // 4. 验证 PostgreSQL（确保服务运行）
     "4. 验证 PostgreSQL..." |> cyan |> output
@@ -626,9 +703,9 @@ let routine
     $"  项目数据库用户: {dbUser}, 数据库: {dbName}" |> cyan |> output
     Util.Linux.PSQL.exeEnsureDatabaseUser output host.deploy.credential dbUser dbPwd dbName |> ignore
 
-    // 6. 部署代码（从 GitHub 更新）
+    // 6. 部署代码（从 GitHub 更新；如果已通过 scp 推送则跳过 git pull）
     "6. 部署代码..." |> cyan |> output
-    exeDeployCode output host.deploy.credential code deployLogPath
+    exeDeployCode output host.deploy.credential code deployLogPath scpPushOk
         
     // 7. 清理 SSH 隧道
     "7. 清理 SSH 隧道..." |> cyan |> output

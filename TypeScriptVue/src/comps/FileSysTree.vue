@@ -13,6 +13,8 @@
       :baseUrl="props.baseUrl"
       @select="onSelect"
       @toggle="onToggle"
+      @rename-folder="onRenameFolder"
+      @download-zip="onDownloadZip"
     />
   </div>
 </div>
@@ -48,6 +50,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'select', node: FileNode): void
+  (e: 'rename-folder', node: FileNode): void
+  (e: 'download-zip', node: FileNode): void
 }>()
 
 // ---- 多语言 ----
@@ -88,6 +92,14 @@ const onToggle = async (node: FileNode) => {
       } catch {}
     }
   }
+}
+
+const onRenameFolder = (node: FileNode) => {
+  emit('rename-folder', node)
+}
+
+const onDownloadZip = (node: FileNode) => {
+  emit('download-zip', node)
 }
 
 onMounted(async () => {

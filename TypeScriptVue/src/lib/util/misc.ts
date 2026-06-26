@@ -46,3 +46,13 @@ export const isImage = (name: string): boolean => {
   const ext = name.split('.').pop()?.toLowerCase() || ''
   return ['jpg','jpeg','png','gif','bmp','svg','webp','ico','heic','heif'].includes(ext)
 }
+
+/** 触发浏览器下载（通过创建临时 <a> 标签） */
+export const triggerDownload = (url: string, filename: string) => {
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}

@@ -32,6 +32,12 @@
     <!-- 文件大小 -->
     <span v-if="node.type === 'file'" class="fstn-size">{{ formatSize(node.size) }}</span>
     <span v-else class="fstn-count">{{ childCount }}</span>
+
+    <!-- 文件夹操作按钮 (hover 时显示) -->
+    <span v-if="node.type === 'folder'" class="fstn-actions">
+      <button class="fstn-act-btn" title="重命名" @click.stop="onRename">✏️</button>
+      <button class="fstn-act-btn" title="下载ZIP" @click.stop="onDownloadZip">📥</button>
+    </span>
   </div>
 
   <!-- 子节点 -->
@@ -45,6 +51,8 @@
       :baseUrl="baseUrl"
       @select="onChildSelect"
       @toggle="onChildToggle"
+      @rename-folder="onChildRename"
+      @download-zip="onChildDownloadZip"
     />
   </div>
 </div>
@@ -71,6 +79,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select', node: FileNode): void
   (e: 'toggle', node: FileNode): void
+  (e: 'rename-folder', node: FileNode): void
+  (e: 'download-zip', node: FileNode): void
 }>()
 
 // ---- State ----
@@ -108,6 +118,22 @@ const onChildToggle = (node: FileNode) => {
   emit('toggle', node)
 }
 
+const onRename = () => {
+  emit('rename-folder', props.node)
+}
+
+const onDownloadZip = () => {
+  emit('download-zip', props.node)
+}
+
+const onChildRename = (node: FileNode) => {
+  emit('rename-folder', node)
+}
+
+const onChildDownloadZip = (node: FileNode) => {
+  emit('download-zip', node)
+}
+
 </script>
 
 
@@ -133,4 +159,17 @@ const onChildToggle = (node: FileNode) => {
 .fstn-count { font-size: 0.7rem; color: #94a3b8; flex-shrink: 0; text-align: right; }
 
 .fstn-children { }
+
+/* 文件夹操作按钮 */
+.fstn-actions {
+  display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0;
+}
+.fstn-row:hover .fstn-actions { opacity: 1; }
+
+.fstn-act-btn {
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  border: none; background: #e2e8f0; border-radius: 4px; cursor: pointer;
+  font-size: 12px; transition: background 0.15s; padding: 0; line-height: 1;
+}
+.fstn-act-btn:hover { background: #cbd5e1; }
 </style>

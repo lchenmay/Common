@@ -778,6 +778,112 @@ fi
         $"部署过程中发生错误: {ex.Message}" |> red |> output
         "请检查远程服务器状态" |> yellow |> output
 
+// ==================== Cloudflare Tunnel 检查 ====================
+
+/// 检测 cloudflared 服务是否存在并检查配置
+/// 如果存在但 originService 端口不对，自动修复
+let private checkCloudflareTunnel output credential (httpsPort: int) =
+    "\n--- Cloudflare Tunnel 检查 ---" |> cyan |> output
+    
+    // 1. 检查 cloudflared 是否安装
+    let checkInstalledCmd = "command -v cloudflared > /dev/null 2>&1 && echo 'INSTALLED' || echo 'NOT_INSTALLED'"
+    let installedStatus = bash output credential checkInstalledCmd
+    
+    if installedStatus.Contains("NOT_INSTALLED") then
+        "  cloudflared 未安装，跳过" |> cyan |> output
+        true  // 不是错误，只是没有 Tunnel
+    else
+        "✓ cloudflared 已安装" |> green |> output
+        
+        // 2. 检查 systemd 服务是否存在
+        let checkServiceCmd = "systemctl list-unit-files cloudflared.service 2>/dev/null | grep cloudflared || echo 'NO_SERVICE'"
+        let serviceStatus = bash output credential checkServiceCmd
+        
+        if serviceStatus.Contains("NO_SERVICE") then
+            "  cloudflared systemd 服务不存在，跳过" |> cyan |> output
+            true
+        else
+            // 3. 检查 config.yml 是否存在
+            let checkConfigCmd = "if [ -f /root/.cloudflared/config.yml ]; then echo 'EXISTS'; elif [ -f /etc/cloudflared/config.yml ]; then echo 'EXISTS_ETC'; else echo 'NOT_EXISTS'; fi"
+            let configStatus = bash output credential checkConfigCmd
+            
+            if configStatus.Contains("NOT_EXISTS") then
+                "⚠ cloudflared 服务存在但未找到 config.yml" |> yellow |> output
+                true  // 不阻断部署
+            else
+                let configPath = if configStatus.Contains("EXISTS_ETC") then "/etc/cloudflared/config.yml" else "/root/.cloudflared/config.yml"
+                $"  配置文件: {configPath}" |> cyan |> output
+                
+                // 4. 读取当前 originService 端口
+                let readOriginCmd = $"grep -oP 'service:\\s*https?://localhost:\\K\\d+' {configPath} 2>/dev/null | head -1 || echo 'UNKNOWN'"
+                let currentOriginPort = bash output credential readOriginCmd
+                let currentOriginPort = currentOriginPort.Trim()
+                
+                $"  当前 Tunnel origin 端口: {currentOriginPort}" |> cyan |> output
+                $"  实际 HTTPS 端口: {httpsPort}" |> cyan |> output
+                
+                // 5. 比较端口
+                if currentOriginPort = httpsPort.ToString() then
+                    $"✓ Cloudflare Tunnel 配置正确 (origin → localhost:{httpsPort})" |> green |> output
+                    
+                    // 确保服务在运行
+                    let isActiveCmd = "systemctl is-active cloudflared 2>/dev/null || echo 'inactive'"
+                    let isActive = bash output credential isActiveCmd
+                    if isActive.Trim() = "active" then
+                        "✓ cloudflared 服务正在运行" |> green |> output
+                    else
+                        "⚠ cloudflared 服务未运行，正在启动..." |> yellow |> output
+                        bash output credential "systemctl restart cloudflared" |> ignore
+                        System.Threading.Thread.Sleep(2000)
+                        let postCheck = bash output credential "systemctl is-active cloudflared"
+                        if postCheck.Trim() = "active" then
+                            "✓ cloudflared 服务已启动" |> green |> output
+                        else
+                            "⚠ cloudflared 服务启动可能失败" |> yellow |> output
+                    true
+                else
+                    $"⚠ Cloudflare Tunnel 端口不匹配! (Tunnel: {currentOriginPort} ≠ 实际: {httpsPort})" |> yellow |> output
+                    "  自动修复中..." |> yellow |> output
+                    
+                    // 6. 用 sed 替换 config.yml 中的端口
+                    // 匹配 service: http://localhost:PORT 或 service: https://localhost:PORT
+                    let fixCmd = $"sed -i 's|\\(service:\\s*\\)https\\?://localhost:[0-9]\\+|\\1https://localhost:{httpsPort}|g' {configPath}"
+                    let fixResult = bash output credential fixCmd
+                    
+                    // 验证修复
+                    let verifyCmd = $"grep -oP 'service:\\s*https?://localhost:\\K\\d+' {configPath} 2>/dev/null | head -1 || echo 'UNKNOWN'"
+                    let newOriginPort = bash output credential verifyCmd
+                    
+                    if newOriginPort.Trim() = httpsPort.ToString() then
+                        $"✓ 已修复: origin → https://localhost:{httpsPort}" |> green |> output
+                        
+                        // 重启 cloudflared
+                        "  重启 cloudflared..." |> cyan |> output
+                        bash output credential "systemctl restart cloudflared" |> ignore
+                        System.Threading.Thread.Sleep(3000)
+                        
+                        // 检查重启后状态
+                        let postRestartCheck = bash output credential "systemctl is-active cloudflared"
+                        if postRestartCheck.Trim() = "active" then
+                            "✓ cloudflared 已重启" |> green |> output
+                            
+                            // 快速验证 Tunnel 日志无错误
+                            let logCheckCmd = "journalctl -u cloudflared --since '10 sec ago' --no-pager 2>&1 | grep -i 'error\|connection refused' || echo 'NO_ERRORS'"
+                            let logCheck = bash output credential logCheckCmd
+                            if logCheck.Contains("NO_ERRORS") then
+                                "✓ Tunnel 日志无错误" |> green |> output
+                            else
+                                "⚠ Tunnel 日志有错误，请检查:" |> yellow |> output
+                                logCheck |> output
+                            true
+                        else
+                            "⚠ cloudflared 重启后状态异常" |> yellow |> output
+                            true  // 不阻断部署
+                    else
+                        $"❌ 自动修复失败，请手动编辑 {configPath}" |> red |> output
+                        $"  将 service 端口改为 https://localhost:{httpsPort}" |> yellow |> output
+                        true  // 不阻断部署
+
 // ==================== 主流程 ====================
 
 let routine 
@@ -871,6 +977,11 @@ let routine
         // 6. 部署代码（从 GitHub 更新；如果已通过 scp 推送则跳过 git pull）
         "6. 部署代码..." |> cyan |> output
         exeDeployCode output host.deploy.credential code deployLogPath scpPushOk
+        
+        // 6.5. 检查 Cloudflare Tunnel 配置（部署完成后，服务已启动）
+        // HTTPS 端口 = HTTP 端口 + 363（Aiarwa: 8081+363=8444, 通用约定）
+        let httpsPort = host.port + 363
+        checkCloudflareTunnel output host.deploy.credential httpsPort |> ignore
             
         // 7. 清理 SSH 隧道
         "7. 清理 SSH 隧道..." |> cyan |> output

@@ -778,113 +778,263 @@ fi
         $"部署过程中发生错误: {ex.Message}" |> red |> output
         "请检查远程服务器状态" |> yellow |> output
 
-// ==================== Cloudflare Tunnel 检查 ====================
+// ==================== 健康检查（非阻塞） ====================
 
-/// 检测 cloudflared 服务是否存在并检查配置
-/// 如果存在但 originService 端口不对，自动修复
-let private checkCloudflareTunnel output credential (httpsPort: int) =
-    "\n--- Cloudflare Tunnel 检查 ---" |> cyan |> output
-    
-    // 1. 检查 cloudflared 是否安装
-    let checkInstalledCmd = "command -v cloudflared > /dev/null 2>&1 && echo 'INSTALLED' || echo 'NOT_INSTALLED'"
-    let installedStatus = bash output credential checkInstalledCmd
-    
-    if installedStatus.Contains("NOT_INSTALLED") then
-        "  cloudflared 未安装，跳过" |> cyan |> output
-        true  // 不是错误，只是没有 Tunnel
-    else
-        "✓ cloudflared 已安装" |> green |> output
-        
-        // 2. 检查 systemd 服务是否存在
-        let checkServiceCmd = "systemctl list-unit-files cloudflared.service 2>/dev/null | grep cloudflared || echo 'NO_SERVICE'"
-        let serviceStatus = bash output credential checkServiceCmd
-        
-        if serviceStatus.Contains("NO_SERVICE") then
-            "  cloudflared systemd 服务不存在，跳过" |> cyan |> output
+/// 轻量 DB 健康检查：pg_isready 一次，通就过，不通记日志不阻断
+let private checkDbHealth output credential =
+    "\n--- DB 健康检查 ---" |> cyan |> output
+    try
+        let result = bash output credential "pg_isready -q 2>&1 && echo 'DB_OK' || echo 'DB_UNREACHABLE'"
+        if result.Contains("DB_OK") then
+            "✓ PostgreSQL 可达" |> green |> output
             true
         else
-            // 3. 检查 config.yml 是否存在
-            let checkConfigCmd = "if [ -f /root/.cloudflared/config.yml ]; then echo 'EXISTS'; elif [ -f /etc/cloudflared/config.yml ]; then echo 'EXISTS_ETC'; else echo 'NOT_EXISTS'; fi"
-            let configStatus = bash output credential checkConfigCmd
-            
-            if configStatus.Contains("NOT_EXISTS") then
-                "⚠ cloudflared 服务存在但未找到 config.yml" |> yellow |> output
-                true  // 不阻断部署
-            else
-                let configPath = if configStatus.Contains("EXISTS_ETC") then "/etc/cloudflared/config.yml" else "/root/.cloudflared/config.yml"
-                $"  配置文件: {configPath}" |> cyan |> output
-                
-                // 4. 读取当前 originService 端口
-                let readOriginCmd = $"grep -oP 'service:\\s*https?://localhost:\\K\\d+' {configPath} 2>/dev/null | head -1 || echo 'UNKNOWN'"
-                let currentOriginPort = bash output credential readOriginCmd
-                let currentOriginPort = currentOriginPort.Trim()
-                
-                $"  当前 Tunnel origin 端口: {currentOriginPort}" |> cyan |> output
-                $"  实际 HTTPS 端口: {httpsPort}" |> cyan |> output
-                
-                // 5. 比较端口
-                if currentOriginPort = httpsPort.ToString() then
-                    $"✓ Cloudflare Tunnel 配置正确 (origin → localhost:{httpsPort})" |> green |> output
-                    
-                    // 确保服务在运行
-                    let isActiveCmd = "systemctl is-active cloudflared 2>/dev/null || echo 'inactive'"
-                    let isActive = bash output credential isActiveCmd
-                    if isActive.Trim() = "active" then
-                        "✓ cloudflared 服务正在运行" |> green |> output
-                    else
-                        "⚠ cloudflared 服务未运行，正在启动..." |> yellow |> output
-                        bash output credential "systemctl restart cloudflared" |> ignore
-                        System.Threading.Thread.Sleep(2000)
-                        let postCheck = bash output credential "systemctl is-active cloudflared"
-                        if postCheck.Trim() = "active" then
-                            "✓ cloudflared 服务已启动" |> green |> output
-                        else
-                            "⚠ cloudflared 服务启动可能失败" |> yellow |> output
-                    true
-                else
-                    $"⚠ Cloudflare Tunnel 端口不匹配! (Tunnel: {currentOriginPort} ≠ 实际: {httpsPort})" |> yellow |> output
-                    "  自动修复中..." |> yellow |> output
-                    
-                    // 6. 用 sed 替换 config.yml 中的端口
-                    // 匹配 service: http://localhost:PORT 或 service: https://localhost:PORT
-                    let fixCmd = $"sed -i 's|\\(service:\\s*\\)https\\?://localhost:[0-9]\\+|\\1https://localhost:{httpsPort}|g' {configPath}"
-                    let fixResult = bash output credential fixCmd
-                    
-                    // 验证修复
-                    let verifyCmd = $"grep -oP 'service:\\s*https?://localhost:\\K\\d+' {configPath} 2>/dev/null | head -1 || echo 'UNKNOWN'"
-                    let newOriginPort = bash output credential verifyCmd
-                    
-                    if newOriginPort.Trim() = httpsPort.ToString() then
-                        $"✓ 已修复: origin → https://localhost:{httpsPort}" |> green |> output
-                        
-                        // 重启 cloudflared
-                        "  重启 cloudflared..." |> cyan |> output
-                        bash output credential "systemctl restart cloudflared" |> ignore
-                        System.Threading.Thread.Sleep(3000)
-                        
-                        // 检查重启后状态
-                        let postRestartCheck = bash output credential "systemctl is-active cloudflared"
-                        if postRestartCheck.Trim() = "active" then
-                            "✓ cloudflared 已重启" |> green |> output
-                            
-                            // 快速验证 Tunnel 日志无错误
-                            let logCheckCmd = "journalctl -u cloudflared --since '10 sec ago' --no-pager 2>&1 | grep -i 'error\|connection refused' || echo 'NO_ERRORS'"
-                            let logCheck = bash output credential logCheckCmd
-                            if logCheck.Contains("NO_ERRORS") then
-                                "✓ Tunnel 日志无错误" |> green |> output
-                            else
-                                "⚠ Tunnel 日志有错误，请检查:" |> yellow |> output
-                                logCheck |> output
-                            true
-                        else
-                            "⚠ cloudflared 重启后状态异常" |> yellow |> output
-                            true  // 不阻断部署
-                    else
-                        $"❌ 自动修复失败，请手动编辑 {configPath}" |> red |> output
-                        $"  将 service 端口改为 https://localhost:{httpsPort}" |> yellow |> output
-                        true  // 不阻断部署
+            "[DEPLOY-WARN] PostgreSQL 不可达，部署继续（AI 后续处理）" |> yellow |> output
+            result |> output
+            false
+    with ex ->
+        $"[DEPLOY-WARN] DB 健康检查异常: {ex.Message}" |> yellow |> output
+        false
 
-// ==================== 主流程 ====================
+/// 轻量 CF 健康检查：检查 cloudflared 是否在运行，不修配置
+let private checkCfHealth output credential =
+    "\n--- Cloudflare Tunnel 健康检查 ---" |> cyan |> output
+    try
+        let installed = bash output credential "command -v cloudflared > /dev/null 2>&1 && echo 'INSTALLED' || echo 'NOT_INSTALLED'"
+        if installed.Contains("NOT_INSTALLED") then
+            "  cloudflared 未安装，跳过" |> cyan |> output
+            true
+        else
+            let active = bash output credential "systemctl is-active cloudflared 2>/dev/null || echo 'inactive'"
+            if active.Trim() = "active" then
+                "✓ cloudflared 服务正在运行" |> green |> output
+                true
+            else
+                "[DEPLOY-WARN] cloudflared 服务未运行，部署继续（AI 后续处理）" |> yellow |> output
+                false
+    with ex ->
+        $"[DEPLOY-WARN] CF 健康检查异常: {ex.Message}" |> yellow |> output
+        false
+
+
+// ==================== 构建函数（并行化） ====================
+
+/// 并行 git pull 三个仓库
+let private parallelGitPull output credential (key__dir: Dictionary<string,string>) code scpAlreadyPushed =
+    "\n--- 并行 git pull ---" |> cyan |> output
+    
+    let pullJob (name: string) (dir: string) =
+        async {
+            if scpAlreadyPushed then
+                $"[{name}] 代码已通过 scp 同步，跳过 git pull" |> output
+            else
+                $"[{name}] git pull..." |> output
+                updateSingleRepo output credential name (getRepoUrl name) dir |> ignore
+                $"[{name}] git pull 完成" |> output
+        }
+    
+    [ pullJob code key__dir["code"]
+      pullJob "Common" key__dir["Common"]
+      pullJob "JCS" key__dir["JCS"] ]
+    |> Async.Parallel
+    |> Async.RunSynchronously
+    |> ignore
+
+/// 并行安装前后端依赖
+let private parallelDepInstall output credential (key__dir: Dictionary<string,string>) =
+    "\n--- 并行依赖安装 ---" |> cyan |> output
+    
+    let vscodeDir = key__dir.["code"] + "/vscode"
+    let serverDir = key__dir.["code"] + "/Server"
+    
+    let frontendJob = async {
+        let cmd = $"""cd ~/{vscodeDir}
+if [ -f package.json ]; then
+    if [ -f /root/.bun/bin/bun ]; then
+        /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
+    else
+        npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
+    fi
+    echo '[前端] 依赖安装完成'
+else
+    echo '[前端] 未找到 package.json，跳过'
+fi
+"""
+        do! Async.SwitchToThreadPool()
+        bashWithTimeout output credential cmd 180000 |> ignore
+    }
+    
+    let backendJob = async {
+        let cmd = $"""cd ~/{serverDir}
+if ls *.fsproj 1>/dev/null 2>&1; then
+    dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>&1 || echo '[DEPLOY-WARN] dotnet restore 失败'
+    echo '[后端] 依赖安装完成'
+else
+    echo '[后端] 未找到 .fsproj，跳过'
+fi
+"""
+        do! Async.SwitchToThreadPool()
+        bashWithTimeout output credential cmd 120000 |> ignore
+    }
+    
+    [ frontendJob; backendJob ]
+    |> Async.Parallel
+    |> Async.RunSynchronously
+    |> ignore
+
+/// 并行构建前后端
+let private parallelBuild output credential code =
+    "\n--- 并行构建 ---" |> cyan |> output
+    
+    let frontendJob = async {
+        let ok = buildFrontend output credential code
+        return if ok then "[前端] 构建成功" else "[DEPLOY-WARN] 前端构建失败"
+    }
+    
+    let backendJob = async {
+        let ok = buildBackend output credential code
+        return if ok then "[后端] 构建成功" else "[DEPLOY-WARN] 后端构建失败"
+    }
+    
+    let results = 
+        [ frontendJob; backendJob ]
+        |> Async.Parallel
+        |> Async.RunSynchronously
+    
+    results |> Array.iter (fun r -> r |> output)
+
+
+// ==================== 部署代码（重构版） ====================
+
+/// 部署代码（从 GitHub 更新所有仓库）- 内部并行化
+let private exeDeployCodeV2
+    output
+    credential
+    code
+    (logPath: string option)
+    (scpAlreadyPushed: bool) =
+
+    let porto,user,server,target,portArg = credentialExpand credential
+    let devRoot = "Dev"
+
+    let output =
+        match logPath with
+        | Some path ->
+            let dir = Path.GetDirectoryName(path)
+            if not (String.IsNullOrEmpty(dir)) && not (Directory.Exists(dir)) then
+                Directory.CreateDirectory(dir) |> ignore
+            fun (msg: string) ->
+                output msg
+                try File.AppendAllText(path, msg + Environment.NewLine) with _ -> ()
+        | None -> output
+
+    try
+        // === Phase 1: 目录检查 ===
+        "1. 检查并创建所有必要目录..." |> cyan |> output
+        
+        let key__dir = new Dictionary<string,string>()
+        key__dir["Dev"] <- devRoot
+        key__dir["code"] <- devRoot + "/" + code
+        key__dir["Common"] <- devRoot + "/Common"
+        key__dir["JCS"] <- devRoot + "/JCS"
+        key__dir["FsRoot"] <- "FsRoot"
+        key__dir["FsRootCode"] <- "FsRoot/" + code
+
+        let dirs = [|
+            ("Dev 根目录", key__dir["Dev"])
+            ("主项目目录", key__dir["code"])
+            ("Common 目录", key__dir["Common"])
+            ("JCS 目录", key__dir["JCS"])
+            ("FsRoot 根目录", key__dir["FsRoot"])
+            ("FsRoot 项目目录", key__dir["FsRootCode"])
+        |]
+        
+        let allDirsExist = ensureDirectories output credential dirs
+        if allDirsExist |> not then
+            "⚠ 部分目录创建失败，尝试继续..." |> yellow |> output
+
+        // === Phase 2: 并行 git pull ===
+        "2. 并行更新仓库..." |> cyan |> output
+        parallelGitPull output credential key__dir code scpAlreadyPushed
+
+        // === Phase 3: 环境检查 ===
+        "3. 确保环境就绪..." |> cyan |> output
+        ensureEnvironment output credential |> ignore
+
+        // === Phase 4: 并行依赖安装 ===
+        "4. 并行安装依赖..." |> cyan |> output
+        parallelDepInstall output credential key__dir
+
+        // === Phase 5: 版本快照 ===
+        "5. 版本快照..." |> cyan |> output
+        let preGitHash = remoteGitHash output credential (key__dir["code"])
+        let preCommonHash = remoteGitHash output credential key__dir["Common"]
+        let preJcsHash = remoteGitHash output credential key__dir["JCS"]
+        $"  部署前 Git Hash → {code}: {preGitHash} | Common: {preCommonHash} | JCS: {preJcsHash}" |> cyan |> output
+
+        // === Phase 6: 并行构建 ===
+        "6. 并行构建前后端..." |> cyan |> output
+        parallelBuild output credential code
+
+        // === Phase 7: 启动服务 ===
+        "7. 启动服务..." |> cyan |> output
+        let serviceRunning = checkDotNetServiceRunning output credential code
+        if serviceRunning then
+            $"✓ {code} systemd 服务已在运行，自动重启加载新代码..." |> green |> output
+            let restartCmd = $"systemctl restart {code.ToLower()}"
+            let restartResult = bash output credential restartCmd
+            $"  重启结果: {restartResult.Trim()}" |> output
+            System.Threading.Thread.Sleep(3000)
+            let postRestartCheck = bash output credential $"systemctl is-active {code.ToLower()}"
+            if postRestartCheck.Trim() = "active" then
+                $"✓ {code} 服务已成功重启" |> green |> output
+            else
+                $"⚠ 服务重启后状态: {postRestartCheck.Trim()}" |> yellow |> output
+        else
+            startServiceVerbose output credential code |> ignore
+
+        // === Phase 8: 部署后验证 ===
+        "\n========================================" |> cyan |> output
+        "📊 部署结果汇总报告" |> cyan |> output
+        "========================================" |> cyan |> output
+        
+        let postGitHash = remoteGitHash output credential (key__dir["code"])
+        let postCommonHash = remoteGitHash output credential key__dir["Common"]
+        let postJcsHash = remoteGitHash output credential key__dir["JCS"]
+        
+        let hashChanged pre post = if pre <> "-" && post <> "-" && pre <> post then "✅ 已更新" else if pre = post then "⚠ 未变化" else "—"
+        $"  Git Hash:" |> output
+        $"    {code}:  {preGitHash} → {postGitHash}  {hashChanged preGitHash postGitHash}" |> output
+        $"    Common: {preCommonHash} → {postCommonHash}  {hashChanged preCommonHash postCommonHash}" |> output
+        $"    JCS:    {preJcsHash} → {postJcsHash}  {hashChanged preJcsHash postJcsHash}" |> output
+        
+        let vscodeDir = key__dir["code"] + "/vscode"
+        let distCount = remoteDistFileCount output credential vscodeDir
+        $"  前端构建: dist 产物 {distCount} 项" |> output
+        
+        let port = "9020"
+        $"  运行时版本 (API):" |> output
+        let versionJson = remoteQueryVersion output credential port code
+        $"    {versionJson}" |> output
+        
+        let serviceStatus = bash output credential $"systemctl is-active {code.ToLower()}"
+        let serviceIcon = if serviceStatus.Trim() = "active" then "✅" else "❌"
+        $"  服务状态: {serviceIcon} {serviceStatus.Trim()}" |> output
+        
+        let logFileInfo = 
+            match logPath with
+            | Some p -> $"📋 部署日志: {p}"
+            | None -> $"📋 服务日志: /tmp/{code.ToLower()}.log"
+        let deployDir = key__dir.["code"]
+        $"\n📁 部署目录: ~/{deployDir}  |  {logFileInfo}" |> output
+        "========================================" |> cyan |> output
+        
+    with ex ->
+        $"部署过程中发生错误: {ex.Message}" |> red |> output
+        "请检查远程服务器状态" |> yellow |> output
+
+
+// ==================== 主流程（重构版） ====================
 
 let routine 
     (runtime: RuntimeTemplate<_,_,_,_>)
@@ -897,49 +1047,44 @@ let routine
     let output = runtime.output
     let code = runtime.projectCode
 
-    // 设置 SSH 私钥路径
     sshPrivateKeyPath <- devDir + "/id_rsa"
     
     $">>> 开始部署至 {user}@{server}..." |> cyan |> output
-    
-    // 部署前版本快照（本地）
     let localGitHash = gitHashLocal()
     $"  本地 {code} Git Hash: {localGitHash}" |> cyan |> output
 
-    // 记录服务是否在部署前运行（用于最终恢复）
     let mutable serviceWasRunning = false
     
     try
-        // 1. 本地：切换目录
-        "1. 切换到项目目录: " + devDir |> cyan |> output
+        // === Phase 1: 本地准备（SSH 检查 + Git Push） ===
+        "Phase 1/4: 本地准备..." |> cyan |> output
+        
+        "1.1 切换到项目目录: " + devDir |> cyan |> output
         let exeLocal args = exec output devDir "powershell" args |> ignore
         "cd " + devDir |> exeLocal
             
-        // 2. 检查 SSH 免密登录是否已配置
-        "2. 检查 SSH 免密登录状态..." |> cyan |> output
+        "1.2 检查 SSH 免密登录..." |> cyan |> output
         checkSSHAuth output credential (host.disk + "Dev/" + runtime.projectCode, host.deploy.gitEmail)
         
-        // 3. 推送本地所有仓库变更到 GitHub
-        "3. 推送本地所有仓库变更到 GitHub..." |> cyan |> output
+        "1.3 推送本地所有仓库变更到 GitHub..." |> cyan |> output
         let gitPushOk = pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
         
-        // 3b. 如果 GitHub push 失败，用 scp 直接把源码推送到目标服务器
         let scpPushOk =
-            if gitPushOk then
-                true  // GitHub 已成功，不需要 scp
+            if gitPushOk then true
             else
                 $"\n⚠ GitHub push 失败，启动 scp 直推方案..." |> orange |> output
                 pushSourceViaScp output code credential host.disk
-            
-        // 3.5. 在操作 PostgreSQL 之前，先停止远程服务（防止 PG 重启导致服务 crash）
-        "3.5. 暂停远程服务（保护数据库连接）..." |> cyan |> output
+
+        // === Phase 2: 停服务 + 健康检查 ===
+        "\nPhase 2/4: 停服务 + 健康检查..." |> cyan |> output
+        
+        "2.1 暂停远程服务..." |> cyan |> output
         serviceWasRunning <- checkDotNetServiceRunning output credential code
         if serviceWasRunning then
             $"  停止 {code} 服务..." |> yellow |> output
             let stopCmd = $"systemctl stop {code.ToLower()}"
             let stopResult = bash output credential stopCmd
             $"  停止结果: {stopResult.Trim()}" |> output
-            // 等待服务完全停止
             System.Threading.Thread.Sleep(2000)
             let postStopCheck = bash output credential $"systemctl is-active {code.ToLower()}"
             if postStopCheck.Trim() = "inactive" then
@@ -947,47 +1092,22 @@ let routine
             else
                 $"⚠ 服务状态: {postStopCheck.Trim()}，继续..." |> yellow |> output
         
-        // 4. 验证 PostgreSQL（确保服务运行）
-        "4. 验证 PostgreSQL..." |> cyan |> output
-        exeRemoteValidatePSQL output host.deploy.credential
-
-        // 5. 配置 PostgreSQL 远程访问（仅当未配置时）
-        "5. 配置 PostgreSQL 远程访问..." |> cyan |> output
-        let conn = exeRemoteConfigurePSQL output host.deploy.credential host.deploy.postgresPwd
-
-        // 5b. 检查并创建项目数据库用户（新装数据库必须检查）
-        "5b. 检查项目数据库用户..." |> cyan |> output
-        // 从 runtime.host.conn 解析出用户名、密码和数据库名
-        let dbParts = 
-            let connStr = host.conn
-            let pairs = 
-                connStr.Split(';') 
-                |> Array.map (fun s -> 
-                    let parts = s.Trim().Split('=')
-                    if parts.Length >= 2 then (parts[0].Trim(), parts[1].Trim()) 
-                    else ("", ""))
-                |> Map.ofArray
-            (pairs |> Map.tryFind "Username" |> Option.defaultValue "postgres",
-             pairs |> Map.tryFind "Password" |> Option.defaultValue "",
-             pairs |> Map.tryFind "Database" |> Option.defaultValue "postgres")
-        let dbUser, dbPwd, dbName = dbParts
-        $"  项目数据库用户: {dbUser}, 数据库: {dbName}" |> cyan |> output
-        Util.Linux.PSQL.exeEnsureDatabaseUser output host.deploy.credential dbUser dbPwd dbName |> ignore
-
-        // 6. 部署代码（从 GitHub 更新；如果已通过 scp 推送则跳过 git pull）
-        "6. 部署代码..." |> cyan |> output
-        exeDeployCode output host.deploy.credential code deployLogPath scpPushOk
+        // DB 和 CF 只做轻量健康检查，失败不阻断
+        "2.2 DB 健康检查..." |> cyan |> output
+        checkDbHealth output credential |> ignore
         
-        // 6.5. 检查 Cloudflare Tunnel 配置（部署完成后，服务已启动）
-        // HTTPS 端口 = HTTP 端口 + 363（Aiarwa: 8081+363=8444, 通用约定）
-        let httpsPort = host.port + 363
-        checkCloudflareTunnel output host.deploy.credential httpsPort |> ignore
-            
-        // 7. 清理 SSH 隧道
-        "7. 清理 SSH 隧道..." |> cyan |> output
+        "2.3 CF 健康检查..." |> cyan |> output
+        checkCfHealth output credential |> ignore
+
+        // === Phase 3: 部署代码 ===
+        "\nPhase 3/4: 部署代码..." |> cyan |> output
+        exeDeployCodeV2 output credential code deployLogPath scpPushOk
+
+        // === Phase 4: 部署后检查 + 清理 ===
+        "\nPhase 4/4: 部署后检查..." |> cyan |> output
+        "4.1 清理 SSH 隧道..." |> cyan |> output
         stopAllSshTunnels output
         
-        $"\n✅ {conn}" |> green |> output
         "\n✅ 部署流程完成 " |> green |> output
 
     with ex ->
@@ -995,7 +1115,6 @@ let routine
         $"{ex.StackTrace}" |> output
         "请检查远程服务器状态" |> yellow |> output
         
-        // 无论如何，尝试恢复服务
         if serviceWasRunning then
             $"\n⚠ 尝试恢复 {code} 服务..." |> yellow |> output
             try
@@ -1011,7 +1130,6 @@ let routine
             with ex2 ->
                 $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
         
-        // 7. 清理 SSH 隧道（即使出错也要清理）
         try
             stopAllSshTunnels output
         with _ -> ()

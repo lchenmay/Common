@@ -113,10 +113,14 @@ let pushAllLocalRepos output code gitName gitEmail disk =
     "=== 所有本地仓库推送完成 ===" |> yellow |> output
     allSuccess
 
-/// 通过 scp 直接推送源码到目标服务器（GitHub 不可用时的 fallback）
+/// 通过 scp 直接推送源码到目标服务器（内网优先方案 / GitHub 不可用时的 fallback）
 /// 将本地 Dev/{code}, Dev/Common, Dev/JCS 目录直接 scp 到远程服务器
-let private pushSourceViaScp output code credential disk =
-    $"\n⚠ GitHub push 失败，改用 scp 直接推送源码到服务器..." |> orange |> output
+/// 参数 `isPrimary`: true=内网优先方案（日志友好）, false=GitHub 失败后的 fallback
+let private pushSourceViaScp output code credential disk isPrimary =
+    if isPrimary then
+        $"\n📡 目标服务器在内网，优先使用 scp 直推源码（跳过 GitHub 中转）..." |> cyan |> output
+    else
+        $"\n⚠ GitHub push 失败，改用 scp 直接推送源码到服务器..." |> orange |> output
     
     let porto, user, server = credential
     let portArg = match porto with Some p -> $"-P {p}" | None -> ""
@@ -166,6 +170,32 @@ let private pushSourceViaScp output code credential disk =
         "⚠ 部分仓库 scp 推送失败，继续后续流程" |> yellow |> output
     
     allSuccess
+
+/// 判断目标服务器是否在内网（RFC 1918 私有地址段）
+/// 192.168.x.x, 10.x.x.x, 172.16-31.x.x
+let private isPrivateNetwork (server: string) =
+    let host =
+        // 去除可能的端口号
+        match server.LastIndexOf(':') with
+        | -1 -> server
+        | idx -> server.Substring(0, idx)
+    
+    // 尝试解析为 IP
+    match System.Net.IPAddress.TryParse(host) with
+    | true, ip ->
+        let bytes = ip.GetAddressBytes()
+        // 10.0.0.0/8
+        if bytes.[0] = 10uy then true
+        // 172.16.0.0/12
+        elif bytes.[0] = 172uy && bytes.[1] >= 16uy && bytes.[1] <= 31uy then true
+        // 192.168.0.0/16
+        elif bytes.[0] = 192uy && bytes.[1] = 168uy then true
+        // 127.0.0.0/8 (localhost 也当内网)
+        elif bytes.[0] = 127uy then true
+        else false
+    | false, _ ->
+        // 非 IP 地址（域名），无法判断，保守视为外网
+        false
 
 
 // ==================== 环境检查函数 ====================
@@ -819,18 +849,42 @@ let private checkCfHealth output credential =
 
 // ==================== 构建函数（并行化） ====================
 
-/// 并行 git pull 三个仓库
+/// 并行 git pull 三个仓库（智能跳过：远程无新提交则跳过）
 let private parallelGitPull output credential (key__dir: Dictionary<string,string>) code scpAlreadyPushed =
     "\n--- 并行 git pull ---" |> cyan |> output
+    let deployStampDir = "~/.deploy-stamps"
     
     let pullJob (name: string) (dir: string) =
         async {
             if scpAlreadyPushed then
                 $"[{name}] 代码已通过 scp 同步，跳过 git pull" |> output
             else
-                $"[{name}] git pull..." |> output
-                updateSingleRepo output credential name (getRepoUrl name) dir |> ignore
-                $"[{name}] git pull 完成" |> output
+                // 检查远程是否有新提交
+                let checkCmd = $"""mkdir -p {deployStampDir}
+STAMP_FILE={deployStampDir}/git-hash-{name}
+OLD_HASH=$(cat $STAMP_FILE 2>/dev/null || echo 'NO_STAMP')
+NEW_HASH=$(cd ~/{dir} && git ls-remote origin HEAD 2>/dev/null | cut -f1 | cut -c1-8 || echo 'FETCH_FAIL')
+if [ "$NEW_HASH" = "FETCH_FAIL" ]; then
+    echo 'FETCH_FAIL'
+elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
+    echo "SKIP:$NEW_HASH"
+else
+    echo "PULL:$NEW_HASH"
+fi"""
+                let checkResult = bash output credential checkCmd |> fun s -> s.Trim()
+                
+                if checkResult.StartsWith("SKIP:") then
+                    let hash = checkResult.Substring(5)
+                    $"[{name}] 远程无新提交 (hash: {hash})，跳过 git pull" |> output
+                elif checkResult.StartsWith("PULL:") then
+                    let hash = checkResult.Substring(5)
+                    $"[{name}] 远程有新提交 (hash: {hash})，git pull..." |> output
+                    updateSingleRepo output credential name (getRepoUrl name) dir |> ignore
+                    $"[{name}] git pull 完成" |> output
+                else
+                    $"[{name}] 无法获取上次部署 hash，执行全量 git pull..." |> yellow |> output
+                    updateSingleRepo output credential name (getRepoUrl name) dir |> ignore
+                    $"[{name}] git pull 完成" |> output
         }
     
     [ pullJob code key__dir["code"]
@@ -840,41 +894,64 @@ let private parallelGitPull output credential (key__dir: Dictionary<string,strin
     |> Async.RunSynchronously
     |> ignore
 
-/// 并行安装前后端依赖
+/// 并行安装前后端依赖（智能跳过：lock 文件未变则跳过）
 let private parallelDepInstall output credential (key__dir: Dictionary<string,string>) =
     "\n--- 并行依赖安装 ---" |> cyan |> output
     
     let vscodeDir = key__dir.["code"] + "/vscode"
     let serverDir = key__dir.["code"] + "/Server"
+    let deployStampDir = "~/.deploy-stamps"
     
     let frontendJob = async {
-        let cmd = $"""cd ~/{vscodeDir}
-if [ -f package.json ]; then
+        let checkCmd = $"""mkdir -p {deployStampDir}
+FE_STAMP={deployStampDir}/bun-lock-hash
+NEW_HASH=$(cd ~/{vscodeDir} && md5sum bun.lockb 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
+OLD_HASH=$(cat $FE_STAMP 2>/dev/null || echo 'NO_STAMP')
+if [ "$NEW_HASH" = "NO_LOCK" ]; then
+    echo '[前端] 未找到 bun.lockb，强制安装'
     if [ -f /root/.bun/bin/bun ]; then
-        /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
+        cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
     else
-        npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
+        cd ~/{vscodeDir} && npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
     fi
     echo '[前端] 依赖安装完成'
+elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
+    echo '[前端] bun.lockb 未变化，跳过安装'
 else
-    echo '[前端] 未找到 package.json，跳过'
+    echo "[前端] bun.lockb 已变化 (旧: $OLD_HASH -> 新: $NEW_HASH)，重新安装..."
+    if [ -f /root/.bun/bin/bun ]; then
+        cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
+    else
+        cd ~/{vscodeDir} && npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
+    fi
+    echo "$NEW_HASH" > $FE_STAMP
+    echo '[前端] 依赖安装完成'
 fi
 """
         do! Async.SwitchToThreadPool()
-        bashWithTimeout output credential cmd 180000 |> ignore
+        bashWithTimeout output credential checkCmd 180000 |> ignore
     }
     
     let backendJob = async {
-        let cmd = $"""cd ~/{serverDir}
-if ls *.fsproj 1>/dev/null 2>&1; then
-    dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>&1 || echo '[DEPLOY-WARN] dotnet restore 失败'
+        let checkCmd = $"""mkdir -p {deployStampDir}
+BE_STAMP={deployStampDir}/dotnet-lock-hash
+NEW_HASH=$(cd ~/{serverDir} && md5sum packages.lock.json 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
+OLD_HASH=$(cat $BE_STAMP 2>/dev/null || echo 'NO_STAMP')
+if [ "$NEW_HASH" = "NO_LOCK" ]; then
+    echo '[后端] 未找到 packages.lock.json，强制 restore'
+    cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>&1 || echo '[DEPLOY-WARN] dotnet restore 失败'
     echo '[后端] 依赖安装完成'
+elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
+    echo '[后端] packages.lock.json 未变化，跳过 restore'
 else
-    echo '[后端] 未找到 .fsproj，跳过'
+    echo "[后端] packages.lock.json 已变化，重新 restore..."
+    cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>&1 || echo '[DEPLOY-WARN] dotnet restore 失败'
+    echo "$NEW_HASH" > $BE_STAMP
+    echo '[后端] 依赖安装完成'
 fi
 """
         do! Async.SwitchToThreadPool()
-        bashWithTimeout output credential cmd 120000 |> ignore
+        bashWithTimeout output credential checkCmd 120000 |> ignore
     }
     
     [ frontendJob; backendJob ]
@@ -1021,6 +1098,15 @@ let private exeDeployCodeV2
         let serviceIcon = if serviceStatus.Trim() = "active" then "✅" else "❌"
         $"  服务状态: {serviceIcon} {serviceStatus.Trim()}" |> output
         
+        // 保存部署后的 git hash，供下次部署时判断是否需要 git pull
+        "  保存版本快照..." |> cyan |> output
+        let saveHashCmd = $"""mkdir -p ~/.deploy-stamps
+echo "{postGitHash}" > ~/.deploy-stamps/git-hash-{code}
+echo "{postCommonHash}" > ~/.deploy-stamps/git-hash-Common
+echo "{postJcsHash}" > ~/.deploy-stamps/git-hash-JCS
+echo "[版本快照] 已保存" """
+        bash output credential saveHashCmd |> ignore
+        
         let logFileInfo = 
             match logPath with
             | Some p -> $"📋 部署日志: {p}"
@@ -1056,7 +1142,7 @@ let routine
     let mutable serviceWasRunning = false
     
     try
-        // === Phase 1: 本地准备（SSH 检查 + Git Push） ===
+        // === Phase 1: 本地准备（SSH 检查 + 源码推送） ===
         "Phase 1/4: 本地准备..." |> cyan |> output
         
         "1.1 切换到项目目录: " + devDir |> cyan |> output
@@ -1066,14 +1152,26 @@ let routine
         "1.2 检查 SSH 免密登录..." |> cyan |> output
         checkSSHAuth output credential (host.disk + "Dev/" + runtime.projectCode, host.deploy.gitEmail)
         
-        "1.3 推送本地所有仓库变更到 GitHub..." |> cyan |> output
-        let gitPushOk = pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
+        // 1.3 判断目标服务器是否在内网，选择最优推送路径
+        let isPrivate = isPrivateNetwork server
+        if isPrivate then
+            $"1.3 检测到内网目标 ({server})，优先使用 scp 直推源码..." |> cyan |> output
+        else
+            $"1.3 目标为外网 ({server})，使用 GitHub 中转..." |> cyan |> output
         
         let scpPushOk =
-            if gitPushOk then true
+            if isPrivate then
+                // 内网优先：直接 scp 源码，快 3-5 倍且避免无意义 git push
+                pushSourceViaScp output code credential host.disk true
             else
-                $"\n⚠ GitHub push 失败，启动 scp 直推方案..." |> orange |> output
-                pushSourceViaScp output code credential host.disk
+                // 外网：先尝试 GitHub 中转
+                "推送本地所有仓库变更到 GitHub..." |> cyan |> output
+                let gitPushOk = pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
+                if gitPushOk then true
+                else
+                    // GitHub 不可用时 fallback 到 scp
+                    $"\n⚠ GitHub push 失败，启动 scp 直推方案..." |> orange |> output
+                    pushSourceViaScp output code credential host.disk false
 
         // === Phase 2: 停服务 + 健康检查 ===
         "\nPhase 2/4: 停服务 + 健康检查..." |> cyan |> output

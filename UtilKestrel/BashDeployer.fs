@@ -14,6 +14,37 @@ open Util.Monitor
 open UtilKestrel.Types
 
 
+// ==================== 部署进度追踪 ====================
+
+/// 写入部署进度 JSON 到远程服务器的 ~/.deploy-stamps/{code}-deploy-progress.json
+/// 该文件由 API 端点 deployStatus 读取，供前端/外部监控部署进度
+let private writeDeployProgress output credential code phase startedAt currentStep gitBefore gitAfter error =
+    try
+        let updatedAt = DateTime.UtcNow.ToString("o")
+        let elapsed =
+            if startedAt <> "" then
+                try let s = (DateTime.UtcNow - DateTime.Parse(startedAt)).TotalSeconds |> int
+                    s.ToString() + "s"
+                with _ -> "?"
+            else "0s"
+        let esc (s: string) = s.Replace("\\", "/").Replace("\"", "'").Replace("\n", " ").Replace("\r", "")
+        let json = sprintf """{"phase":"%s","startedAt":"%s","updatedAt":"%s","elapsed":"%s","currentStep":"%s","gitBefore":"%s","gitAfter":"%s","error":"%s"}"""
+                        phase startedAt updatedAt elapsed (esc currentStep) (esc gitBefore) (esc gitAfter) (esc error)
+        let mkdirCmd = "mkdir -p /root/.deploy-stamps"
+        bash output credential mkdirCmd |> ignore
+        let escapedJson = json.Replace("\\", "\\\\").Replace("\"", "\\\"")
+        let cmd = sprintf "echo \"%s\" > /root/.deploy-stamps/%s-deploy-progress.json" escapedJson code
+        bash output credential cmd |> ignore
+    with _ -> ()
+
+/// 清空部署进度（部署结束后重置为 idle）
+let private clearDeployProgress output credential code =
+    try
+        let cmd = sprintf "rm -f /root/.deploy-stamps/%s-deploy-progress.json" code
+        bash output credential cmd |> ignore
+    with _ -> ()
+
+
 // ==================== Git 推送函数 ====================
 
 /// 获取仓库本地 HEAD 和远程 origin/main 的 commit hash
@@ -1033,6 +1064,7 @@ let private exeDeployCodeV2
         // === Phase 2: 并行 git pull ===
         "2. 并行更新仓库..." |> cyan |> output
         parallelGitPull output credential key__dir code scpAlreadyPushed
+        writeDeployProgress output credential code "phase3_pulled" "" "代码已拉取到远程" "" "" ""
 
         // === Phase 3: 环境检查 ===
         "3. 确保环境就绪..." |> cyan |> output
@@ -1041,6 +1073,7 @@ let private exeDeployCodeV2
         // === Phase 4: 并行依赖安装 ===
         "4. 并行安装依赖..." |> cyan |> output
         parallelDepInstall output credential key__dir
+        writeDeployProgress output credential code "phase3_deps" "" "依赖安装完成，准备构建..." "" "" ""
 
         // === Phase 5: 版本快照 ===
         "5. 版本快照..." |> cyan |> output
@@ -1048,12 +1081,15 @@ let private exeDeployCodeV2
         let preCommonHash = remoteGitHash output credential key__dir["Common"]
         let preJcsHash = remoteGitHash output credential key__dir["JCS"]
         $"  部署前 Git Hash → {code}: {preGitHash} | Common: {preCommonHash} | JCS: {preJcsHash}" |> cyan |> output
+        writeDeployProgress output credential code "phase3_build" "" "正在编译前后端..." preGitHash "" ""
 
         // === Phase 6: 并行构建 ===
         "6. 并行构建前后端..." |> cyan |> output
         parallelBuild output credential code
+        writeDeployProgress output credential code "phase3_built" "" "编译完成，准备重启服务..." preGitHash "" ""
 
         // === Phase 7: 启动服务 ===
+        writeDeployProgress output credential code "phase4_restarting" "" "重启远程服务..." "" "" ""
         "7. 启动服务..." |> cyan |> output
         let serviceRunning = checkDotNetServiceRunning output credential code
         if serviceRunning then
@@ -1097,6 +1133,7 @@ let private exeDeployCodeV2
         let serviceStatus = bash output credential $"systemctl is-active {code.ToLower()}"
         let serviceIcon = if serviceStatus.Trim() = "active" then "✅" else "❌"
         $"  服务状态: {serviceIcon} {serviceStatus.Trim()}" |> output
+        writeDeployProgress output credential code "phase4_verified" "" "部署验证完成" preGitHash postGitHash ""
         
         // 保存部署后的 git hash，供下次部署时判断是否需要 git pull
         "  保存版本快照..." |> cyan |> output
@@ -1135,15 +1172,18 @@ let routine
 
     sshPrivateKeyPath <- devDir + "/id_rsa"
     
+    let mutable startedAt = DateTime.UtcNow.ToString("o")
     $">>> 开始部署至 {user}@{server}..." |> cyan |> output
     let localGitHash = gitHashLocal()
     $"  本地 {code} Git Hash: {localGitHash}" |> cyan |> output
+    writeDeployProgress output credential code "starting" startedAt "开始部署前期准备..." localGitHash "" ""
 
     let mutable serviceWasRunning = false
     
     try
         // === Phase 1: 本地准备（SSH 检查 + 源码推送） ===
         "Phase 1/4: 本地准备..." |> cyan |> output
+        writeDeployProgress output credential code "phase1_pushing" startedAt "推送源码到远程..." localGitHash "" ""
         
         "1.1 切换到项目目录: " + devDir |> cyan |> output
         let exeLocal args = exec output devDir "powershell" args |> ignore
@@ -1174,6 +1214,7 @@ let routine
                     pushSourceViaScp output code credential host.disk false
 
         // === Phase 2: 停服务 + 健康检查 ===
+        writeDeployProgress output credential code "phase2_stopping" startedAt "停止远程服务..." localGitHash "" ""
         "\nPhase 2/4: 停服务 + 健康检查..." |> cyan |> output
         
         "2.1 暂停远程服务..." |> cyan |> output
@@ -1198,8 +1239,10 @@ let routine
         checkCfHealth output credential |> ignore
 
         // === Phase 3: 部署代码 ===
+        writeDeployProgress output credential code "phase3_building" startedAt "远程构建前后端..." localGitHash "" ""
         "\nPhase 3/4: 部署代码..." |> cyan |> output
         exeDeployCodeV2 output credential code deployLogPath scpPushOk
+        writeDeployProgress output credential code "phase4_verifying" startedAt "部署后验证..." localGitHash "" ""
 
         // === Phase 4: 部署后检查 + 清理 ===
         "\nPhase 4/4: 部署后检查..." |> cyan |> output
@@ -1207,11 +1250,13 @@ let routine
         stopAllSshTunnels output
         
         "\n✅ 部署流程完成 " |> green |> output
+        writeDeployProgress output credential code "done" startedAt "部署流程全部完成" localGitHash "" ""
 
     with ex ->
         $"\n❌ 部署过程中发生错误: {ex.Message}" |> red |> output
         $"{ex.StackTrace}" |> output
         "请检查远程服务器状态" |> yellow |> output
+        writeDeployProgress output credential code "failed" startedAt "部署失败" localGitHash "" ex.Message
         
         if serviceWasRunning then
             $"\n⚠ 尝试恢复 {code} 服务..." |> yellow |> output

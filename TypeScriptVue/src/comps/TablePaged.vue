@@ -1,6 +1,6 @@
 <template>
 
-<div class="table-container text-left">
+<div class="table-container text-left" :data-theme="theme">
     <div class="table-card">
         
         <div class="table-wrapper">
@@ -181,13 +181,16 @@ export interface Paging{
   pages: number
 }
 
-const props = defineProps(['lang','fields','api','hpostdata','onRowClick','selected'])
+const props = defineProps(['lang','fields','api','hpostdata','onRowClick','selected','theme'])
 props.lang as string
 props.fields as TableField[]
 props.api as string
 props.hpostdata as Function
 props.onRowClick as Function
 props.selected as Data[] | undefined
+props.theme as string | undefined
+
+const theme = vue.computed(() => props.theme || 'day')
 
 const s = vue.shallowReactive({
   npps: [10,30,50,100,200],
@@ -550,5 +553,66 @@ vue.onMounted(async () => {
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* ===== Dark Theme ===== */
+[data-theme="dark"] .table-card {
+  background-color: #1e293b;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.2);
+}
+[data-theme="dark"] .table-header {
+  background-color: #0f172a;
+}
+[data-theme="dark"] .table-header-cell {
+  color: #94a3b8;
+}
+[data-theme="dark"] .table-header-cell-sortable:hover {
+  background-color: #1e293b;
+}
+[data-theme="dark"] .table-row-border {
+  border-bottom: 1px solid #334155;
+}
+[data-theme="dark"] .table-row:hover {
+  background-color: #1e293b;
+}
+[data-theme="dark"] .table-cell {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .table-pagination {
+  background-color: #1e293b;
+  border-top: 1px solid #334155;
+}
+[data-theme="dark"] .table-page-size-select {
+  border: 1px solid #334155;
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .table-page-size-label {
+  color: #94a3b8;
+}
+[data-theme="dark"] .table-page-btn {
+  border: 1px solid #334155;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .table-page-btn:hover {
+  background-color: #334155;
+}
+[data-theme="dark"] .table-stats {
+  color: #94a3b8;
+}
+[data-theme="dark"] .table-stats-number {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .table-skeleton {
+  background: linear-gradient(90deg, #334155 25%, #475569 50%, #334155 75%);
+}
+[data-theme="dark"] .table-sort-icon.sort-active {
+  color: #60a5fa;
+}
+[data-theme="dark"] .table-sort-icon.sort-inactive {
+  color: #64748b;
+}
+[data-theme="dark"] .table-header-cell-sortable:hover .table-sort-icon.sort-inactive {
+  color: #94a3b8;
 }
 </style>

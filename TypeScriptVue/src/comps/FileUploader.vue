@@ -1,6 +1,6 @@
 <template>
 
-<div class="fu-container">
+<div class="fu-container" :data-theme="theme">
   <!-- 拖拽上传区域 -->
   <div class="fu-dropzone" :class="{ 'fu-dragging': isDragging }"
     @dragover.prevent="isDragging = true"
@@ -71,13 +71,14 @@
 
 <script setup lang="ts">
 
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import Thumbnail from './Thumbnail.vue'
 import { formatSize } from '../lib/util/misc'
 
 // ---- Props ----
 
 const props = defineProps<{
+  theme?: string
   lang?: string            // 'zh' | 'en'
   uploadUrl?: string       // 上传目标 URL，默认 '/api/public/upload'
   baseUrl?: string         // 后端基础 URL，用于拼接 /thumbnail/{id}
@@ -138,6 +139,8 @@ const t = (key: string): string => {
 }
 
 // ---- State ----
+
+const theme = computed(() => props.theme || 'day')
 
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -318,4 +321,53 @@ defineExpose({
 }
 .fu-btn-remove:hover { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
 .fu-footer { margin-top: 0.5rem; text-align: right; }
+
+/* ===== Dark Theme ===== */
+[data-theme="dark"] .fu-dropzone {
+  background: #1e293b;
+  border-color: #475569;
+}
+[data-theme="dark"] .fu-dropzone:hover {
+  border-color: #94a3b8;
+  background: #334155;
+}
+[data-theme="dark"] .fu-dragging {
+  border-color: #60a5fa;
+  background: #1e3a5f;
+}
+[data-theme="dark"] .fu-dropzone-text {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .fu-dropzone-sub {
+  color: #64748b;
+}
+[data-theme="dark"] .fu-item {
+  background: #1e293b;
+  border-color: #334155;
+}
+[data-theme="dark"] .fu-thumb {
+  background: #0f172a;
+}
+[data-theme="dark"] .fu-name {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .fu-size {
+  color: #64748b;
+}
+[data-theme="dark"] .fu-progress {
+  background: #334155;
+}
+[data-theme="dark"] .fu-btn-remove {
+  background: #1e293b;
+  color: #64748b;
+  border-color: #334155;
+}
+[data-theme="dark"] .fu-btn-remove:hover {
+  color: #fca5a5;
+  background: #450a0a;
+  border-color: #7f1d1d;
+}
+[data-theme="dark"] .fu-pending {
+  color: #64748b;
+}
 </style>

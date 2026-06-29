@@ -129,6 +129,9 @@ let runServer
     if Directory.Exists vueDistPath then
         let fileServerOptions = StaticFileOptions()
         fileServerOptions.FileProvider <- new PhysicalFileProvider(vueDistPath)
+        fileServerOptions.OnPrepareResponse <- fun ctx ->
+            // 禁止 Cloudflare CDN 缓存静态资源（Vite hash 文件名自带版本控制，不需要 CDN 缓存）
+            ctx.Context.Response.Headers["Cache-Control"] <- "no-cache, no-store, must-revalidate"
         app.UseStaticFiles(fileServerOptions) |> ignore
 
     // 启用 WebSocket 支持

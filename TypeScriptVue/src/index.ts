@@ -15,6 +15,11 @@ export { default as BatchUploader } from './comps/BatchUploader.vue'
 export type { UploadTask, UploaderProps } from './comps/BatchUploader.vue'
 
 // ============================================
+// 导出 Theme 类型
+// ============================================
+export type { Theme } from './lib/util/theme'
+
+// ============================================
 // 导出 lib 层 —— 工具函数
 // ============================================
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="markdown-container">
+  <div class="markdown-container" :data-theme="theme">
     <div v-if="loading" class="markdown-loading">
       <div class="loading-spinner"></div>
       <span>渲染中...</span>
@@ -12,7 +12,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 // @ts-ignore
 import texmath from 'markdown-it-texmath'
@@ -20,8 +20,11 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
 const props = defineProps<{
+  theme?: string
   markdown: string
 }>()
+
+const theme = computed(() => props.theme || 'day')
 
 const renderedHtml = ref('')
 const loading = ref(false)
@@ -324,5 +327,63 @@ defineExpose({
 .markdown-content :deep(.katex .tag) {
   font-size: 0.85em;
   color: #64748b;
+}
+
+/* ===== Dark Theme ===== */
+[data-theme="dark"] .markdown-container {
+  background: #1e293b;
+}
+[data-theme="dark"] .markdown-content {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .markdown-content :deep(h1) {
+  border-bottom-color: #334155;
+}
+[data-theme="dark"] .markdown-content :deep(h2) {
+  border-bottom-color: #334155;
+}
+[data-theme="dark"] .markdown-content :deep(code) {
+  background: #334155;
+  color: #f472b6;
+}
+[data-theme="dark"] .markdown-content :deep(pre) {
+  background: #0f172a;
+}
+[data-theme="dark"] .markdown-content :deep(blockquote) {
+  background: #0f172a;
+  border-left-color: #60a5fa;
+  color: #94a3b8;
+}
+[data-theme="dark"] .markdown-content :deep(th),
+[data-theme="dark"] .markdown-content :deep(td) {
+  border-color: #334155;
+}
+[data-theme="dark"] .markdown-content :deep(th) {
+  background: #0f172a;
+}
+[data-theme="dark"] .markdown-content :deep(tr:nth-child(even)) {
+  background: #0f172a;
+}
+[data-theme="dark"] .markdown-content :deep(hr) {
+  border-top-color: #334155;
+}
+[data-theme="dark"] .markdown-content :deep(a) {
+  color: #60a5fa;
+}
+[data-theme="dark"] .markdown-empty {
+  background: #0f172a;
+  color: #64748b;
+}
+[data-theme="dark"] .markdown-loading {
+  color: #64748b;
+}
+[data-theme="dark"] .loading-spinner {
+  border-color: #334155;
+  border-top-color: #60a5fa;
+}
+[data-theme="dark"] .render-error {
+  color: #fca5a5;
+  background: #450a0a;
+  border-color: #7f1d1d;
 }
 </style>

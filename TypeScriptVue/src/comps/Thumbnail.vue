@@ -1,6 +1,6 @@
 <template>
 
-<div class="tn-container">
+<div class="tn-container" :data-theme="theme">
   <!-- 图片：直接渲染 -->
   <img v-if="isImage && src" :src="src" class="tn-img" :class="fitClass" />
 
@@ -31,6 +31,7 @@ import { fileIcon } from '../lib/util/misc'
 // ---- Props ----
 
 const props = defineProps<{
+  theme?: string
   src?: string              // 文件 URL 或 data URL
   name?: string             // 文件名（用于图标和类型判断）
   fileId?: number           // 后端文件 ID（用于 /thumbnail/{id}）
@@ -40,6 +41,8 @@ const props = defineProps<{
 }>()
 
 // ---- 类型判断 ----
+
+const theme = computed(() => props.theme || 'day')
 
 const ext = computed(() => {
   const n = (props.name || '').toLowerCase()
@@ -92,4 +95,12 @@ const fitClass = computed(() => {
 .tn-icon { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; background: #f1f5f9; border-radius: 4px; }
 .tn-icon-emoji { font-size: 2rem; }
 .tn-name { font-size: 0.7rem; color: #64748b; margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; }
+
+/* ===== Dark Theme ===== */
+[data-theme="dark"] .tn-icon {
+  background: #0f172a;
+}
+[data-theme="dark"] .tn-name {
+  color: #94a3b8;
+}
 </style>

@@ -5,7 +5,7 @@
     :item__key="props.data__id" 
     :item__text="props.data__desc" 
     :onselect="openTab" />
-  <TabContainer ref="tabRef" :default-tab-type="'dashboard'" :show-add-btn="props.showAddBtn !== false"
+  <TabContainer ref="tabRef" :theme="theme" :default-tab-type="'dashboard'" :show-add-btn="props.showAddBtn !== false"
     @onClickCreate="openTab(props.empty__data())" />
 
 </template>
@@ -27,6 +27,7 @@ const props = defineProps([
   'hpostdata',
   'component',
   'selected',
+  'theme',
   'showAddBtn',
   'data__title', 'empty__data', 'data__id', 'data__desc'])
 props.lang as string
@@ -36,11 +37,14 @@ props.fields as TableField[]
 props.hpostdata as Function
 props.component as Component
 props.selected as Data[]
+props.theme as string | undefined
 props.showAddBtn as boolean | undefined
 props.data__title as Function
 props.empty__data as Function
 props.data__id as Function
 props.data__desc as Function
+
+const theme = vue.computed(() => props.theme || 'day')
 
 const tabRef = ref<InstanceType<typeof TabContainer>>()
 

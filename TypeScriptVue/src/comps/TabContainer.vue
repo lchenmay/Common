@@ -1,5 +1,5 @@
 <template>
-  <div class="tab-container">
+  <div class="tab-container" :data-theme="theme">
     <!-- 标签栏 -->
     <div class="tab-bar">
       <div class="tab-list">
@@ -56,6 +56,7 @@ export interface TabItem {
 
 // Props
 const props = defineProps<{
+  theme?: string
   initialTabs?: TabItem[]
   defaultTabType?: string
   defaultTabTitle?: string
@@ -64,6 +65,8 @@ const props = defineProps<{
 }>()
 
 // Emits
+const theme = computed(() => props.theme || 'day')
+
 const emit = defineEmits<{
   (e: 'onClickCreate'): void
   (e: 'tab-created', tab: TabItem): void
@@ -262,3 +265,147 @@ if (tabs.value.length === 0 && props.defaultTabType && props.defaultTabComponent
   createDefaultTab()
 }
 </script>
+
+
+<style scoped>
+.tab-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.tab-bar {
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 8px;
+  min-height: 40px;
+  gap: 4px;
+}
+.tab-list {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  gap: 2px;
+}
+.tab-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 6px 6px 0 0;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  transition: all 0.15s;
+  white-space: nowrap;
+  user-select: none;
+}
+.tab-item:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+.tab-item-active {
+  background: #fff;
+  color: #1e293b;
+  font-weight: 500;
+  border-color: #e2e8f0;
+}
+.tab-title {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tab-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.tab-close-btn:hover {
+  background: #e2e8f0;
+  color: #64748b;
+}
+.tab-close-icon {
+  width: 12px;
+  height: 12px;
+}
+.tab-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.tab-add-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+.tab-add-icon {
+  width: 16px;
+  height: 16px;
+}
+.tab-content {
+  flex: 1;
+  overflow: auto;
+  background: #fff;
+}
+.tab-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+}
+
+/* ===== Dark Theme ===== */
+[data-theme="dark"] .tab-bar {
+  background: #0f172a;
+  border-bottom: 1px solid #334155;
+}
+[data-theme="dark"] .tab-item {
+  color: #94a3b8;
+}
+[data-theme="dark"] .tab-item:hover {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+[data-theme="dark"] .tab-item-active {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+[data-theme="dark"] .tab-close-btn {
+  color: #64748b;
+}
+[data-theme="dark"] .tab-close-btn:hover {
+  background: #334155;
+  color: #94a3b8;
+}
+[data-theme="dark"] .tab-add-btn {
+  color: #94a3b8;
+}
+[data-theme="dark"] .tab-add-btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .tab-content {
+  background: #1e293b;
+}
+</style>

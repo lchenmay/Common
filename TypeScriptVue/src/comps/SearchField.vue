@@ -1,7 +1,7 @@
 <template>
 
 
-<div class="relative w-[400px]">
+<div class="relative w-[400px]" :data-theme="theme">
     
     <input 
       type="text" 
@@ -34,11 +34,14 @@ import * as vue from 'vue'
 import { loader } from '~/lib/api'
 
 const props = defineProps<{
+  theme?: string
   api: string
   item__key: (item: Data) => string
   item__text: (item: Data) => string
   onselect: (item: Data) => void
 }>()
+
+const theme = vue.computed(() => props.theme || 'day')
 
 const s = vue.shallowReactive({
   opts: [] as Data[]
@@ -73,3 +76,26 @@ const onBlur = () => {
 }
 
 </script>
+
+
+<style scoped>
+/* ===== Dark Theme ===== */
+[data-theme="dark"] input {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+[data-theme="dark"] input::placeholder {
+  color: #64748b;
+}
+[data-theme="dark"] ul {
+  background-color: #1e293b;
+  border-color: #334155;
+}
+[data-theme="dark"] li {
+  color: #e2e8f0;
+}
+[data-theme="dark"] li:hover {
+  background-color: #1e3a5f;
+}
+</style>

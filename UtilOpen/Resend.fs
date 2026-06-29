@@ -50,8 +50,10 @@ let send (cfg:ResendCfg) (subject:string) (htmlBody:string) (toEmail:string) =
         else
             try
                 let url = "https://api.resend.com/emails"
-                let payload = { from = cfg.from; ``to`` = [| toEmail |]; subject = subject; html = htmlBody }
-                let json = JsonSerializer.Serialize(payload, jo)
+                let jsonEscape (s:string) = s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","\\r").Replace("\t","\\t")
+                let json = sprintf "{\"from\":\"%s\",\"to\":[\"%s\"],\"subject\":\"%s\",\"html\":\"%s\"}" 
+                                (jsonEscape cfg.from) (jsonEscape toEmail) (jsonEscape subject) (jsonEscape htmlBody)
+                eprintfn "[RESEND-JSON] %s" json
                 
                 client.DefaultRequestHeaders.Remove("Authorization") |> ignore
                 client.DefaultRequestHeaders.Add("Authorization", "Bearer " + cfg.apiKey)

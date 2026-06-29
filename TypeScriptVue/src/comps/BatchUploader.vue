@@ -1,5 +1,5 @@
 <template>
-  <div class="batch-uploader">
+  <div class="batch-uploader" :data-theme="theme">
 
     <!-- 拖拽上传区 -->
     <div class="bu-drop-zone" :class="{ 'bu-dragging': isDragging }"
@@ -87,7 +87,7 @@ export interface UploaderProps {
   autoUpload?: boolean
 }
 
-const props = withDefaults(defineProps<UploaderProps>(), {
+const props = withDefaults(defineProps<UploaderProps & { theme?: string }>(), {
   uploadUrl: '/api/public/upload',
   autoUpload: false
 })
@@ -103,6 +103,8 @@ const emit = defineEmits<{
 }>()
 
 // ========== 状态 ==========
+const theme = computed(() => props.theme || 'day')
+
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const tasks = ref<UploadTask[]>([])
@@ -513,5 +515,62 @@ const fileIcon = (name: string) => {
 
 .bu-btn-clear {
   color: #94a3b8;
+}
+
+/* ===== Dark Theme ===== */
+[data-theme="dark"] .bu-drop-zone {
+  background: #1e293b;
+  border-color: #475569;
+}
+[data-theme="dark"] .bu-drop-zone:hover {
+  border-color: #60a5fa;
+  background: #334155;
+}
+[data-theme="dark"] .bu-drop-zone.bu-dragging {
+  border-color: #60a5fa;
+  background: #1e3a5f;
+}
+[data-theme="dark"] .bu-text {
+  color: #94a3b8;
+}
+[data-theme="dark"] .bu-task-list {
+  background: #1e293b;
+  border-color: #334155;
+}
+[data-theme="dark"] .bu-task-header {
+  color: #64748b;
+  border-bottom-color: #334155;
+}
+[data-theme="dark"] .bu-task-item {
+  border-bottom-color: #1e293b;
+}
+[data-theme="dark"] .bu-task-item:hover {
+  background: #0f172a;
+}
+[data-theme="dark"] .bu-task-name {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .bu-task-size {
+  color: #64748b;
+}
+[data-theme="dark"] .bu-progress {
+  background: #334155;
+}
+[data-theme="dark"] .bu-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .bu-btn:hover:not(:disabled) {
+  background: #334155;
+}
+[data-theme="dark"] .bu-btn-icon {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+[data-theme="dark"] .bu-btn-icon:hover {
+  background: #334155;
+  color: #e2e8f0;
 }
 </style>

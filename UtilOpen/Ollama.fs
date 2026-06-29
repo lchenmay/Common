@@ -104,55 +104,6 @@ let embeddings cfg model (input: string) =
     }
 
 
-// ---- 反向代理中间件 ----
-
-/// 将 /ollama/... 路径代理到 Ollama 服务
-/// 支持流式和非流式请求
-let proxyMiddleware (cfg: OllamaCfg) (context: Microsoft.AspNetCore.Http.HttpContext) (next: RequestDelegate) =
-    let t = task {
-        let path = context.Request.Path.Value
-        if not cfg.enabled || not (path.StartsWith("/ollama/", StringComparison.OrdinalIgnoreCase)) then
-            do! next.Invoke(context)
-            return ()
-        
-        let targetPath = path.Substring("/ollama".Length)
-        let targetUrl = cfg.url + targetPath + context.Request.QueryString.Value
-        
-        try
-            use req = new HttpRequestMessage()
-            req.RequestUri <- Uri(targetUrl)
-            req.Method <- HttpMethod(context.Request.Method)
-            
-            // 复制请求体
-            if context.Request.Method = "POST" || context.Request.Method = "PUT" then
-                context.Request.EnableBuffering()
-                use reader = new StreamReader(context.Request.Body, Encoding.UTF8, leaveOpen=true)
-                let! body = reader.ReadToEndAsync()
-                context.Request.Body.Position <- 0L
-                req.Content <- new StringContent(body, Encoding.UTF8, "application/json")
-            
-            // 转发到 Ollama
-            let! res = client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead)
-            
-            context.Response.StatusCode <- int res.StatusCode
-            
-            // 复制响应头
-            for h in res.Content.Headers do
-                context.Response.Headers[h.Key] <- Microsoft.Extensions.Primitives.StringValues(h.Value |> Seq.toArray)
-            
-            // 复制响应体
-            use! stream = res.Content.ReadAsStreamAsync()
-            do! stream.CopyToAsync(context.Response.Body)
-            
-        with ex ->
-            context.Response.StatusCode <- 502
-            let err = "{\"error\":\"Ollama proxy: " + ex.Message + "\"}"
-            let bin = Encoding.UTF8.GetBytes(err)
-            do! context.Response.Body.WriteAsync(ReadOnlyMemory bin)
-    }
-    t :> Task
-
-
 // ---- API Handler（供 Web 路由调用） ----
 
 /// 处理 ollama API 请求，返回 (string * Json)[] 供 wrapOk/er 包装

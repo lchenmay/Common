@@ -27,7 +27,6 @@ let runServer
     (incomingFile,fileid__bin,id__thumbnail)
     (apiEngine,wsEngineo)
     (port80, port443)
-    (ollamaCfg: UtilOpen.Ollama.OllamaCfg)
     output
     (args: string[]) =
 
@@ -100,12 +99,6 @@ let runServer
         } :> Task
     ) |> ignore
 
-    // Ollama 反向代理中间件（可启用/禁用）
-    if ollamaCfg.enabled then
-        ("Ollama proxy enabled: " + ollamaCfg.url) |> green |> output
-        app.Use(fun (httpx: HttpContext) (next: RequestDelegate) ->
-            UtilOpen.Ollama.proxyMiddleware ollamaCfg httpx next
-        ) |> ignore
 
     // 扫描拦截器
     app.Use(fun (context: HttpContext) (next: Func<Task>) ->

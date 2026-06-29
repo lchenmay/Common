@@ -838,6 +838,20 @@ fi
     with ex ->
         $"部署过程中发生错误: {ex.Message}" |> red |> output
         "请检查远程服务器状态" |> yellow |> output
+        // 尝试恢复服务：如果异常发生在启动服务之前，服务可能已经停了
+        try
+            $"\n⚠ 尝试恢复 {code} 服务（容错）..." |> yellow |> output
+            let running = checkDotNetServiceRunning output credential code
+            if not running then
+                startServiceVerbose output credential code |> ignore
+                System.Threading.Thread.Sleep(3000)
+                let status = bash output credential $"systemctl is-active {code.ToLower()}"
+                if status.Trim() = "active" then
+                    $"✓ {code} 服务已恢复运行" |> green |> output
+                else
+                    $"⚠ 服务恢复失败，状态: {status.Trim()}" |> red |> output
+        with ex2 ->
+            $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
 
 // ==================== 健康检查（非阻塞） ====================
 
@@ -1155,6 +1169,20 @@ echo "[版本快照] 已保存" """
     with ex ->
         $"部署过程中发生错误: {ex.Message}" |> red |> output
         "请检查远程服务器状态" |> yellow |> output
+        // 尝试恢复服务：如果异常发生在 Phase 7（启动服务）之前，服务可能已经停了
+        try
+            $"\n⚠ 尝试恢复 {code} 服务（容错）..." |> yellow |> output
+            let running = checkDotNetServiceRunning output credential code
+            if not running then
+                startServiceVerbose output credential code |> ignore
+                System.Threading.Thread.Sleep(3000)
+                let status = bash output credential $"systemctl is-active {code.ToLower()}"
+                if status.Trim() = "active" then
+                    $"✓ {code} 服务已恢复运行" |> green |> output
+                else
+                    $"⚠ 服务恢复失败，状态: {status.Trim()}" |> red |> output
+        with ex2 ->
+            $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
 
 
 // ==================== 主流程（重构版） ====================
@@ -1248,6 +1276,28 @@ let routine
         "\nPhase 4/4: 部署后检查..." |> cyan |> output
         "4.1 清理 SSH 隧道..." |> cyan |> output
         stopAllSshTunnels output
+        
+        // 4.2 最终服务健康检查（最后防线）
+        "4.2 最终服务健康检查..." |> cyan |> output
+        try
+            let finalStatus = bash output credential $"systemctl is-active {code.ToLower()}"
+            $"  服务状态: {finalStatus.Trim()}" |> output
+            if finalStatus.Trim() <> "active" then
+                $"⚠ 服务未运行（状态: {finalStatus.Trim()}），尝试启动..." |> yellow |> output
+                if serviceWasRunning then
+                    startServiceVerbose output credential code |> ignore
+                    System.Threading.Thread.Sleep(3000)
+                    let retryStatus = bash output credential $"systemctl is-active {code.ToLower()}"
+                    if retryStatus.Trim() = "active" then
+                        $"✓ {code} 服务已恢复运行" |> green |> output
+                    else
+                        $"⚠ 服务恢复失败，状态: {retryStatus.Trim()}" |> red |> output
+                else
+                    $"  服务在部署前未运行，跳过启动" |> cyan |> output
+            else
+                $"✓ {code} 服务运行正常" |> green |> output
+        with exCheck ->
+            $"[WARN] 最终健康检查异常: {exCheck.Message}" |> yellow |> output
         
         "\n✅ 部署流程完成 " |> green |> output
         writeDeployProgress output credential code "done" startedAt "部署流程全部完成" localGitHash "" ""

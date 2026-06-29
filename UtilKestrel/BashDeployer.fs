@@ -1198,17 +1198,19 @@ let routine
     let output = runtime.output
     let code = runtime.projectCode
 
-    sshPrivateKeyPath <- devDir + "/id_rsa"
-    
-    let mutable startedAt = DateTime.UtcNow.ToString("o")
-    $">>> 开始部署至 {user}@{server}..." |> cyan |> output
-    let localGitHash = gitHashLocal()
-    $"  本地 {code} Git Hash: {localGitHash}" |> cyan |> output
-    writeDeployProgress output credential code "starting" startedAt "开始部署前期准备..." localGitHash "" ""
-
+    let mutable startedAt = ""
+    let mutable localGitHash = ""
     let mutable serviceWasRunning = false
     
     try
+        sshPrivateKeyPath <- devDir + "/id_rsa"
+        startedAt <- DateTime.UtcNow.ToString("o")
+        $">>> 开始部署至 {user}@{server}..." |> cyan |> output
+        localGitHash <- gitHashLocal()
+        $"  本地 {code} Git Hash: {localGitHash}" |> cyan |> output
+        writeDeployProgress output credential code "starting" startedAt "开始部署前期准备..." localGitHash "" ""
+        
+        serviceWasRunning <- false
         // === Phase 1: 本地准备（SSH 检查 + 源码推送） ===
         "Phase 1/4: 本地准备..." |> cyan |> output
         writeDeployProgress output credential code "phase1_pushing" startedAt "推送源码到远程..." localGitHash "" ""

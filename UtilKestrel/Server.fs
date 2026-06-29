@@ -57,14 +57,6 @@ let runServer
             options.ValueLengthLimit <- Int32.MaxValue
             options.MemoryBufferThreshold <- 1024 * 1024) |> ignore
 
-    // CORS 保持不变
-    builder.Services.AddCors(fun options ->
-        options.AddDefaultPolicy(fun policy ->
-            policy.AllowAnyOrigin()      
-                  .AllowAnyHeader()      
-                  .AllowAnyMethod() |> ignore
-        )) |> ignore
-
     // 1. 高性能 Kestrel 配置 (保持你的 10GB 限制)
     builder.WebHost.ConfigureKestrel(fun options ->
         options.Limits.MaxRequestBodySize <- Nullable(10L * 1024L * 1024L * 1024L) 
@@ -91,8 +83,22 @@ let runServer
 
     let app = builder.Build()
 
-    // 必须第一步
-    app.UseCors() |> ignore 
+    // --- CORS 手动中间件（替代 UseCors，确保跨域头绝对生效）---
+    // UseCors() + AllowAnyOrigin() 在 net10.0 上不追加 Access-Control-Allow-Origin
+    // 改用显式中间件直接设响应头，所有请求（含 OPTIONS preflight）均覆盖
+    app.Use(fun (context: HttpContext) (next: Func<Task>) ->
+        task {
+            context.Response.Headers["Access-Control-Allow-Origin"] <- "*"
+            if HttpMethods.IsOptions(context.Request.Method) then
+                context.Response.Headers["Access-Control-Allow-Methods"] <- "GET, POST, PUT, DELETE, OPTIONS"
+                context.Response.Headers["Access-Control-Allow-Headers"] <- "*"
+                context.Response.StatusCode <- 204
+            elif context.Request.Method = "CONNECT" then
+                context.Response.StatusCode <- 405 
+            else
+                return! next.Invoke()
+        } :> Task
+    ) |> ignore
 
     // Ollama 反向代理中间件（可启用/禁用）
     if ollamaCfg.enabled then
@@ -100,18 +106,6 @@ let runServer
         app.Use(fun (httpx: HttpContext) (next: RequestDelegate) ->
             UtilOpen.Ollama.proxyMiddleware ollamaCfg httpx next
         ) |> ignore
-
-    // 强力拦截：保持原有逻辑
-    app.Use(fun (httpx: HttpContext) (next: RequestDelegate) ->
-        if httpx.Request.Method = "CONNECT" then
-            httpx.Response.StatusCode <- 405 
-            Task.CompletedTask
-        elif HttpMethods.IsOptions httpx.Request.Method then
-            httpx.Response.StatusCode <- 204
-            Task.CompletedTask
-        else 
-            //showHttpX httpx
-            next.Invoke(httpx)) |> ignore
 
     // 扫描拦截器
     app.Use(fun (context: HttpContext) (next: Func<Task>) ->

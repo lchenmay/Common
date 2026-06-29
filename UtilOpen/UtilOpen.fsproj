@@ -15,6 +15,7 @@
     <Compile Include="Google.fs" />
     <Compile Include="Monday.fs" />
     <Compile Include="Ollama.fs" />
+    <Compile Include="Resend.fs" />
   </ItemGroup>
 
   <ItemGroup>

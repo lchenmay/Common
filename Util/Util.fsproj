@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-	  <PackageReference Include="FSharp.Core" Version="10.1.300-servicing.26177.108" />
+	  <PackageReference Include="FSharp.Core" Version="10.1.301" />
 	  <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.0" />
 	  <None Include="README.md" />
 	  <Compile Include="AssemblyInfo.fs" />

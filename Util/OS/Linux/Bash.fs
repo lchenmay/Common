@@ -107,10 +107,11 @@ let bashWithTimeout output credential (cmd: string) (timeoutMs: int) : string =
             cleanCommand cmd
     
     let privateKeyArg = getSshPrivateKeyArg()
+    let sshOpts = "-o StrictHostKeyChecking=no -o ConnectTimeout=10"
     let args = 
         match porto with
-        | Some p -> $"{privateKeyArg} -p {p} {user}@{server} \"{effectiveCmd}\""
-        | None -> $"{privateKeyArg} {user}@{server} \"{effectiveCmd}\""
+        | Some p -> $"{sshOpts} {privateKeyArg} -p {p} {user}@{server} \"{effectiveCmd}\""
+        | None -> $"{sshOpts} {privateKeyArg} {user}@{server} \"{effectiveCmd}\""
     
     execWithTimeout output "" "ssh" args timeoutMs
 

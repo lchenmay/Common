@@ -42,6 +42,8 @@
 <script setup lang="ts">
 
 import { ref, computed, watch, type Component } from 'vue'
+// 破解 TS4082 私有类型泄漏（需导入任一 vue-router 公开类型）
+// @ts-ignore: 故意未使用，仅用于破解类型链
 import type { NavigationGuard } from 'vue-router'
 
 // 标签项接口

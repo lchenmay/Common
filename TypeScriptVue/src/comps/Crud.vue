@@ -29,7 +29,8 @@ const props = defineProps([
   'selected',
   'theme',
   'showAddBtn',
-  'data__title', 'empty__data', 'data__id', 'data__desc'])
+  'data__title', 'empty__data', 'data__id', 'data__desc',
+  'noEdit'])
 props.lang as string
 props.caption as string
 props.api as string
@@ -56,7 +57,8 @@ const openTab = (i: Data) => {
     title: (id == 0 ? "新建" : (props.data__title(i))),
     component: markRaw(props.component),
     props: {
-      data: i
+      data: i,
+      noEdit: props.noEdit || false
     },
     closable: true
   })

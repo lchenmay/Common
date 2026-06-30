@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <Compile Include="AI/Tensor.fs" />
+    <Compile Include="AI/Autograd.fs" />
     <Compile Include="AI/Model.fs" />
     <Compile Include="AI/LLM.fs" />
   </ItemGroup>

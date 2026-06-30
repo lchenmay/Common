@@ -8,9 +8,12 @@ export const loader = async (url: string, postdata: any, h: Function, ex: Functi
     ''
   if (session) postdata.session = session
 
+  let response: Response | undefined
+  let fullUrl = ''
+
   try {
-    const fullUrl = checkUrl(url)
-    const response = await fetch(fullUrl, {
+    fullUrl = checkUrl(url)
+    response = await fetch(fullUrl, {
       method: 'POST',
       mode: 'cors',
       headers: {
@@ -18,6 +21,10 @@ export const loader = async (url: string, postdata: any, h: Function, ex: Functi
       },
       body: JSON.stringify(postdata)
     })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
 
     const rep = await response.json()
 
@@ -33,7 +40,11 @@ export const loader = async (url: string, postdata: any, h: Function, ex: Functi
       ex(rep)
     }
   } catch (err) {
-    console.error('Loader error:', err)
-    ex({ Er: 'NetworkError', message: err })
+    console.error('Loader error:', err, '\nURL:', fullUrl)
+    if (response) {
+      console.error('Response status:', response.status)
+      try { console.error('Response text:', await response.text()) } catch (_) {}
+    }
+    ex({ Er: 'NetworkError', message: (err as Error).message })
   }
 }

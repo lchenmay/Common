@@ -2,7 +2,11 @@
 import { checkUrl } from './util/fetch'
 
 export const loader = async (url: string, postdata: any, h: Function, ex: Function = () => {}) => {
-  postdata.session = (globalThis as any).runtime?.session
+  const session =
+    (globalThis as any).runtime?.session ||
+    localStorage.getItem('session') ||
+    ''
+  if (session) postdata.session = session
 
   try {
     const fullUrl = checkUrl(url)
@@ -14,20 +18,17 @@ export const loader = async (url: string, postdata: any, h: Function, ex: Functi
       },
       body: JSON.stringify(postdata)
     })
-    
+
     const rep = await response.json()
-    
-    if (rep?.Er == "OK") {
+
+    if (rep?.Er == 'OK') {
       h(rep)
     } else {
-      if (rep?.Er == "Unauthorized") {
+      if (rep?.Er == 'Unauthorized') {
         const rt = (globalThis as any).runtime
-        if (rt) {
-          rt.session = ""
-          try { localStorage.removeItem("runtime.session") } catch (_) {}
-          try { localStorage.removeItem("session") } catch (_) {}
-        }
-        alert('登录已过期，请重新登录')
+        if (rt) rt.session = ''
+        try { localStorage.removeItem('session') } catch (_) {}
+        alert('Session expired, please login again')
       }
       ex(rep)
     }

@@ -163,6 +163,8 @@
 import * as vue from 'vue'
 import { computed } from 'vue'
 import { loader } from '~/lib/api'
+import { theme } from '../lib/common'
+import { key__text } from '../lib/util/lang'
 
 export interface TableField {
   key: string,
@@ -181,16 +183,15 @@ export interface Paging{
   pages: number
 }
 
-const props = defineProps(['lang','fields','api','hpostdata','onRowClick','selected','theme'])
+const props = defineProps(['lang','fields','api','hpostdata','onRowClick','selected'])
 props.lang as string
 props.fields as TableField[]
 props.api as string
 props.hpostdata as Function
 props.onRowClick as Function
 props.selected as Data[] | undefined
-props.theme as string | undefined
 
-const theme = vue.computed(() => props.theme || 'day')
+// theme 从 common.ts 导入
 
 const s = vue.shallowReactive({
   npps: [10,30,50,100,200],
@@ -208,31 +209,8 @@ const s = vue.shallowReactive({
   loading: false
 })
 
-const lang__display = (display:string) => {
-  if(props.lang && props.lang == 'zh'){
-    switch(display){
-      case 'rpp': return '记录/页'
-      case 'fst': return '首页'
-      case 'prv': return '上页'
-      case 'nxt': return '下页'
-      case 'lst': return '末页'
-      case 'total': return '总页数'
-      case 'current': return '当前'
-      default: return ''
-    }
-  }
-  else{
-    switch(display){
-      case 'rpp': return 'records per page'
-      case 'fst': return 'First'
-      case 'prv': return 'Previous'
-      case 'nxt': return 'Next'
-      case 'lst': return 'Last'
-      case 'total': return 'Total: '
-      case 'current': return 'Current: '
-      default: return ''
-    }
-  }
+const lang__display = (display: string): string => {
+  return key__text(display, props.lang)
 }
 
 // 获取排序方向

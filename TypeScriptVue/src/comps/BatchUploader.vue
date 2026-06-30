@@ -1,5 +1,5 @@
 <template>
-  <div class="batch-uploader" :data-theme="theme">
+  <div class="batch-uploader">
 
     <!-- 拖拽上传区 -->
     <div class="bu-drop-zone" :class="{ 'bu-dragging': isDragging }"
@@ -8,7 +8,7 @@
       <input type="file" ref="fileInput" multiple style="display:none"
         :accept="props.accept" @change="onFileSelect" />
       <div class="bu-icon">📤</div>
-      <div class="bu-text">{{ props.dropText || '拖拽文件到此处或点击选择' }}</div>
+      <div class="bu-text">{{ props.dropText || key__text('dropText', props.lang) }}</div>
       <div class="bu-hint" v-if="props.acceptHint">{{ props.acceptHint }}</div>
       <div class="bu-hint" v-else-if="props.accept">支持: {{ props.accept }}</div>
     </div>
@@ -46,9 +46,9 @@
     <!-- 操作按钮 -->
     <div v-if="tasks.length > 0 && !allDone" class="bu-actions">
       <button class="bu-btn bu-btn-upload" @click="uploadAll" :disabled="uploading">
-        {{ uploading ? '上传中...' : '⬆️ 全部上传' }}
+        {{ uploading ? key__text('uploadingAll', props.lang) : key__text('uploadAllBtn', props.lang) }}
       </button>
-      <button class="bu-btn bu-btn-clear" @click="clearDone">清除已完成</button>
+      <button class="bu-btn bu-btn-clear" @click="clearDone">{{ key__text('clearDone', props.lang) }}</button>
     </div>
 
   </div>
@@ -56,6 +56,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { theme } from '../lib/common'
+import { key__text } from '../lib/util/lang'
+
+// 确保 theme 在 script 中被引用（TypeScript 不检查 template）
+void theme.value
 
 // ========== 类型定义 ==========
 export interface UploadTask {
@@ -85,9 +90,11 @@ export interface UploaderProps {
   maxSize?: number
   /** 是否自动开始上传 (选文件后立即上传，无需点按钮) */
   autoUpload?: boolean
+  /** 语言 */
+  lang?: string
 }
 
-const props = withDefaults(defineProps<UploaderProps & { theme?: string }>(), {
+const props = withDefaults(defineProps<UploaderProps>(), {
   uploadUrl: '/api/public/upload',
   autoUpload: false
 })
@@ -103,7 +110,8 @@ const emit = defineEmits<{
 }>()
 
 // ========== 状态 ==========
-const theme = computed(() => props.theme || 'day')
+// theme 从 common.ts 导入（响应式 ref）
+
 
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -204,12 +212,12 @@ const executeUpload = (task: UploadTask): Promise<void> => {
             emit('fileDone', task)
           } else {
             task.status = 'error'
-            task.message = rep.Er || '未知错误'
+            task.message = rep.Er || key__text('unknownError', props.lang)
             emit('fileError', task)
           }
         } catch {
           task.status = 'error'
-          task.message = '响应解析失败'
+          task.message = key__text('responseParseError', props.lang)
           emit('fileError', task)
         }
       } else {
@@ -222,7 +230,7 @@ const executeUpload = (task: UploadTask): Promise<void> => {
 
     xhr.onerror = () => {
       task.status = 'error'
-      task.message = '网络错误'
+      task.message = key__text('networkError', props.lang)
       emit('fileError', task)
       resolve()
     }
@@ -256,10 +264,10 @@ const clearDone = () => {
 // ========== 显示辅助 ==========
 const statusText = (task: UploadTask) => {
   switch (task.status) {
-    case 'uploading': return `上传中 ${task.progress}%`
-    case 'success': return '✓ 完成'
-    case 'error': return '✗ 失败'
-    default: return '等待上传'
+    case 'uploading': return key__text('uploadingAll', props.lang) + ` ${task.progress}%`
+    case 'success': return key__text('statusDone', props.lang)
+    case 'error': return key__text('statusError', props.lang)
+    default: return key__text('statusIdle', props.lang)
   }
 }
 

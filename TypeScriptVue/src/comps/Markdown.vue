@@ -12,20 +12,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, computed } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import MarkdownIt from 'markdown-it'
+import { theme } from '../lib/common'
 // @ts-ignore
 import texmath from 'markdown-it-texmath'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
 const props = defineProps<{
-  theme?: string
   markdown: string
 }>()
 
-const theme = computed(() => props.theme || 'day')
-
+// theme 从 common.ts 导入（响应式 ref）
 const renderedHtml = ref('')
 const loading = ref(false)
 

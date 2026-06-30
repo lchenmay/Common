@@ -5,7 +5,7 @@
     :item__key="props.data__id" 
     :item__text="props.data__desc" 
     :onselect="openTab" />
-  <TabContainer ref="tabRef" :theme="theme" :default-tab-type="'dashboard'" :show-add-btn="props.showAddBtn !== false"
+  <TabContainer ref="tabRef" :default-tab-type="'dashboard'" :show-add-btn="props.showAddBtn !== false"
     @onClickCreate="openTab(props.empty__data())" />
 
 </template>
@@ -18,6 +18,10 @@ import { ref, markRaw, type Component } from 'vue'
 import TablePaged, { type TableField } from './TablePaged.vue'
 import TabContainer from './TabContainer.vue'
 import SearchField from './SearchField.vue';
+import { theme } from '../lib/common'
+
+// 确保 theme 在 script 中被引用（TypeScript 不检查 template）
+void theme.value
 
 const props = defineProps([
   'lang',
@@ -27,10 +31,9 @@ const props = defineProps([
   'hpostdata',
   'component',
   'selected',
-  'theme',
   'showAddBtn',
   'data__title', 'empty__data', 'data__id', 'data__desc',
-  'noEdit'])
+  'tag'])
 props.lang as string
 props.caption as string
 props.api as string
@@ -38,15 +41,13 @@ props.fields as TableField[]
 props.hpostdata as Function
 props.component as Component
 props.selected as Data[]
-props.theme as string | undefined
 props.showAddBtn as boolean | undefined
 props.data__title as Function
 props.empty__data as Function
 props.data__id as Function
 props.data__desc as Function
 
-const theme = vue.computed(() => props.theme || 'day')
-
+// theme 从 common.ts 导入（响应式 ref）
 const tabRef = ref<InstanceType<typeof TabContainer>>()
 
 const openTab = (i: Data) => {
@@ -58,7 +59,7 @@ const openTab = (i: Data) => {
     component: markRaw(props.component),
     props: {
       data: i,
-      noEdit: props.noEdit || false
+      tag: props.tag
     },
     closable: true
   })

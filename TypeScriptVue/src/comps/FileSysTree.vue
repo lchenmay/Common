@@ -24,11 +24,11 @@
   <!-- ═══ Loading / Empty ═══ -->
   <div v-if="loading" class="fst-state">
     <div class="fst-spinner"></div>
-    <span>{{ t('loading') }}</span>
+    <span>{{ key__text('loading', props.lang) }}</span>
   </div>
   <div v-else-if="nodes.length === 0" class="fst-state">
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-    <span class="fst-empty-text">{{ t('empty') }}</span>
+    <span class="fst-empty-text">{{ key__text('empty', props.lang) }}</span>
   </div>
 
   <!-- ═══ Grid View ═══ -->
@@ -85,8 +85,9 @@
 
 <script setup lang="ts">
 
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import FileSysTreeNode from './FileSysTreeNode.vue'
+import { theme } from '../lib/common'
 
 // ---- Types ----
 
@@ -109,7 +110,6 @@ export interface MenuAction {
 // ---- Props ----
 
 const props = defineProps<{
-  theme?: string
   lang?: string
   baseUrl?: string
   api?: string
@@ -125,24 +125,11 @@ const emit = defineEmits<{
 }>()
 
 // ---- Lang ----
-
-const t = (key: string): string => {
-  const zh: Record<string, string> = {
-    loading: '加载中...',
-    empty: '暂无文件，拖放文件到此处上传',
-  }
-  const en: Record<string, string> = {
-    loading: 'Loading...',
-    empty: 'No files. Drop files here to upload.',
-  }
-  if (props.lang === 'zh') return zh[key] || key
-  return en[key] || key
-}
+import { key__text } from '../lib/util/lang'
 
 // ---- State ----
 
-const theme = computed(() => props.theme || 'day')
-
+// theme 从 common.ts 导入（响应式 ref）
 const nodes = ref<FileNode[]>(props.nodes || [])
 const loading = ref(false)
 const viewMode = ref<'grid' | 'list'>('grid')

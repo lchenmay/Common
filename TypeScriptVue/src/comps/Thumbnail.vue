@@ -27,11 +27,11 @@
 
 import { computed } from 'vue'
 import { fileIcon } from '../lib/util/misc'
+import { theme } from '../lib/common'
 
 // ---- Props ----
 
 const props = defineProps<{
-  theme?: string
   src?: string              // 文件 URL 或 data URL
   name?: string             // 文件名（用于图标和类型判断）
   fileId?: number           // 后端文件 ID（用于 /thumbnail/{id}）
@@ -42,7 +42,7 @@ const props = defineProps<{
 
 // ---- 类型判断 ----
 
-const theme = computed(() => props.theme || 'day')
+// theme 从 common.ts 导入（响应式 ref）
 
 const ext = computed(() => {
   const n = (props.name || '').toLowerCase()

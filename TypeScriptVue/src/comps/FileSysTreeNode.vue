@@ -125,11 +125,11 @@ import { ref, computed } from 'vue'
 import Thumbnail from './Thumbnail.vue'
 import { formatSize } from '../lib/util/misc'
 import type { FileNode, MenuAction } from './FileSysTree.vue'
+import { theme } from '../lib/common'
 
 // ---- Props ----
 
 const props = defineProps<{
-  theme?: string
   node: FileNode
   depth: number
   view: 'grid' | 'list'
@@ -147,7 +147,8 @@ const emit = defineEmits<{
 
 // ---- State ----
 
-const theme = computed(() => props.theme || 'day')
+// theme 从 common.ts 导入（响应式 ref）
+
 
 const selected = ref(false)
 const hover = ref(false)

@@ -17,7 +17,9 @@ export type { UploadTask, UploaderProps } from './comps/BatchUploader.vue'
 // ============================================
 // 导出 Theme 类型
 // ============================================
-export type { Theme } from './lib/util/theme'
+
+// Theme 类型已从 ./lib/common 导出（见下方 Common 区域）
+
 
 // ============================================
 // 导出 lib 层 —— 工具函数
@@ -47,6 +49,8 @@ export { SignOut, biz__LoginOptions, LoginOption__RT, host__DiscordRedirectURL }
 
 // --- 通用 (Common) ---
 export { getLocalStorage, setLocalStorage, checkDomain, is_local, getDebugger } from './lib/common'
+export { theme, setTheme, toggleTheme, type Theme } from './lib/common'
+export { key__text } from './lib/util/lang'
 
 // --- jlib 工厂函数 (泛型项目聚合器) ---
 export { createJlib } from '~/lib/common.ts'

@@ -9,8 +9,8 @@
     @click="triggerSelect">
     <input type="file" multiple ref="fileInput" @change="onFileSelect" hidden />
     <div class="fu-dropzone-icon">📄</div>
-    <div class="fu-dropzone-text">{{ t('dropHint') }}</div>
-    <div class="fu-dropzone-sub">{{ t('dropHintSub') }}</div>
+    <div class="fu-dropzone-text">{{ key__text('dropHint', props.lang) }}</div>
+    <div class="fu-dropzone-sub">{{ key__text('dropHintSub', props.lang) }}</div>
   </div>
 
   <!-- 文件列表 -->
@@ -41,27 +41,27 @@
         </div>
         <!-- 状态 -->
         <div class="fu-status" :class="'fu-' + f.status">
-          <span v-if="f.status === 'pending'">{{ t('pending') }}</span>
+          <span v-if="f.status === 'pending'">{{ key__text('pending', props.lang) }}</span>
           <span v-if="f.status === 'uploading'">{{ f.progress }}%</span>
-          <span v-if="f.status === 'success'">{{ t('success') }}</span>
-          <span v-if="f.status === 'error'">{{ f.message || t('error') }}</span>
+          <span v-if="f.status === 'success'">{{ key__text('success', props.lang) }}</span>
+          <span v-if="f.status === 'error'">{{ f.message || key__text('uploadError', props.lang) }}</span>
         </div>
       </div>
       <!-- 操作 -->
       <div class="fu-actions">
         <button v-if="f.status === 'pending'" class="fu-btn-upload" @click.stop="uploadOne(idx)">
-          {{ t('upload') }}
+          {{ key__text('upload', props.lang) }}
         </button>
         <button v-if="f.status === 'error'" class="fu-btn-retry" @click.stop="uploadOne(idx)">
-          {{ t('retry') }}
+          {{ key__text('retry', props.lang) }}
         </button>
-        <button class="fu-btn-remove" @click.stop="remove(idx)">{{ t('remove') }}</button>
+        <button class="fu-btn-remove" @click.stop="remove(idx)">{{ key__text('remove', props.lang) }}</button>
       </div>
     </div>
 
     <!-- 底部批量操作 -->
     <div class="fu-footer" v-if="hasPending">
-      <button class="fu-btn-upload-all" @click="uploadAll">{{ t('uploadAll') }}</button>
+      <button class="fu-btn-upload-all" @click="uploadAll">{{ key__text('uploadAll', props.lang) }}</button>
     </div>
   </div>
 </div>
@@ -71,14 +71,14 @@
 
 <script setup lang="ts">
 
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive } from 'vue'
 import Thumbnail from './Thumbnail.vue'
 import { formatSize } from '../lib/util/misc'
+import { theme } from '../lib/common'
 
 // ---- Props ----
 
 const props = defineProps<{
-  theme?: string
   lang?: string            // 'zh' | 'en'
   uploadUrl?: string       // 上传目标 URL，默认 '/api/public/upload'
   baseUrl?: string         // 后端基础 URL，用于拼接 /thumbnail/{id}
@@ -108,40 +108,11 @@ interface FileItem {
 }
 
 // ---- 多语言 ----
-
-const t = (key: string): string => {
-  const zh: Record<string, string> = {
-    dropHint: '拖拽文件到此处，或点击选择',
-    dropHintSub: '支持图片、PDF、文档等任意文件，单文件最大 10GB',
-    pending: '待上传',
-    uploading: '上传中',
-    success: '上传成功',
-    error: '上传失败',
-    upload: '上传',
-    retry: '重试',
-    remove: '移除',
-    uploadAll: '全部上传',
-  }
-  const en: Record<string, string> = {
-    dropHint: 'Drop files here or click to select',
-    dropHintSub: 'Images, PDFs, documents supported, max 10GB per file',
-    pending: 'Pending',
-    uploading: 'Uploading',
-    success: 'Succeeded',
-    error: 'Failed',
-    upload: 'Upload',
-    retry: 'Retry',
-    remove: 'Remove',
-    uploadAll: 'Upload All',
-  }
-  if (props.lang === 'zh') return zh[key] || key
-  return en[key] || key
-}
+import { key__text } from '../lib/util/lang'
 
 // ---- State ----
 
-const theme = computed(() => props.theme || 'day')
-
+// theme 从 common.ts 导入（响应式 ref）
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const files = reactive<FileItem[]>([])

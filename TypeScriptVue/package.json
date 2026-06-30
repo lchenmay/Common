@@ -1,6 +1,6 @@
 {
   "name": "@lchenmay/jcs-common",
-  "version": "1.0.162",
+  "version": "1.0.170",
   "type": "module",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -41,8 +41,8 @@
     "typescript": "^5.4.5",
     "vite": "^8.0.16",
     "vite-plugin-dts": "^4.0.0",
-    "vue-router": "4.0.0",
-    "vue-tsc": "^2.0.21"
+    "vue-router": "^4.5.0",
+    "vue-tsc": "2.1.10"
   },
   "dependencies": {
     "markdown-it": "^14.2.0",

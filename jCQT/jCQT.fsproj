@@ -6,8 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="AI/LLM.fs" />
+    <Compile Include="AI/Tensor.fs" />
     <Compile Include="AI/Model.fs" />
+    <Compile Include="AI/LLM.fs" />
   </ItemGroup>
 
 </Project>

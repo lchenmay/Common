@@ -19,6 +19,8 @@ declare global {
         mor: any
         user: User
         data: Data
+        theme: any 
+        lang: any 
         debugger: string
     }
 

@@ -32,17 +32,16 @@
 
 import * as vue from 'vue'
 import { loader } from '~/lib/api'
+import { theme } from '../lib/common'
 
 const props = defineProps<{
-  theme?: string
   api: string
   item__key: (item: Data) => string
   item__text: (item: Data) => string
   onselect: (item: Data) => void
 }>()
 
-const theme = vue.computed(() => props.theme || 'day')
-
+// theme 从 common.ts 导入（响应式 ref）
 const s = vue.shallowReactive({
   opts: [] as Data[]
 })

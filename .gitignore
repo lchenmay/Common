@@ -6,11 +6,9 @@
 **/.vs/**
 TypeScriptVue/.npmrc
 *.lock
-*.lockb
 node_modules
 
 # AI 调试临时文件
-*.Backup.tmp
 *.tmp
 build_output.txt
 build_err.txt

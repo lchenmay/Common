@@ -10,6 +10,7 @@ export default defineConfig({
     vueJsx(),
     dts({
       include: ['src/**/*.ts', 'src/**/*.vue'],
+      exclude: ['src/comps/TabContainer.vue'],
       outDir: 'dist',
       staticImport: true,
       cleanVueFileName: true,

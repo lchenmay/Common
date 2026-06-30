@@ -7,16 +7,6 @@ declare module '*.vue' {
   export default component
 }
 
-declare module '*.css' {
-  const content: string
-  export default content
-}
-
-declare module '*.scss' {
-  const content: string
-  export default content
-}
-
 // ✅ 扩展 ImportMeta 类型
 interface ImportMeta {
   readonly env: {

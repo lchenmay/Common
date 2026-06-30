@@ -305,3 +305,65 @@ let getLocalIPs () =
     Net.Dns.GetHostAddresses hostname
         |> Array.map(fun a -> a.ToString())
         |> Array.insertAt 0 "127.0.0.1"
+
+// ========================================================================
+// 进程链检测：判断当前进程是"人类调试"还是"AI调试"
+// ========================================================================
+
+/// 获取指定进程的父进程 ID
+let private getParentProcessId (pid: int) =
+    try
+        let query = sprintf "Select * from Win32_Process where ProcessId = %d" pid
+        use searcher = new ManagementObjectSearcher(query)
+        let mo = searcher.Get() |> Seq.cast<ManagementObject> |> Seq.tryHead
+        match mo with
+        | Some m -> m.["ParentProcessId"] :?> int
+        | None -> -1
+    with _ -> -1
+
+/// 获取进程名（不含 .exe 后缀）
+let private getProcessName (pid: int) =
+    try
+        let p = Process.GetProcessById(pid)
+        p.ProcessName  // 不含 .exe
+    with _ -> ""
+
+/// 获取当前进程的完整父进程链（递归到 PID=0）
+let getParentProcessChain () =
+    let rec loop (currentPid: int) (chain: string list) =
+        if currentPid <= 0 then chain
+        else
+            let ppid = getParentProcessId currentPid
+            if ppid <= 0 then chain
+            else
+                let pname = getProcessName ppid
+                loop ppid (pname :: chain)
+    
+    let currentPid = Process.GetCurrentProcess().Id
+    loop currentPid []
+
+/// 检查当前进程是否有可见窗口（判断是否有终端附着）
+let private hasVisibleWindow () =
+    try
+        let p = Process.GetCurrentProcess()
+        p.MainWindowHandle <> System.IntPtr.Zero
+    with _ -> false
+
+
+type Debugger = 
+| Human
+| AI
+| Unknown
+
+/// 判断调试模式："human" 或 "ai"
+/// 逻辑：
+///   1. 如果父进程链包含 "cb"（CodeBuddy）且无可见窗口 → "ai"
+///   2. 否则 → "human"
+let getDebugger () =
+    let chain = getParentProcessChain ()
+    let hasCb = chain |> List.exists (fun n -> n = "cb" || n = "CodeBuddy")
+    let hasTerminal = hasVisibleWindow ()
+    
+    match hasCb, hasTerminal with
+    | true, false -> Debugger.AI
+    | _ -> Debugger.Human

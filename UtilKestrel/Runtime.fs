@@ -11,7 +11,7 @@ open System.Net.Sockets
 open Util.Cat
 open Util.Text
 open Util.CollectionModDict
-open Util.Db
+open Util.OS
 open Util.DbQuery
 open Util.DbTx
 open Util.Orm
@@ -27,6 +27,7 @@ let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
     (data:'RuntimeData):RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData> =
     {
         since = DateTime.UtcNow
+        debugger = Debugger.Unknown
         inited = false
         host = {
             data = hostdata

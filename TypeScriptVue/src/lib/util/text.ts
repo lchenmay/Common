@@ -7,7 +7,7 @@ export const decode = (src: string) => {
 
 export const timestamp__str = (timestamp:any) => {
   let t = new Date(Number(timestamp))
-  return t.getFullYear() + "/" + t.getMonth() + "/" + t.getDay()
+  return t.getFullYear() + "/" + (t.getMonth() + 1) + "/" + t.getDate()
       + " " + t.getHours() + ":" + t.getMinutes()
 }
 
@@ -45,5 +45,16 @@ export const amt__2digitDollar = (num: number): string => {
   })
 
   return `${sign}$${formatted}`
+}
+
+export const yyyymmdd__usa = (yyyymmdd: string) => {
+  if (yyyymmdd.length != 8)
+    return "";
+
+  let yyyy = yyyymmdd.substring(0, 4)
+  let mm = yyyymmdd.substring(4, 4 + 2)
+  let dd = yyyymmdd.substring(6, 6 + 2)
+
+  return mm + "/" + dd + "/" + yyyy
 }
 

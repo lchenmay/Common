@@ -384,7 +384,7 @@ export const Stat__bin = (bb: BytesBuilder) => (v: any) => {
     float__bin(bb)(v.osup)
     float__bin(bb)(v.inf)
     float__bin(bb)(v.sup)
-    array__bin(int32__bin)(bb)
+    array__bin(int32__bin)(bb)(v.histogram)
     int32__bin(bb)(v.count)
 }
 

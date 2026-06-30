@@ -1,6 +1,6 @@
 {
   "name": "@lchenmay/jcs-common",
-  "version": "1.0.149",
+  "version": "1.0.159",
   "type": "module",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -19,10 +19,10 @@
     "dist"
   ],
   "scripts": {
+    "bd": "npm run build",
     "build": "vue-tsc --noEmit && vite build",
     "dev": "vite --open",
-    "prepublishOnly": "npm run build",
-    "release": "npm version patch --no-git-tag-version && npm run build && npm publish"
+    "pub": "npm version patch --no-git-tag-version && npm run build && npm publish"
   },
   "peerDependencies": {
     "pixi.js": "^8.0.0",

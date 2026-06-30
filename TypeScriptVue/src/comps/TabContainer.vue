@@ -42,6 +42,7 @@
 <script setup lang="ts">
 
 import { ref, computed, watch, type Component } from 'vue'
+import type { NavigationGuard } from 'vue-router'
 
 // 标签项接口
 export interface TabItem {

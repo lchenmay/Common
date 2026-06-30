@@ -59,6 +59,7 @@ type SessionsTemplate<'User,'Data> = ConcurrentDictionary<string,SessionTemplate
 
 type RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData> = {
 since: DateTime
+mutable debugger: Util.OS.Debugger
 mutable inited: bool
 host: Host<'HostData>
 data: 'RuntimeData

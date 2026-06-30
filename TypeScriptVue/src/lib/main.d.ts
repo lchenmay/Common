@@ -1,48 +1,34 @@
 declare global {
+
     namespace JSX {
         interface IntrinsicElements {
             [elem: string]: any
         }
     }
 
-    export interface Runtime {
-        host: Host
-        wsctx: WsCtx
-        router: any
-        session: string
-
-        domainname: string
-        lang: string
-        user: any
-        data: any
-    }
-
-    export type WsCtx = {
-        ws: WebSocket
-        ping: NodeJS.Timeout | null
-        autoping: boolean
-        pinginterval: number
-        sent: number
-        sentsize: number
-        rec: number
-        recsize: number
-    }
-
-    export type Host = {
+    type Host = {
         hostname: string
         api: string
         wsurl: string
     }
 
-    export type NotifyItem = {
-        cdate?: number
-        msg?: string
-        label?: string
-        bgcolor?: string
-        url?: string
-        expire?: number
-        textColor?: string
+    interface Runtime<User,Data> {
+        host: Host
+        router: any
+        session: string
+        mor: any
+        user: User
+        data: Data
+        debugger: string
     }
+
+    interface Jlib<User,Data> {
+        vue: any,
+        rt: Runtime<User,Data>
+    }
+
 }
+
+export type { Host, Runtime, Jlib }
 
 export { }

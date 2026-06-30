@@ -31,11 +31,8 @@ export * from './lib/util/text'
 export * from './lib/util/bin'
 
 // --- HTTP / 网络 ---
-export { checkUrl, upload, loader } from './lib/api'
-export { post, get } from './lib/util/fetch'
-
-// --- WebSocket ---
-export { createWebSocket_base, disconnect, trySend, trySendx } from './lib/util/ws'
+export { loader } from './lib/api'
+export { checkUrl, upload, post, get } from './lib/util/fetch'
 
 // --- 图形 (Graphics) ---
 export * as Graphics from './lib/util/graphics'
@@ -49,13 +46,13 @@ export { markdown__html, markdown__html_, html__toc } from './lib/util/markdown'
 export { SignOut, biz__LoginOptions, LoginOption__RT, host__DiscordRedirectURL } from './lib/mod/auth'
 
 // --- 通用 (Common) ---
-export { buildHost, getLocalStorage, setLocalStorage, checkDomain } from './lib/common'
+export { getLocalStorage, setLocalStorage, checkDomain, is_local, getDebugger } from './lib/common'
 
 // --- jlib 工厂函数 (泛型项目聚合器) ---
-export { createJlib } from './lib/jlib'
+export { createJlib } from '~/lib/common.ts'
+export type { Host, Runtime, Jlib } from './lib/main.d.ts'
 
-// --- notify / panel (通用模块) ---
-export * from './lib/mod/notify'
+// --- panel (通用模块) ---
 export * from './lib/mod/panel'
 
 // --- route 工厂函数 (泛型路由，参数化 routes) ---

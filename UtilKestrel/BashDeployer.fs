@@ -570,10 +570,13 @@ let buildBackend output credential code =
                 let refResult = bash output credential utilRefCmd
                 refResult |> output
                 
-                // 3. dotnet build (suppress NU1603 warnings, 300s timeout for large solution)
-                "  - dotnet build --configuration Release" |> cyan |> output
-                let buildResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity minimal /nowarn:NU1603" 300000
-                buildResult |> output
+                // 3. dotnet clean + dotnet publish (确保依赖 DLL 最新)
+                "  - dotnet clean --configuration Release" |> cyan |> output
+                bash output credential $"cd ~/{serverDir} && dotnet clean --configuration Release" |> ignore
+
+                "  - dotnet publish --configuration Release --output /root/publish/{code}" |> cyan |> output
+                let publishResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet publish --configuration Release --output /root/publish/{code} --verbosity minimal /nowarn:NU1603" 300000
+                publishResult |> output
                 
                 "✓ 后端构建完成" |> green |> output
                 true
@@ -602,10 +605,13 @@ let buildBackend output credential code =
             let refResult = bash output credential refCmd
             refResult |> output
             
-            // 3. dotnet build (suppress NU1603, 300s timeout)
-            "  - dotnet build --configuration Release" |> cyan |> output
-            let buildResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet build --configuration Release --verbosity minimal /nowarn:NU1603" 300000
-            buildResult |> output
+            // 3. dotnet clean + dotnet publish (确保依赖 DLL 最新)
+            "  - dotnet clean --configuration Release" |> cyan |> output
+            bash output credential $"cd ~/{serverDir} && dotnet clean --configuration Release" |> ignore
+
+            "  - dotnet publish --configuration Release --output /root/publish/{code}" |> cyan |> output
+            let publishResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet publish --configuration Release --output /root/publish/{code} --verbosity minimal /nowarn:NU1603" 300000
+            publishResult |> output
             
             "✓ 后端构建完成" |> green |> output
             true
@@ -817,7 +823,7 @@ fi
         $"  前端构建: {frontendStatus}" |> output
         
         // 11c. 运行时版本（通过 API 查询）
-        let port = "9020"  // Aiarwa HTTP 端口（runServer 9020 9021）
+        let port = match code with | "WYI" -> "9000" | "Aiarwa" -> "9020" | _ -> "5000"
         $"  运行时版本 (API):" |> output
         let versionJson = remoteQueryVersion output credential port code
         $"    {versionJson}" |> output
@@ -1139,7 +1145,7 @@ let private exeDeployCodeV2
         let distCount = remoteDistFileCount output credential vscodeDir
         $"  前端构建: dist 产物 {distCount} 项" |> output
         
-        let port = "9020"
+        let port = match code with | "WYI" -> "9000" | "Aiarwa" -> "9020" | _ -> "5000"
         $"  运行时版本 (API):" |> output
         let versionJson = remoteQueryVersion output credential port code
         $"    {versionJson}" |> output

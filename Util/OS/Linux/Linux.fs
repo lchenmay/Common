@@ -264,12 +264,20 @@ let checkDotNetServiceRunning
 let private createOrUpdateSystemdService output credential (code: string) =
     let svcName = getServiceName code
     let serverDir = $"/root/Dev/{code}/Server"
-    let workingDir = serverDir
-    let dllPath = $"{serverDir}/bin/Release/net10.0/Server.dll"
+    let publishDir = $"/root/publish/{code}"
+    let workingDir = publishDir
+    let dllPath = $"{publishDir}/Server.dll"
     let logFile = $"/var/log/{svcName}.log"
-    
+
+    // 从服务名推断端口（WYI=9000, Aiarwa=9020, 其他默认 5000）
+    let httpPort =
+        match code with
+        | "WYI" -> "9000"
+        | "Aiarwa" -> "9020"
+        | _ -> "5000"
+
     // systemd unit 文件内容
-    let unitContent = 
+    let unitContent =
         "[Unit]\n" +
         $"Description={code} Kestrel HTTP Service\n" +
         "After=network-online.target postgresql.service\n" +
@@ -278,7 +286,7 @@ let private createOrUpdateSystemdService output credential (code: string) =
         "[Service]\n" +
         "Type=simple\n" +
         $"WorkingDirectory={workingDir}\n" +
-        $"ExecStart=/usr/bin/dotnet {dllPath}\n" +
+        $"ExecStart=/usr/bin/dotnet {dllPath} --urls=http://localhost:{httpPort}\n" +
         "Restart=always\n" +
         "RestartSec=10\n" +
         $"StandardOutput=append:{logFile}\n" +
@@ -369,8 +377,9 @@ let startServiceVerbose output credential (code: string) =
     "    - Server 目录内容:" |> cyan |> output
     bash output credential $"ls -la {serverDir}/" |> output
     
-    "    - Build 输出目录:" |> cyan |> output
-    bash output credential $"ls -la {serverDir}/bin/Release/net10.0/ 2>/dev/null || echo '(build 输出目录不存在)'" |> output
+    "    - Publish 输出目录:" |> cyan |> output
+    let publishDir = $"/root/publish/{code}"
+    bash output credential $"ls -la {publishDir}/ 2>/dev/null || echo '(publish 输出目录不存在)'" |> output
     
     "    - 当前 systemd 服务状态:" |> cyan |> output
     bash output credential $"systemctl status {svcName} 2>/dev/null || echo '(服务尚未注册)'" |> output
@@ -405,8 +414,13 @@ let startServiceVerbose output credential (code: string) =
     "    - systemd 服务状态:" |> cyan |> output
     bash output credential $"systemctl status {svcName} --no-pager -l 2>&1 | head -30" |> output
     
-    "    - 端口占用:" |> cyan |> output
-    bash output credential $"sudo ss -tlnp | grep -E ':80 |:443 ' || echo '(端口 80/443 未被占用)'" |> output
+    "    - Kestrel 端口占用:" |> cyan |> output
+    let httpPort =
+        match code with
+        | "WYI" -> "9000"
+        | "Aiarwa" -> "9020"
+        | _ -> "5000"
+    bash output credential $"sudo ss -tlnp | grep ':{httpPort} ' || echo '(端口 {httpPort} 未被占用)'" |> output
     
     "    - 服务日志（最近 30 行）:" |> cyan |> output
     bash output credential $"journalctl -u {svcName} --no-pager -n 30 2>/dev/null || echo '(无日志)'" |> output

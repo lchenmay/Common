@@ -148,9 +148,9 @@ let ensureDirectory output credential targetDir =
         
         // 验证创建是否成功
         let verifyCmd = $"if [ -d ~/{targetDir} ]; then echo 'CREATED'; else echo 'FAILED'; fi"
-        let verifyResult = bash output credential verifyCmd
+        let verifyResult = bash output credential verifyCmd |> fun s -> s.Trim()
         
-        if verifyResult.Contains("CREATED") then
+        if verifyResult = "CREATED" then
             $"✓ 目录 ~/{targetDir} 创建成功" |> green |> output
             // 设置权限
             let chmodCmd = $"chmod -R 755 ~/{targetDir}"
@@ -158,16 +158,20 @@ let ensureDirectory output credential targetDir =
             "✓ 权限已设置为 755" |> green |> output
             true
         else
-            $"❌ 目录 ~/{targetDir} 创建失败" |> red |> output
+            $"❌ 目录 ~/{targetDir} 创建失败（verifyResult: {verifyResult}）" |> red |> output
             false
     else
         $"✓ 目录 ~/{targetDir} 已存在" |> green |> output
         
         // 检查权限
         let permCmd = $"if [ -w ~/{targetDir} ] && [ -r ~/{targetDir} ] && [ -x ~/{targetDir} ]; then echo 'PERM_OK'; else echo 'PERM_BAD'; fi"
-        let permResult = bash output credential permCmd
+        let permResult = bash output credential permCmd |> fun s -> s.Trim()
         
-        if permResult.Contains("PERM_OK") then
+        if String.IsNullOrEmpty(permResult) then
+            // 命令超时或失败，跳过权限检查（避免不必要的 chmod）
+            $"⚠ 权限检查超时或失败，跳过（目录: ~/{targetDir}）" |> yellow |> output
+            true
+        elif permResult = "PERM_OK" then
             "✓ 权限正确" |> green |> output
             true
         else

@@ -24,31 +24,36 @@ type Scalar = {
   mutable grad: float
   prev: Scalar[]
   op: Op
-  backwardingo: (Scalar * Scalar * Scalar -> unit) option }
-
-let __Scalar backwardingo prev op v = 
-  let id = Interlocked.Increment nextId
-  { id = id
-    value = v
-    grad = 0.0
-    prev = prev
-    op = op
-    backwardingo = backwardingo }
-
-let f1 (a,b,c) =
-    a.grad <- a.grad + c.grad
-    b.grad <- b.grad + c.grad
-
-let add a b =
-    __Scalar (Some f1) [| a; b |] Mul (a.value + b.value)
+  mutable backwardFn: (unit -> unit) option }
 
 module Scalar =
 
+    let create prev op v = 
+        let id = Interlocked.Increment nextId
+        { id = id
+            value = v
+            grad = 0.0
+            prev = prev
+            op = op
+            backwardFn = None }
 
+    let add a b =
+        let c = create [| a; b |] Add (a.value + b.value)
+        c.backwardFn <- Some (fun () ->
+            a.grad <- a.grad + c.grad
+            b.grad <- b.grad + c.grad
+        )
+        c
+
+    let leaf v =
+        create [||] Leaf v
+
+    let param v =
+        create [||] Param v
 
     let mul a b =
         let c = create [| a; b |] Mul (a.value * b.value)
-        c.backwardingo <- Some (fun () ->
+        c.backwardFn <- Some (fun () ->
             a.grad <- a.grad + c.grad * b.value
             b.grad <- b.grad + c.grad * a.value
         )
@@ -56,7 +61,7 @@ module Scalar =
 
     let relu a =
         let c = create [| a |] Relu (max 0.0 a.value)
-        c.backwardingo <- Some (fun () ->
+        c.backwardFn <- Some (fun () ->
             if a.value > 0.0 then
                 a.grad <- a.grad + c.grad
         )
@@ -79,7 +84,7 @@ let backward output =
 
     for i = topo.Count - 1 downto 0 do
         let node = topo.[i]
-        match node.backwardingo with
+        match node.backwardFn with
         | Some f -> f ()
         | None -> ()
 
@@ -108,7 +113,7 @@ module Loss =
     let mse yPred yTrue =
         let diff = yPred.value - yTrue
         let loss = Scalar.create [| yPred |] Mse (diff * diff)
-        loss.backwardingo <- Some (fun () ->
+        loss.backwardFn <- Some (fun () ->
             yPred.grad <- yPred.grad + loss.grad * 2.0 * (yPred.value - yTrue)
         )
         loss

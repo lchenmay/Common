@@ -36,15 +36,18 @@ extern bool GetVolumeInformation(
 
 // get memory usage
 let mutable total_mem_size = 0L
-let free_mem_counter = new PerformanceCounter("Memory", "Available MBytes")
+// TEMP: disable PerformanceCounter for Linux compatibility
+// let free_mem_counter =
+//     if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
+//         try
+//             Some (new PerformanceCounter("Memory", "Available MBytes"))
+//         with
+//         | :? PlatformNotSupportedException -> None
+//     else
+//         None
 let getMemUsage() =
-    if total_mem_size = 0 then
-        let searcher = new ManagementObjectSearcher("Select * From Win32_PhysicalMemory")
-        for ram in searcher.Get() do
-            total_mem_size <- total_mem_size + Convert.ToInt64(ram.GetPropertyValue("Capacity"))
-        total_mem_size <- total_mem_size / (1024L * 1024L)
-    let free_mem_size = int64(free_mem_counter.NextValue())
-    total_mem_size, free_mem_size
+    // TEMP: return dummy values
+    (0L, 0L)
 
 let getVolumeByName name = 
     let VolumeNameSize = 255

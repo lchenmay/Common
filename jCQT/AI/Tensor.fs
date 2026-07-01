@@ -1,39 +1,29 @@
 module jCQT.AI.Tensor
 
-#nowarn "64"  // INumber<'T> 泛型函数无实参调用点导致的过度狭义警告，float/int 均可
+type Tensor = {
+dims: int[]
+dim__indices: int[][]
+dataIndices: int[]
+data: float[] }
 
-open System
-open System.Numerics
-open System.Threading.Tasks
+let dimes__Tensor dimes =
 
-type Scalar<'T> = 'T[]
-type Vct<'T> = 'T[]
-type Matrix<'T> = 'T[,]
-type Tensor3<'T> = 'T[,,]
-type Tensor4<'T> = 'T[,,,]
+  let mutable length = 1
+  let dim__indices =
+    dimes
+    |> Array.map(fun dim -> 
+      length <- length * dim
+      [| 0 .. dim - 1 |])
+  
+  { dims = dimes
+    dim__indices = dim__indices
+    dataIndices = [| 0 .. length - 1 |]
+    data = Array.zeroCreate length }
 
-type Tensor<'T> = 
-| Trival
-| Scalar of Scalar<'T>
-| Vct of Vct<'T>
-| Matrix of Matrix<'T>
-| Tensor3 of Tensor3<'T>
-| Tensor4 of Tensor4<'T>
+let addWith me incoming = 
+    me.dataIndices
+    |> Array.iter(fun i -> me.data[i] <- me.data[i] + incoming.data[i])
 
-open System.Numerics
-
-let inline add a b = 
-    match a, b with
-    | Scalar x, Scalar y -> 
-        [| x.[0] + y.[0] |] |> Scalar
-
-    | Vct x, Vct y -> 
-        Array.init x.Length (fun i -> x.[i] + y.[i])
-        |> Vct
-
-    | Matrix x, Matrix y ->
-        let r, c = Array2D.length1 x, Array2D.length2 x
-        Array2D.init r c (fun i j -> x.[i, j] + y.[i, j])
-        |> Matrix
-
-    | _ -> Trival
+let addHadamardWtih me a b = 
+  me.dataIndices
+  |> Array.iter(fun i -> me.data[i] <- me.data[i] + a.data[i] * b.data[i])

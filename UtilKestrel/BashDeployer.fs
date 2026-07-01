@@ -564,13 +564,8 @@ let buildBackend output credential code =
                 let restoreResult = bash output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603"
                 if restoreResult.Trim().Length > 0 then restoreResult |> output
                 
-                // 2. 添加正确的 Common 子项目引用 (suppress stderr noise)
-                "  - 添加项目引用..." |> cyan |> output
-                let utilRefCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Util/Util.fsproj 2>/dev/null; dotnet add reference ~/Dev/Common/UtilKestrel/UtilKestrel.fsproj 2>/dev/null; dotnet add reference ~/Dev/JCS/JCS.Shared/JCS.Shared.fsproj 2>/dev/null; dotnet add reference ~/Dev/JCS/JCS.BizLogics/JCS.BizLogics.fsproj 2>/dev/null; echo '✓ 项目引用检查完成'"
-                let refResult = bash output credential utilRefCmd
-                refResult |> output
-                
-                // 3. dotnet clean + dotnet publish (确保依赖 DLL 最新)
+                // 2. dotnet clean + dotnet publish (确保依赖 DLL 最新)
+                // 注意：不执行 `dotnet add reference`，因为 `dotnet publish` 会自动解析项目引用
                 "  - dotnet clean --configuration Release" |> cyan |> output
                 bash output credential $"cd ~/{serverDir} && dotnet clean --configuration Release" |> ignore
 
@@ -599,13 +594,8 @@ let buildBackend output credential code =
             let restoreResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603" 120000
             if restoreResult.Trim().Length > 0 then restoreResult |> output
             
-            // 2. 添加项目引用 (suppress stderr noise)
-            "  - 添加项目引用..." |> cyan |> output
-            let refCmd = $"cd ~/{serverDir} && dotnet add reference ~/Dev/Common/Util/Util.fsproj 2>/dev/null; dotnet add reference ~/Dev/Common/UtilKestrel/UtilKestrel.fsproj 2>/dev/null; dotnet add reference ~/Dev/JCS/JCS.Shared/JCS.Shared.fsproj 2>/dev/null; dotnet add reference ~/Dev/JCS/JCS.BizLogics/JCS.BizLogics.fsproj 2>/dev/null; echo '✓ 项目引用检查完成'"
-            let refResult = bash output credential refCmd
-            refResult |> output
-            
-            // 3. dotnet clean + dotnet publish (确保依赖 DLL 最新)
+            // 2. dotnet clean + dotnet publish (确保依赖 DLL 最新)
+            // 注意：不执行 `dotnet add reference`，因为 `dotnet publish` 会自动解析项目引用
             "  - dotnet clean --configuration Release" |> cyan |> output
             bash output credential $"cd ~/{serverDir} && dotnet clean --configuration Release" |> ignore
 
@@ -1277,10 +1267,18 @@ let routine
         // === Phase 3: 部署代码 ===
         writeDeployProgress output credential code "phase3_building" startedAt "远程构建前后端..." localGitHash "" ""
         "\nPhase 3/4: 部署代码..." |> cyan |> output
-        exeDeployCodeV2 output credential code deployLogPath scpPushOk
-        writeDeployProgress output credential code "phase4_verifying" startedAt "部署后验证..." localGitHash "" ""
-
+        
+        // 检查源码推送是否成功
+        if not scpPushOk then
+            "❌ 源码推送失败，中止部署" |> red |> output
+            $"  请检查 SSH 连接、服务器磁盘空间、或手动执行：`scp -r C:\\Dev\\{code} root@5.78.201.21:~/Dev/`" |> yellow |> output
+            writeDeployProgress output credential code "phase3_failed" startedAt "源码推送失败，中止部署" localGitHash "" ""
+        else
+            exeDeployCodeV2 output credential code deployLogPath scpPushOk
+            writeDeployProgress output credential code "phase4_verifying" startedAt "部署后验证..." localGitHash "" ""
+        
         // === Phase 4: 部署后检查 + 清理 ===
+        // 无论部署是否执行，都要检查服务状态
         "\nPhase 4/4: 部署后检查..." |> cyan |> output
         "4.1 清理 SSH 隧道..." |> cyan |> output
         stopAllSshTunnels output

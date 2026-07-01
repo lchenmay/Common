@@ -35,50 +35,66 @@ let ensureNodeInstalled output credential =
     elif not (versionStr.Contains("NOT_INSTALLED")) then
         // 已安装但版本太旧
         $"⚠ Node.js 已安装但版本过旧: {versionStr.Trim()}（Vite 8 需要 ≥ 22.12），正在升级..." |> yellow |> output
-
-        // 使用 nodesource 安装 Node.js 22.x
-        let installCmds = [|
-            "curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -"
-            "yum install -y nodejs || dnf install -y nodejs || (apt update && apt install -y nodejs)"
-        |]
-
-        installCmds |> Array.iter (fun cmd ->
-            let result = bash output credential cmd
-            result |> output)
-
+        
+        // 使用 nodesource 安装 Node.js 22.x（自动检测系统类型）
+        let installCmd = "curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs"
+        let result = bashWithTimeout output credential installCmd 180000  // 3分钟超时
+        result |> output
+        
         // 验证升级
         let newVersionStr = bash output credential "node --version 2>/dev/null || echo 'FAILED'"
         let upgradeOk, newVersion = checkVersion newVersionStr
-
+        
         if upgradeOk then
             $"✓ Node.js 升级成功: {newVersion}" |> green |> output
             true
         else
-            "❌ Node.js 升级失败" |> red |> output
-            false
+            // 备用方案：手动下载二进制文件
+            $"⚠ nodesource 安装失败，尝试手动下载 Node.js 22.x..." |> yellow |> output
+            let fallbackCmd = "cd /tmp && curl -fsSL https://nodejs.org/dist/v22.12.0/node-v22.12.0-linux-x64.tar.xz -o node.tar.xz && tar -xJf node.tar.xz && mv node-v22.12.0-linux-x64 /usr/local/lib/nodejs 2>/dev/null || true && ln -sf /usr/local/lib/nodejs/bin/node /usr/local/bin/node && ln -sf /usr/local/lib/nodejs/bin/npm /usr/local/bin/npm && ln -sf /usr/local/lib/nodejs/bin/npx /usr/local/bin/npx"
+            let fallbackResult = bashWithTimeout output credential fallbackCmd 180000
+            fallbackResult |> output
+            
+            let verifyVersionStr = bash output credential "node --version 2>/dev/null || echo 'FAILED'"
+            let fallbackOk, fallbackVersion = checkVersion verifyVersionStr
+            
+            if fallbackOk then
+                $"✓ Node.js 手动安装成功: {fallbackVersion}" |> green |> output
+                true
+            else
+                "❌ Node.js 升级失败（nodesource + 手动安装均失败）" |> red |> output
+                false
     else
         "⚠ Node.js 未安装，正在安装..." |> yellow |> output
-
-        // 使用 nodesource 安装 Node.js 22.x
-        let installCmds = [|
-            "curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -"
-            "yum install -y nodejs || dnf install -y nodejs || (apt update && apt install -y nodejs)"
-        |]
-
-        installCmds |> Array.iter (fun cmd ->
-            let result = bash output credential cmd
-            result |> output)
-
+        
+        // 使用 nodesource 安装 Node.js 22.x（自动检测系统类型）
+        let installCmd = "curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs"
+        let result = bashWithTimeout output credential installCmd 180000  // 3分钟超时
+        result |> output
+        
         // 验证安装
         let newVersionStr = bash output credential "node --version 2>/dev/null || echo 'FAILED'"
         let installOk, newVersion = checkVersion newVersionStr
-
+        
         if installOk then
             $"✓ Node.js 安装成功: {newVersion}" |> green |> output
             true
         else
-            "❌ Node.js 安装失败（或版本不满足 ≥ 22.12）" |> red |> output
-            false
+            // 备用方案：手动下载二进制文件
+            $"⚠ nodesource 安装失败，尝试手动下载 Node.js 22.x..." |> yellow |> output
+            let fallbackCmd = "cd /tmp && curl -fsSL https://nodejs.org/dist/v22.12.0/node-v22.12.0-linux-x64.tar.xz -o node.tar.xz && tar -xJf node.tar.xz && mv node-v22.12.0-linux-x64 /usr/local/lib/nodejs 2>/dev/null || true && ln -sf /usr/local/lib/nodejs/bin/node /usr/local/bin/node && ln -sf /usr/local/lib/nodejs/bin/npm /usr/local/bin/npm && ln -sf /usr/local/lib/nodejs/bin/npx /usr/local/bin/npx"
+            let fallbackResult = bashWithTimeout output credential fallbackCmd 180000
+            fallbackResult |> output
+            
+            let verifyVersionStr = bash output credential "node --version 2>/dev/null || echo 'FAILED'"
+            let fallbackOk, fallbackVersion = checkVersion verifyVersionStr
+            
+            if fallbackOk then
+                $"✓ Node.js 手动安装成功: {fallbackVersion}" |> green |> output
+                true
+            else
+                "❌ Node.js 安装失败（nodesource + 手动安装均失败）" |> red |> output
+                false
 
 /// 检查并安装 Bun（修复版）
 let ensureBunInstalled output credential =
@@ -160,7 +176,7 @@ let buildFrontend output credential code =
     
     // 检查 package.json 是否存在
     "检查 package.json..." |> cyan |> output
-    let checkPackageCmd = $"if [ -f ~/{vscodeDir}/package.json ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
+    let checkPackageCmd = $"if [ -f $HOME/{vscodeDir}/package.json ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
     let packageExists = bash output credential checkPackageCmd
     
     if packageExists.Contains("NOT_EXISTS") then
@@ -186,41 +202,41 @@ let buildFrontend output credential code =
             debugNode |> output
             
             // 调试2: 检查 vite.js 是否存在
-            let debugVite = bash output credential $"echo '[DEBUG] vite.js exists:' && ls -la ~/{vscodeDir}/node_modules/vite/bin/vite.js 2>&1 || echo 'VITE_NOT_FOUND'"
+            let debugVite = bash output credential $"echo '[DEBUG] vite.js exists:' && ls -la $HOME/{vscodeDir}/node_modules/vite/bin/vite.js 2>&1 || echo 'VITE_NOT_FOUND'"
             debugVite |> output
             
             // 调试3: 构建前 dist 目录内容
-            let debugDistBefore = bash output credential $"echo '[DEBUG] dist before build:' && ls -laR ~/{vscodeDir}/dist/ 2>&1 || echo 'DIST_NOT_FOUND'"
+            let debugDistBefore = bash output credential $"echo '[DEBUG] dist before build:' && ls -laR $HOME/{vscodeDir}/dist/ 2>&1 || echo 'DIST_NOT_FOUND'"
             debugDistBefore |> output
             
             // ====== 正式构建 ======
             // 步骤1: bun install（180s 超时，适应慢速网络和大依赖）
             "[DEBUG] --- 步骤1: bun install ---" |> yellow |> output
-            let installResult = bashWithTimeout output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1; echo '[DEBUG] bun install exit code:' $?" 180000
+            let installResult = bashWithTimeout output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun install 2>&1; echo '[DEBUG] bun install exit code:' $?" 180000
             installResult |> output
             
             // 步骤2: bun generateRoutes.cjs（生成路由）
             "[DEBUG] --- 步骤2: bun generateRoutes.cjs ---" |> yellow |> output
-            let genResult = bash output credential $"cd ~/{vscodeDir} && /root/.bun/bin/bun generateRoutes.cjs 2>&1; echo '[DEBUG] generateRoutes exit code:' $?"
+            let genResult = bash output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun generateRoutes.cjs 2>&1; echo '[DEBUG] generateRoutes exit code:' $?"
             genResult |> output
             
             // 步骤3: 用系统 node 运行 vite build（不用 bun bd，因 bun 内嵌 Node 版本可能不够 Vite 8 要求）
             // 参考：bun 1.2.15 内嵌 Node 22.6.0，Vite 8 要求 22.12+，导致构建静默失败
             "[DEBUG] --- 步骤3: node vite build ---" |> yellow |> output
-            let buildResult = bashWithTimeout output credential $"cd ~/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 180000
+            let buildResult = bashWithTimeout output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 180000
             buildResult |> output
             
             // 调试4: 构建后 dist 目录内容
             "[DEBUG] --- 构建后检查 ---" |> yellow |> output
-            let debugDistAfter = bash output credential $"echo '[DEBUG] dist after build:' && ls -laR ~/{vscodeDir}/dist/ 2>&1 || echo 'DIST_NOT_FOUND'"
+            let debugDistAfter = bash output credential $"echo '[DEBUG] dist after build:' && ls -laR $HOME/{vscodeDir}/dist/ 2>&1 || echo 'DIST_NOT_FOUND'"
             debugDistAfter |> output
             
             // 调试5: 检查是否有 vite.config.ts 和 tsconfig
-            let debugConfig = bash output credential $"echo '[DEBUG] config files:' && ls -la ~/{vscodeDir}/vite.config.* ~/{vscodeDir}/tsconfig*.json 2>&1 || echo 'CONFIG_NOT_FOUND'"
+            let debugConfig = bash output credential $"echo '[DEBUG] config files:' && ls -la $HOME/{vscodeDir}/vite.config.* $HOME/{vscodeDir}/tsconfig*.json 2>&1 || echo 'CONFIG_NOT_FOUND'"
             debugConfig |> output
             
             // 调试6: 检查 node_modules/.bin/vite
-            let debugBinVite = bash output credential $"echo '[DEBUG] node_modules/.bin/vite:' && ls -la ~/{vscodeDir}/node_modules/.bin/vite 2>&1 || echo 'BIN_VITE_NOT_FOUND'; echo '[DEBUG] vite package.json version:' && cat ~/{vscodeDir}/node_modules/vite/package.json 2>/dev/null | grep '\"version\"' || echo 'NO_PKG_JSON'"
+            let debugBinVite = bash output credential $"echo '[DEBUG] node_modules/.bin/vite:' && ls -la $HOME/{vscodeDir}/node_modules/.bin/vite 2>&1 || echo 'BIN_VITE_NOT_FOUND'; echo '[DEBUG] vite package.json version:' && cat $HOME/{vscodeDir}/node_modules/vite/package.json 2>/dev/null | grep '\"version\"' || echo 'NO_PKG_JSON'"
             debugBinVite |> output
             
             "[DEBUG] --- 构建调试结束 ---" |> yellow |> output
@@ -235,10 +251,10 @@ let buildFrontend output credential code =
                 false
         else
             "  使用 npm 安装..." |> cyan |> output
-            let npmResult = bash output credential $"cd ~/{vscodeDir} && npm install"
+            let npmResult = bash output credential $"cd $HOME/{vscodeDir} && npm install"
             npmResult |> output
             
-            let buildResult = bash output credential $"cd ~/{vscodeDir} && npm run build 2>&1"
+            let buildResult = bash output credential $"cd $HOME/{vscodeDir} && npm run build 2>&1"
             buildResult |> output
             
             let distCount = remoteDistFileCount output credential vscodeDir

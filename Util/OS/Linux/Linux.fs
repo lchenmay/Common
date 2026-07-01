@@ -135,36 +135,35 @@ let checkSSHAuth
 let ensureDirectory output credential targetDir =
     $"\n--- 检查目录 ~/{targetDir} ---" |> cyan |> output
     
-    // 检查目录是否存在 - 使用简单的 if 语句避免多行问题
-    let checkCmd = $"if [ -d ~/{targetDir} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
-    let checkResult = bash output credential checkCmd
+    // 检查目录是否存在 - 使用 $HOME 代替 ~（~ 在 SSH 双引号内不会展开）
+    let checkCmd = $"if [ -d $HOME/{targetDir} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
+    let checkResult = bash output credential checkCmd |> fun s -> s.Trim()
     
-    if checkResult.Contains("NOT_EXISTS") then
+    if checkResult = "NOT_EXISTS" then
         // 目录不存在，创建
         $"创建目录 ~/{targetDir}..." |> cyan |> output
-        let mkdirCmd = $"mkdir -p ~/{targetDir}"
-        let mkdirResult = bash output credential mkdirCmd
-        mkdirResult |> output
+        let mkdirCmd = $"mkdir -p $HOME/{targetDir}"
+        bash output credential mkdirCmd |> ignore
         
         // 验证创建是否成功
-        let verifyCmd = $"if [ -d ~/{targetDir} ]; then echo 'CREATED'; else echo 'FAILED'; fi"
+        let verifyCmd = $"if [ -d $HOME/{targetDir} ]; then echo 'CREATED'; else echo 'FAILED'; fi"
         let verifyResult = bash output credential verifyCmd |> fun s -> s.Trim()
         
         if verifyResult = "CREATED" then
             $"✓ 目录 ~/{targetDir} 创建成功" |> green |> output
             // 设置权限
-            let chmodCmd = $"chmod -R 755 ~/{targetDir}"
+            let chmodCmd = $"chmod -R 755 $HOME/{targetDir}"
             bash output credential chmodCmd |> ignore
             "✓ 权限已设置为 755" |> green |> output
             true
         else
             $"❌ 目录 ~/{targetDir} 创建失败（verifyResult: {verifyResult}）" |> red |> output
             false
-    else
+    elif checkResult = "EXISTS" then
         $"✓ 目录 ~/{targetDir} 已存在" |> green |> output
         
         // 检查权限
-        let permCmd = $"if [ -w ~/{targetDir} ] && [ -r ~/{targetDir} ] && [ -x ~/{targetDir} ]; then echo 'PERM_OK'; else echo 'PERM_BAD'; fi"
+        let permCmd = $"if [ -w $HOME/{targetDir} ] && [ -r $HOME/{targetDir} ] && [ -x $HOME/{targetDir} ]; then echo 'PERM_OK'; else echo 'PERM_BAD'; fi"
         let permResult = bash output credential permCmd |> fun s -> s.Trim()
         
         if String.IsNullOrEmpty(permResult) then
@@ -176,10 +175,14 @@ let ensureDirectory output credential targetDir =
             true
         else
             "⚠ 权限不正确，修复中..." |> yellow |> output
-            let fixPermCmd = $"chmod -R 755 ~/{targetDir}"
+            let fixPermCmd = $"chmod -R 755 $HOME/{targetDir}"
             bash output credential fixPermCmd |> ignore
             "✓ 权限已修复为 755" |> green |> output
             true
+    else
+        // 未知输出，记录警告但继续
+        $"⚠ 目录检查返回未知输出: {checkResult}" |> yellow |> output
+        true
 
 
 /// 确保多个目录存在
@@ -213,25 +216,24 @@ let ensureDirectories output credential dirs =
 let deleteRemoteDir output credential targetDir =
     $"\n--- 删除目录 ~/{targetDir} ---" |> yellow |> output
     
-    let checkCmd = $"if [ -d ~/{targetDir} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
-    let checkResult = bash output credential checkCmd
+    let checkCmd = $"if [ -d $HOME/{targetDir} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
+    let checkResult = bash output credential checkCmd |> fun s -> s.Trim()
     
-    if checkResult.Contains("NOT_EXISTS") then
+    if checkResult = "NOT_EXISTS" then
         $"⚠ 目录 ~/{targetDir} 不存在，无需删除" |> yellow |> output
         true
     else
-        let deleteCmd = $"rm -rf ~/{targetDir}"
-        let deleteResult = bash output credential deleteCmd
-        deleteResult |> output
+        let deleteCmd = $"rm -rf $HOME/{targetDir}"
+        bash output credential deleteCmd |> ignore
         
-        let verifyCmd = $"if [ -d ~/{targetDir} ]; then echo 'STILL_EXISTS'; else echo 'DELETED'; fi"
-        let verifyResult = bash output credential verifyCmd
+        let verifyCmd = $"if [ -d $HOME/{targetDir} ]; then echo 'STILL_EXISTS'; else echo 'DELETED'; fi"
+        let verifyResult = bash output credential verifyCmd |> fun s -> s.Trim()
         
-        if verifyResult.Contains("DELETED") then
+        if verifyResult = "DELETED" then
             $"✓ 目录 ~/{targetDir} 已成功删除" |> green |> output
             true
         else
-            $"❌ 目录 ~/{targetDir} 删除失败" |> red |> output
+            $"❌ 目录 ~/{targetDir} 删除失败（verifyResult: {verifyResult}）" |> red |> output
             false
 
 /// 获取服务的 systemd 单元名称
@@ -259,7 +261,7 @@ let checkDotNetServiceRunning
         $"  [DEBUG] systemctl status {svcName}:" |> cyan |> output
         bash output credential $"systemctl status {svcName} 2>/dev/null || echo '(无状态信息)'" |> output
         $"  [DEBUG] 检查 build 产物:" |> cyan |> output
-        let checkBuildCmd = $"ls -la ~/Dev/{code}/Server/bin/Release/net10.0/ 2>/dev/null | head -20 || echo '(build 输出目录不存在)'"
+        let checkBuildCmd = $"ls -la $HOME/Dev/{code}/Server/bin/Release/net10.0/ 2>/dev/null | head -20 || echo '(build 输出目录不存在)'"
         bash output credential checkBuildCmd |> output
         false
 
@@ -319,13 +321,13 @@ let startDotNetService output credential (code: string) =
     $"\n--- 启动 {code} 服务 (systemd) ---" |> cyan |> output
     
     let svcName = getServiceName code
-    let serverDir = $"~/Dev/{code}/Server"
+    let serverDir = $"$HOME/Dev/{code}/Server"
     
     // 1. 检查 build 产物
     "  1. 检查 build 产物..." |> cyan |> output
     let buildOutCmd = $"ls -la {serverDir}/bin/Release/net10.0/Server.dll 2>/dev/null && echo 'EXISTS' || echo 'NOT_EXISTS'"
-    let buildCheck = bash output credential buildOutCmd
-    if buildCheck.Contains("NOT_EXISTS") then
+    let buildCheck = bash output credential buildOutCmd |> fun s -> s.Trim()
+    if buildCheck = "NOT_EXISTS" then
         "❌ Server.dll 不存在，请先 build" |> red |> output
         false
     else
@@ -373,7 +375,7 @@ let startServiceVerbose output credential (code: string) =
     "\n--- 启动服务 (systemd) ---" |> cyan |> output
     
     let svcName = getServiceName code
-    let serverDir = $"~/Dev/{code}/Server"
+    let serverDir = $"$HOME/Dev/{code}/Server"
     
     // 0. 启动前诊断
     "  0. 启动前诊断..." |> cyan |> output

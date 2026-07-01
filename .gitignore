@@ -16,3 +16,7 @@ build_log.txt
 server-out.txt
 run_log.txt
 TypeScriptVue/package-lock.json
+jcqt_build.log
+jcqt_build.txt
+utilkestrel_build.txt
+build.log

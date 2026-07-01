@@ -4,7 +4,7 @@ export const checkUrl = (url: string) => {
     if (api) return api
     if (import.meta.env.DEV || (typeof location !== 'undefined' && location.hostname === 'localhost'))
       return ""
-    return `https://localhost`
+    return ``
   }
 
   if (/^http(s?):/i.test(url)) return url

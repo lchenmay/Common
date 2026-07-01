@@ -6,8 +6,20 @@ open LanguagePrimitives
 
 open System
 open System.Threading
+open System.Collections.Generic
 
 open jCQT.AI.Tensor
+
+// ============================================================
+// 操作类型枚举（替代 string）
+// ============================================================
+
+type Op =
+    | Leaf | Param | Add | Mul | Relu | Mse
+    override this.ToString() =
+        match this with
+        | Leaf -> "leaf" | Param -> "param" | Add -> "add" | Mul -> "mul"
+        | Relu -> "relu" | Mse -> "mse"
 
 // ============================================================
 // 计算图节点（标量）- 正确实现反向传播
@@ -32,29 +44,29 @@ type Scalar =
         /// 输入节点（计算图依赖，用于构建计算图）
         prev: Scalar list
 
-        /// 操作名称（用于调试）
-        op: string
+        /// 操作类型（用于调试）
+        op: Op
 
         /// 反向函数（如何将梯度传播到输入）
         mutable backwardFn: (unit -> unit) option
     }
 
     /// 创建标量节点
-    static member create (v: float) (prev: Scalar list) (op: string) : Scalar =
-        let id = System.Threading.Interlocked.Increment(nextId)
+    static member create v prev op =
+        let id = Interlocked.Increment(nextId)
         { id = id; value = v; grad = 0.0; prev = prev; op = op; backwardFn = None }
 
     /// 叶子节点（常量，不需要梯度）
-    static member leaf (v: float) : Scalar =
-        Scalar.create v [] "leaf"
+    static member leaf v =
+        Scalar.create v [] Leaf
 
     /// 参数节点（需要梯度）
-    static member param (v: float) : Scalar =
-        Scalar.create v [] "param"
+    static member param v =
+        Scalar.create v [] Param
 
     /// 加法运算：c = a + b
-    static member add (a: Scalar) (b: Scalar) : Scalar =
-        let c = Scalar.create (a.value + b.value) [a; b] "add"
+    static member add a b =
+        let c = Scalar.create (a.value + b.value) [a; b] Add
         c.backwardFn <- Some (fun () ->
             a.grad <- a.grad + c.grad
             b.grad <- b.grad + c.grad
@@ -62,8 +74,8 @@ type Scalar =
         c
 
     /// 乘法运算：c = a * b
-    static member mul (a: Scalar) (b: Scalar) : Scalar =
-        let c = Scalar.create (a.value * b.value) [a; b] "mul"
+    static member mul a b =
+        let c = Scalar.create (a.value * b.value) [a; b] Mul
         c.backwardFn <- Some (fun () ->
             a.grad <- a.grad + c.grad * b.value
             b.grad <- b.grad + c.grad * a.value
@@ -71,8 +83,8 @@ type Scalar =
         c
 
     /// ReLU 激活函数
-    static member relu (a: Scalar) : Scalar =
-        let c = Scalar.create (max 0.0 a.value) [a] "relu"
+    static member relu a =
+        let c = Scalar.create (max 0.0 a.value) [a] Relu
         c.backwardFn <- Some (fun () ->
             // ∂L/∂a = ∂L/∂c * (a > 0 ? 1 : 0)
             if a.value > 0.0 then
@@ -87,10 +99,10 @@ type Scalar =
 /// 反向传播（从输出节点开始，构建计算图并传播梯度）
 let backward output =
     // 1. 构建计算图的所有节点（拓扑排序，后序遍历）
-    let visited = System.Collections.Generic.HashSet<int>()
+    let visited = HashSet<int>()
     let topo = ResizeArray<Scalar>()
 
-    let rec buildTopo (node: Scalar) : unit =
+    let rec buildTopo node =
         if visited.Add(node.id) then
             // 先访问所有输入节点（依赖）
             for input in node.prev do
@@ -126,16 +138,16 @@ type SGD =
     }
 
     /// 创建 SGD 优化器
-    static member create (lr: float) (parameters: Scalar list) : SGD =
+    static member create lr parameters =
         { lr = lr; parameters = parameters }
 
     /// 执行一步优化（w = w - lr * dw）
-    member this.step () : unit =
+    member this.step () =
         for p in this.parameters do
             p.value <- p.value - this.lr * p.grad
 
     /// 清零梯度
-    member this.zeroGrad () : unit =
+    member this.zeroGrad () =
         for p in this.parameters do
             p.grad <- 0.0
 
@@ -146,9 +158,9 @@ type SGD =
 module Loss =
 
     /// 均方误差损失：L = (y_pred - y_true)²
-    let mse (yPred: Scalar) (yTrue: float) : Scalar =
+    let mse yPred yTrue =
         let diff = yPred.value - yTrue
-        let loss = Scalar.create (diff * diff) [yPred] "mse"
+        let loss = Scalar.create (diff * diff) [yPred] Mse
         loss.backwardFn <- Some (fun () ->
             // ∂L/∂y_pred = 2 * (y_pred - y_true)
             yPred.grad <- yPred.grad + loss.grad * 2.0 * (yPred.value - yTrue)
@@ -174,7 +186,7 @@ module Loss =
 module Examples =
 
     /// 测试标量 Autograd
-    let testScalar () : unit =
+    let testScalar () =
         printfn "=== 测试标量 Autograd ==="
 
         // 计算图：y = w * x + b
@@ -197,7 +209,7 @@ module Examples =
         printfn "实际：dw = %f, db = %f" w.grad b.grad
 
     /// 线性回归示例
-    let linearRegression () : unit =
+    let linearRegression () =
         printfn "=== 线性回归示例 ==="
 
         // 数据

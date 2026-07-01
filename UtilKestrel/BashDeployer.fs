@@ -176,11 +176,11 @@ let private pushSourceViaScp output code credential disk isPrimary =
             let mkdirCmd = $"mkdir -p {remotePath}"
             bash output credential mkdirCmd |> ignore
             
-            // Windows 路径需要转换：C:\Dev\Xxx -> /cygdrive/c/Dev/Xxx 或使用原生路径
-            // PowerShell 的 scp 支持 Windows 路径格式
+            // Windows 路径需要转换：将反斜杠替换为正斜杠（scp 需要）
+            let normalizedPath = localPath.Replace('\\', '/')
             let scpArgs = 
                 $"{privateKeyArg} {portArg} -r -o StrictHostKeyChecking=no " +
-                $"\"{localPath}\\*\" {user}@{server}:{remotePath}/"
+                $"\"{normalizedPath}/*\" {user}@{server}:{remotePath}/"
             
             $"  scp {localPath}\\* -> {server}:{remotePath}/" |> cyan |> output
             let result = execWithTimeout output "" "scp" scpArgs 600000  // 10分钟超时（大文件）
@@ -234,68 +234,71 @@ let private isPrivateNetwork (server: string) =
 /// 检查并安装 Node.js（要求 ≥ 22.12，Vite 8 最低要求）
 let ensureNodeInstalled output credential =
     "\n--- 检查 Node.js ---" |> cyan |> output
-    
-    // 检查 node 是否已安装且版本 ≥ 22.12
-    // 使用 node -e 提取 major.minor.patch 并比较
-    let checkVersionCmd = 
-        "node -e \"var v=process.versions.node.split('.');var ok=(+v[0]>22)||(+v[0]==22&&+v[1]>=12);console.log(ok?'OK':'OLD')\" 2>/dev/null || echo 'NOT_INSTALLED'"
-    let nodeStatus = bash output credential checkVersionCmd
-    
-    if nodeStatus.Contains("OK") then
-        // 显示版本
-        let versionCmd = "node --version 2>/dev/null || echo 'unknown'"
-        let version = bash output credential versionCmd
-        $"✓ Node.js 已安装且版本满足要求: {version.Trim()}" |> green |> output
+
+    // 检查 node 是否已安装
+    let versionCmd = "node --version 2>/dev/null || echo 'NOT_INSTALLED'"
+    let versionStr = bash output credential versionCmd
+
+    // 解析版本号并检查是否 ≥ 22.12
+    let checkVersion (verStr: string) =
+        if verStr.Contains("NOT_INSTALLED") then
+            false, "未安装"
+        else
+            let ver = verStr.Trim().TrimStart('v')
+            let parts = ver.Split('.') |> Array.map (fun s -> try int s with _ -> 0)
+            let major = if parts.Length > 0 then parts.[0] else 0
+            let minor = if parts.Length > 1 then parts.[1] else 0
+            let ok = major > 22 || (major = 22 && minor >= 12)
+            ok, verStr.Trim()
+
+    let nodeOk, version = checkVersion versionStr
+
+    if nodeOk then
+        $"✓ Node.js 已安装且版本满足要求: {version}" |> green |> output
         true
-    elif nodeStatus.Contains("OLD") then
-        // Node.js 已安装但版本太旧
-        let versionCmd = "node --version 2>/dev/null || echo 'unknown'"
-        let version = bash output credential versionCmd
-        $"⚠ Node.js 已安装但版本过旧: {version.Trim()}（Vite 8 需要 ≥ 22.12），正在升级..." |> yellow |> output
-        
+    elif not (versionStr.Contains("NOT_INSTALLED")) then
+        // 已安装但版本太旧
+        $"⚠ Node.js 已安装但版本过旧: {versionStr.Trim()}（Vite 8 需要 ≥ 22.12），正在升级..." |> yellow |> output
+
         // 使用 nodesource 安装 Node.js 22.x
         let installCmds = [|
             "curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -"
             "yum install -y nodejs || dnf install -y nodejs || (apt update && apt install -y nodejs)"
         |]
-        
+
         installCmds |> Array.iter (fun cmd ->
             let result = bash output credential cmd
             result |> output)
-        
+
         // 验证升级
-        let verifyCmd = "node -e \"var v=process.versions.node.split('.');var ok=(+v[0]>22)||(+v[0]==22&&+v[1]>=12);console.log(ok?'OK':'STILL_OLD')\" 2>/dev/null || echo 'FAILED'"
-        let verifyResult = bash output credential verifyCmd
-        
-        if verifyResult.Contains("OK") then
-            let newVersionCmd = "node --version 2>/dev/null || echo 'unknown'"
-            let newVersion = bash output credential newVersionCmd
-            $"✓ Node.js 升级成功: {newVersion.Trim()}" |> green |> output
+        let newVersionStr = bash output credential "node --version 2>/dev/null || echo 'FAILED'"
+        let upgradeOk, newVersion = checkVersion newVersionStr
+
+        if upgradeOk then
+            $"✓ Node.js 升级成功: {newVersion}" |> green |> output
             true
         else
             "❌ Node.js 升级失败" |> red |> output
             false
     else
         "⚠ Node.js 未安装，正在安装..." |> yellow |> output
-        
+
         // 使用 nodesource 安装 Node.js 22.x
         let installCmds = [|
             "curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -"
             "yum install -y nodejs || dnf install -y nodejs || (apt update && apt install -y nodejs)"
         |]
-        
+
         installCmds |> Array.iter (fun cmd ->
             let result = bash output credential cmd
             result |> output)
-        
+
         // 验证安装
-        let verifyCmd = "node -e \"var v=process.versions.node.split('.');var ok=(+v[0]>22)||(+v[0]==22&&+v[1]>=12);console.log(ok?'OK':'STILL_OLD')\" 2>/dev/null || echo 'FAILED'"
-        let verifyResult = bash output credential verifyCmd
-        
-        if verifyResult.Contains("OK") then
-            let versionCmd = "node --version 2>/dev/null || echo 'unknown'"
-            let version = bash output credential versionCmd
-            $"✓ Node.js 安装成功: {version.Trim()}" |> green |> output
+        let newVersionStr = bash output credential "node --version 2>/dev/null || echo 'FAILED'"
+        let installOk, newVersion = checkVersion newVersionStr
+
+        if installOk then
+            $"✓ Node.js 安装成功: {newVersion}" |> green |> output
             true
         else
             "❌ Node.js 安装失败（或版本不满足 ≥ 22.12）" |> red |> output
@@ -617,13 +620,15 @@ let getRepoUrl code =
 
 /// 部署代码（从 GitHub 更新所有仓库）- 逐条执行
 /// scpAlreadyPushed: 如果为 true，git pull 失败时不会报错（因为代码已通过 scp 同步）
+// 部署代码（从 GitHub 更新所有仓库）- 逐条执行
+// isScpPush: 如果为 true，git pull 失败时不会报错（因为代码已通过 scp 同步）
 let exeDeployCode
     output
     credential
     code
     (logPath: string option)
-    (scpAlreadyPushed: bool) =
-
+    (isScpPush: bool) =
+    
     let porto,user,server,target,portArg = credentialExpand credential
     let devRoot = "Dev"
 
@@ -653,7 +658,7 @@ let exeDeployCode
         key__dir["JCS"] <- devRoot + "/JCS"
         key__dir["FsRoot"] <- "FsRoot"
         key__dir["FsRootCode"] <- "FsRoot/" + code
-
+        
         // 定义需要检查的目录列表
         let dirs = [|
             ("Dev 根目录", key__dir["Dev"])
@@ -672,7 +677,7 @@ let exeDeployCode
         // ========================================
         // 2. 更新主项目仓库
         // ========================================
-        if scpAlreadyPushed then
+        if isScpPush then
             $"2. 代码已通过 scp 同步，跳过 git pull（主项目）" |> cyan |> output
         else
             "2. 从 GitHub 更新主项目仓库..." |> cyan |> output
@@ -682,7 +687,7 @@ let exeDeployCode
         // ========================================
         // 3. 更新 Common 仓库
         // ========================================
-        if scpAlreadyPushed then
+        if isScpPush then
             $"3. 代码已通过 scp 同步，跳过 git pull（Common）" |> cyan |> output
         else
             "3. 从 GitHub 更新 Common 仓库..." |> cyan |> output
@@ -692,7 +697,7 @@ let exeDeployCode
         // ========================================
         // 4. 更新 JCS 仓库
         // ========================================
-        if scpAlreadyPushed then
+        if isScpPush then
             $"4. 代码已通过 scp 同步，跳过 git pull（JCS）" |> cyan |> output
         else
             "4. 从 GitHub 更新 JCS 仓库..." |> cyan |> output
@@ -891,13 +896,13 @@ let private checkCfHealth output credential =
 // ==================== 构建函数（并行化） ====================
 
 /// 并行 git pull 三个仓库（智能跳过：远程无新提交则跳过）
-let private parallelGitPull output credential (key__dir: Dictionary<string,string>) code scpAlreadyPushed =
+let private parallelGitPull output credential (key__dir: Dictionary<string,string>) code (isScpPush: bool) =
     "\n--- 并行 git pull ---" |> cyan |> output
     let deployStampDir = "~/.deploy-stamps"
     
     let pullJob (name: string) (dir: string) =
         async {
-            if scpAlreadyPushed then
+            if isScpPush then
                 $"[{name}] 代码已通过 scp 同步，跳过 git pull" |> output
             else
                 // 检查远程是否有新提交
@@ -1032,7 +1037,7 @@ let private exeDeployCodeV2
     credential
     code
     (logPath: string option)
-    (scpAlreadyPushed: bool) =
+    (isScpPush: bool) =
 
     let porto,user,server,target,portArg = credentialExpand credential
     let devRoot = "Dev"
@@ -1075,7 +1080,7 @@ let private exeDeployCodeV2
 
         // === Phase 2: 并行 git pull ===
         "2. 并行更新仓库..." |> cyan |> output
-        parallelGitPull output credential key__dir code scpAlreadyPushed
+        parallelGitPull output credential key__dir code isScpPush
         writeDeployProgress output credential code "phase3_pulled" "" "代码已拉取到远程" "" "" ""
 
         // === Phase 3: 环境检查 ===
@@ -1227,19 +1232,22 @@ let routine
         else
             $"1.3 目标为外网 ({server})，使用 GitHub 中转..." |> cyan |> output
         
-        let scpPushOk =
+        let isScpPush, codePushedOk =
             if isPrivate then
                 // 内网优先：直接 scp 源码，快 3-5 倍且避免无意义 git push
-                pushSourceViaScp output code credential host.disk true
+                let ok = pushSourceViaScp output code credential host.disk true
+                (true, ok)
             else
                 // 外网：先尝试 GitHub 中转
                 "推送本地所有仓库变更到 GitHub..." |> cyan |> output
                 let gitPushOk = pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
-                if gitPushOk then true
+                if gitPushOk then
+                    (false, true)  // GitHub push 成功，不是 scp
                 else
                     // GitHub 不可用时 fallback 到 scp
                     $"\n⚠ GitHub push 失败，启动 scp 直推方案..." |> orange |> output
-                    pushSourceViaScp output code credential host.disk false
+                    let ok = pushSourceViaScp output code credential host.disk false
+                    (true, ok)
 
         // === Phase 2: 停服务 + 健康检查 ===
         writeDeployProgress output credential code "phase2_stopping" startedAt "停止远程服务..." localGitHash "" ""
@@ -1271,12 +1279,12 @@ let routine
         "\nPhase 3/4: 部署代码..." |> cyan |> output
         
         // 检查源码推送是否成功
-        if not scpPushOk then
+        if not codePushedOk then
             "❌ 源码推送失败，中止部署" |> red |> output
             $"  请检查 SSH 连接、服务器磁盘空间、或手动执行：`scp -r C:\\Dev\\{code} root@5.78.201.21:~/Dev/`" |> yellow |> output
             writeDeployProgress output credential code "phase3_failed" startedAt "源码推送失败，中止部署" localGitHash "" ""
         else
-            exeDeployCodeV2 output credential code deployLogPath scpPushOk
+            exeDeployCodeV2 output credential code deployLogPath isScpPush
             writeDeployProgress output credential code "phase4_verifying" startedAt "部署后验证..." localGitHash "" ""
         
         // === Phase 4: 部署后检查 + 清理 ===

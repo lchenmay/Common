@@ -15,67 +15,61 @@ open jCQT.AI.Tensor
 // ============================================================
 
 type Op =
-    | Leaf | Param | Add | Mul | Relu | Mse
-    override this.ToString() =
-        match this with
-        | Leaf -> "leaf" | Param -> "param" | Add -> "add" | Mul -> "mul"
-        | Relu -> "relu" | Mse -> "mse"
+| Leaf 
+| Param 
+| Add 
+| Mul 
+| Relu 
+| Mse
 
 // ============================================================
 // 计算图节点（标量）- 正确实现反向传播
 // ============================================================
 
-/// 全局 ID 计数器（模块级 mutable 变量，确保唯一 ID）
 let private nextId = ref 0
 
 /// 可微分的标量（构建计算图）
 /// 设计：每个节点存储输入节点列表，backward 函数负责将梯度传播到输入
-type Scalar =
-    {
-        /// 唯一 ID（用于拓扑排序）
-        id: int
+type Scalar = {
+    id: int
+    mutable value: float
+    mutable grad: float
+    prev: Scalar list
+    op: Op
+    mutable backwardFn: (unit -> unit) option
+}
 
-        /// 前向值
-        mutable value: float
+// ============================================================
+// Scalar 模块（函数式风格，无 static member）
+// ============================================================
 
-        /// 梯度（反向传播后填充）
-        mutable grad: float
+module Scalar =
 
-        /// 输入节点（计算图依赖，用于构建计算图）
-        prev: Scalar list
-
-        /// 操作类型（用于调试）
-        op: Op
-
-        /// 反向函数（如何将梯度传播到输入）
-        mutable backwardFn: (unit -> unit) option
-    }
-
-    /// 创建标量节点
-    static member create v prev op =
-        let id = Interlocked.Increment(nextId)
+    /// 创建标量节点（scalar 是第一个参数）
+    let create v prev op =
+        let id = Interlocked.Increment nextId
         { id = id; value = v; grad = 0.0; prev = prev; op = op; backwardFn = None }
 
     /// 叶子节点（常量，不需要梯度）
-    static member leaf v =
-        Scalar.create v [] Leaf
+    let leaf v =
+        create v [] Leaf
 
     /// 参数节点（需要梯度）
-    static member param v =
-        Scalar.create v [] Param
+    let param v =
+        create v [] Param
 
-    /// 加法运算：c = a + b
-    static member add a b =
-        let c = Scalar.create (a.value + b.value) [a; b] Add
+    /// 加法运算：c = a + b（a 是第一个参数，便于管道符）
+    let add a b =
+        let c = create (a.value + b.value) [a; b] Add
         c.backwardFn <- Some (fun () ->
             a.grad <- a.grad + c.grad
             b.grad <- b.grad + c.grad
         )
         c
 
-    /// 乘法运算：c = a * b
-    static member mul a b =
-        let c = Scalar.create (a.value * b.value) [a; b] Mul
+    /// 乘法运算：c = a * b（a 是第一个参数）
+    let mul a b =
+        let c = create (a.value * b.value) [a; b] Mul
         c.backwardFn <- Some (fun () ->
             a.grad <- a.grad + c.grad * b.value
             b.grad <- b.grad + c.grad * a.value
@@ -83,8 +77,8 @@ type Scalar =
         c
 
     /// ReLU 激活函数
-    static member relu a =
-        let c = Scalar.create (max 0.0 a.value) [a] Relu
+    let relu a =
+        let c = create (max 0.0 a.value) [a] Relu
         c.backwardFn <- Some (fun () ->
             // ∂L/∂a = ∂L/∂c * (a > 0 ? 1 : 0)
             if a.value > 0.0 then
@@ -137,18 +131,24 @@ type SGD =
         parameters: Scalar list
     }
 
+// ============================================================
+// SGD 模块（函数式风格，无 member 方法）
+// ============================================================
+
+module SGD =
+
     /// 创建 SGD 优化器
-    static member create lr parameters =
+    let create lr parameters =
         { lr = lr; parameters = parameters }
 
     /// 执行一步优化（w = w - lr * dw）
-    member this.step () =
-        for p in this.parameters do
-            p.value <- p.value - this.lr * p.grad
+    let step (optimizer: SGD) =
+        for p in optimizer.parameters do
+            p.value <- p.value - optimizer.lr * p.grad
 
     /// 清零梯度
-    member this.zeroGrad () =
-        for p in this.parameters do
+    let zeroGrad (optimizer: SGD) =
+        for p in optimizer.parameters do
             p.grad <- 0.0
 
 // ============================================================
@@ -225,7 +225,7 @@ module Examples =
 
         // 训练循环
         for epoch = 1 to 1000 do
-            optimizer.zeroGrad()
+            SGD.zeroGrad optimizer
 
             let mutable totalLoss = 0.0
             for i = 0 to xData.Length - 1 do
@@ -244,7 +244,7 @@ module Examples =
                 backward loss
 
             // 优化器步进
-            optimizer.step()
+            SGD.step optimizer
 
             // 打印进度
             if epoch % 100 = 0 then

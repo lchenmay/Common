@@ -18,11 +18,11 @@ type Op =
 
 let private nextId = ref 0
 
-type Scalar = {
+type TNode<'T> = {
   id: int
-  mutable value: float
-  mutable grad: float
-  prev: Scalar[]
+  mutable value: Tensor<'T>
+  mutable grad: Tensor<'T>
+  prev:  Tensor<'T>[]
   op: Op }
 
 let backward scalar =
@@ -56,7 +56,7 @@ let create (prev, op, v) =
 
 let outputBackward output =
   let visited = HashSet<int>()
-  let topo = List<Scalar>()
+  let topo = List<TNode>()
 
   let rec buildTopo node =
     if visited.Add node.id then
@@ -74,7 +74,7 @@ let outputBackward output =
 
 type SGD = {
   lr: float
-  prms: Scalar[] }
+  prms: TNode[] }
 
 let step optimizer =
   optimizer.prms

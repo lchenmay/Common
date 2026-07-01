@@ -159,9 +159,9 @@ let private pushSourceViaScp output code credential disk isPrimary =
     
     // 源目录 → 目标目录映射
     let repos = [|
-        (code, $"{disk}Dev/{code}", $"~/Dev/{code}")
-        ("Common", $"{disk}Dev/Common", $"~/Dev/Common")
-        ("JCS", $"{disk}Dev/JCS", $"~/Dev/JCS")
+        (code, Path.Combine(disk, $"Dev\{code}"), $"~/Dev/{code}")
+        ("Common", Path.Combine(disk, "Dev\Common"), $"~/Dev/Common")
+        ("JCS", Path.Combine(disk, "Dev\JCS"), $"~/Dev/JCS")
     |]
     
     let mutable allSuccess = true
@@ -959,7 +959,9 @@ if [ "$NEW_HASH" = "NO_LOCK" ]; then
 elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
     echo '[前端] bun.lockb 未变化，跳过安装'
 else
-    echo "[前端] bun.lockb 已变化 (旧: $OLD_HASH -> 新: $NEW_HASH)，重新安装..."
+    echo "[前端] bun.lockb 已变化，重新安装..."
+    echo "  旧: $OLD_HASH"
+    echo "  新: $NEW_HASH"
     if [ -f /root/.bun/bin/bun ]; then
         cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
     else

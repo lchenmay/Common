@@ -3,6 +3,7 @@ module jCQT.AI.Autograd
 #nowarn "64"
 
 open System
+open jCQT.AI.Tensor
 
 // ============================================================
 // 计算图节点（标量）- 正确实现反向传播
@@ -76,7 +77,150 @@ type Scalar =
         c
 
 // ============================================================
-// 反向传播（正确实现）
+// 张量自动微分（向量和矩阵）
+// ============================================================
+
+/// 张量数据类型的判别联合
+type TensorData =
+    | S of float
+    | V of Vct<float>
+    | M of Matrix<float>
+
+/// 可微分的张量（构建计算图）
+type DTensor =
+    {
+        /// 唯一 ID
+        id: int
+
+        /// 前向值（张量数据）
+        mutable data: TensorData
+
+        /// 梯度（反向传播后填充）
+        mutable grad: TensorData
+
+        /// 输入节点（计算图依赖）
+        prev: DTensor list
+
+        /// 操作名称
+        op: string
+
+        /// 反向函数
+        mutable backwardFn: (unit -> unit) option
+    }
+
+    /// 创建张量节点
+    static member create (d: TensorData) (prev: DTensor list) (op: string) : DTensor =
+        let id = System.Threading.Interlocked.Increment(nextId)
+        { id = id; data = d; grad = S 0.0; prev = prev; op = op; backwardFn = None }
+
+    /// 标量叶子节点
+    static member leafS (v: float) : DTensor =
+        DTensor.create (S v) [] "leaf"
+
+    /// 向量叶子节点
+    static member leafV (v: Vct<float>) : DTensor =
+        DTensor.create (V v) [] "leaf"
+
+    /// 矩阵叶子节点
+    static member leafM (m: Matrix<float>) : DTensor =
+        DTensor.create (M m) [] "leaf"
+
+    /// 标量参数节点（需要梯度）
+    static member paramS (v: float) : DTensor =
+        DTensor.create (S v) [] "param"
+
+    /// 向量参数节点
+    static member paramV (v: Vct<float>) : DTensor =
+        DTensor.create (V v) [] "param"
+
+    /// 矩阵参数节点
+    static member paramM (m: Matrix<float>) : DTensor =
+        DTensor.create (M m) [] "param"
+
+// ============================================================
+// 张量辅助函数
+// ============================================================
+
+/// 从 TensorData 中提取标量（安全）
+let inline tryScalarOf (d: TensorData) : float option =
+    match d with
+    | S v -> Some v
+    | _ -> None
+
+/// 从 TensorData 中提取向量（安全）
+let inline tryVectorOf (d: TensorData) : Vct<float> option =
+    match d with
+    | V v -> Some v
+    | _ -> None
+
+/// 从 TensorData 中提取矩阵（安全）
+let inline tryMatrixOf (d: TensorData) : Matrix<float> option =
+    match d with
+    | M m -> Some m
+    | _ -> None
+
+/// 创建与输入形状相同的零梯度
+let zerosLike (d: TensorData) : TensorData =
+    match d with
+    | S _ -> S 0.0
+    | V v -> V (Vct.zeros v.Length)
+    | M m ->
+        let r, c = Mat.rows m, Mat.cols m
+        M (Mat.zeros r c)
+
+/// 将梯度添加到现有梯度（安全）
+let addGrad (node: DTensor) (g: TensorData) : unit =
+    match node.grad, g with
+    | S a, S b -> node.grad <- S (a + b)
+    | V a, V b ->
+        if a.Length = b.Length then
+            for i = 0 to a.Length - 1 do a.[i] <- a.[i] + b.[i]
+    | M a, M b ->
+        let ra, ca = Mat.rows a, Mat.cols a
+        let rb, cb = Mat.rows b, Mat.cols b
+        if ra = rb && ca = cb then
+            for i = 0 to ra - 1 do
+                for j = 0 to ca - 1 do
+                    a.[i, j] <- a.[i, j] + b.[i, j]
+    | _ -> ()  // 类型不匹配，静默忽略
+
+// ============================================================
+// 张量反向传播
+// ============================================================
+
+/// 张量反向传播（从输出节点开始）
+let backwardT (output: DTensor) : unit =
+    // 1. 构建计算图的所有节点（拓扑排序）
+    let visited = System.Collections.Generic.HashSet<int>()
+    let topo = ResizeArray<DTensor>()
+
+    let rec buildTopo (node: DTensor) : unit =
+        if visited.Add(node.id) then
+            for input in node.prev do
+                buildTopo input
+            topo.Add(node)
+
+    buildTopo output
+
+    // 2. 设置输出节点的梯度为 1.0（标量）或全1（向量/矩阵）
+    match output.data with
+    | S _ -> output.grad <- S 1.0
+    | V v ->
+        let g = Vct.init v.Length (fun _ -> 1.0)
+        output.grad <- V g
+    | M m ->
+        let r, c = Mat.rows m, Mat.cols m
+        let g = Mat.init r c (fun _ _ -> 1.0)
+        output.grad <- M g
+
+    // 3. 反向遍历，依次调用 backwardFn
+    for node in List.rev (List.ofSeq topo) do
+        match node.backwardFn with
+        | Some f -> f ()
+        | None -> ()
+
+// ============================================================
+// 标量反向传播（正确实现）
 // ============================================================
 
 /// 反向传播（从输出节点开始，构建计算图并传播梯度）
@@ -135,6 +279,56 @@ type SGD =
             p.grad <- 0.0
 
 // ============================================================
+// 张量优化器
+// ============================================================
+
+/// 张量 SGD 优化器
+type SGDt =
+    {
+        /// 学习率
+        lr: float
+
+        /// 参数列表
+        parameters: DTensor list
+    }
+
+    /// 创建张量 SGD 优化器
+    static member create (lr: float) (parameters: DTensor list) : SGDt =
+        { lr = lr; parameters = parameters }
+
+    /// 执行一步优化
+    member this.step () : unit =
+        for p in this.parameters do
+            match p.data, p.grad with
+            | S _, S g ->
+                // 标量参数更新
+                match p.data with
+                | S v -> p.data <- S (v - this.lr * g)
+                | _ -> ()
+            | V _, V g ->
+                // 向量参数更新
+                match p.data with
+                | V v ->
+                    for i = 0 to v.Length - 1 do
+                        v.[i] <- v.[i] - this.lr * g.[i]
+                | _ -> ()
+            | M _, M g ->
+                // 矩阵参数更新
+                match p.data with
+                | M m ->
+                    let r, c = Mat.rows m, Mat.cols m
+                    for i = 0 to r - 1 do
+                        for j = 0 to c - 1 do
+                            m.[i, j] <- m.[i, j] - this.lr * g.[i, j]
+                | _ -> ()
+            | _ -> ()  // 类型不匹配，静默忽略
+
+    /// 清零梯度
+    member this.zeroGrad () : unit =
+        for p in this.parameters do
+            p.grad <- zerosLike p.data
+
+// ============================================================
 // 损失函数
 // ============================================================
 
@@ -149,6 +343,18 @@ module Loss =
             yPred.grad <- yPred.grad + loss.grad * 2.0 * (yPred.value - yTrue)
         )
         loss
+
+// ============================================================
+// 向量和矩阵自动微分操作（待实现）
+// ============================================================
+// 注意：以下模块因 F# 泛型类型推断问题暂时注释
+// 使用时需要内联向量/矩阵操作或添加显式类型注解
+//
+// module VctA = ...  // 向量自动微分操作
+// module MatA = ...  // 矩阵自动微分操作
+// module LossT = ...  // 张量损失函数
+//
+// ============================================================
 
 // ============================================================
 // 示例
@@ -175,7 +381,6 @@ module Examples =
         printfn "x = %f" x.value
         printfn "w = %f, dw = %f" w.value w.grad
         printfn "b = %f, db = %f" b.value b.grad
-        printfn "y = %f" y.value
         printfn ""
         printfn "期望：dw = 2.0, db = 1.0"
         printfn "实际：dw = %f, db = %f" w.grad b.grad

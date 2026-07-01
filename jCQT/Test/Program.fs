@@ -9,6 +9,11 @@ let main argv =
 
     printfn "\n"
 
+    // 测试向量 Autograd
+    Examples.testVector ()
+
+    printfn "\n"
+
     // 线性回归示例
     Examples.linearRegression ()
 

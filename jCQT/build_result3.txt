@@ -1,0 +1,67 @@
+  正在确定要还原的项目…
+  所有项目均是最新的，无法还原。
+c:\Dev\Common\jCQT\AI\Autograd.fs(334,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(352,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(358,30): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(370,21): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(375,29): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,46): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,49): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,46): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,49): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,54): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,56): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,54): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,56): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,48): error FS0001: 此表达式应具有类型    “int”    而此处具有类型    “float” [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,51): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,56): error FS0001: 此表达式应具有类型    “int”    而此处具有类型    “float” [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,59): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+
+生成失败。
+
+c:\Dev\Common\jCQT\AI\Autograd.fs(334,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(352,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(358,30): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(370,21): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(375,29): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,46): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,49): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,46): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,49): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,54): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,56): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,54): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,56): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,48): error FS0001: 此表达式应具有类型    “int”    而此处具有类型    “float” [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,51): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,38): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,56): error FS0001: 此表达式应具有类型    “int”    而此处具有类型    “float” [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,59): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,46): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+    0 个警告
+    29 个错误
+
+已用时间 00:00:02.54

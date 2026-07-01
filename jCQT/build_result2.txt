@@ -1,0 +1,51 @@
+  正在确定要还原的项目…
+  所有项目均是最新的，无法还原。
+c:\Dev\Common\jCQT\AI\Autograd.fs(318,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(334,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(352,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(358,30): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(370,21): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(375,29): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,38): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,40): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,38): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,40): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(442,34): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(443,34): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(453,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(458,30): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(459,30): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,30): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(493,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(498,30): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+
+生成失败。
+
+c:\Dev\Common\jCQT\AI\Autograd.fs(318,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(334,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(352,22): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(358,30): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(370,21): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(375,29): error FS0039: 未定义值、命名空间、类型或模块“VctF”。 你可能需要以下之一:   Vct [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(419,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(435,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,38): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(440,40): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,38): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(441,40): error FS0001: 类型不匹配。应为    “Matrix<int>”    而给定的是    “Matrix<float>”    类型“int”与类型“float”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(442,34): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(443,34): error FS0001: 类型不匹配。应为    “Matrix<float>”    而给定的是    “Matrix<int>”    类型“float”与类型“int”不匹配 [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(453,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(458,30): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(459,30): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(471,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(481,30): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(493,22): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+c:\Dev\Common\jCQT\AI\Autograd.fs(498,30): error FS0039: 未定义值、命名空间、类型或模块“MatF”。 你可能需要以下之一:   Math   MathF   Mat   Matrix   Map [c:\Dev\Common\jCQT\jCQT.fsproj]
+    0 个警告
+    21 个错误
+
+已用时间 00:00:02.45

@@ -1,0 +1,424 @@
+module UtilKestrel.BashDeployer.Deploy
+
+open System
+open System.IO
+open System.Collections.Generic
+open Util.Linux.Bash
+open Util.Linux.Linux
+open Util.Linux.Git
+open Util.Linux.PSQL
+open Util.Monitor
+open UtilKestrel.Types
+open UtilKestrel.BashDeployer.Common
+open UtilKestrel.BashDeployer.Git
+open UtilKestrel.BashDeployer.NodeJs
+open UtilKestrel.BashDeployer.DotNet
+open UtilKestrel.BashDeployer.PgSql
+open UtilKestrel.BashDeployer.Process
+open UtilKestrel.BashDeployer.File
+
+// ==================== 并行依赖安装 ====================
+
+/// 并行安装前后端依赖（智能跳过：lock 文件未变则跳过）
+let private parallelDepInstall output credential (key__dir: Dictionary<string,string>) =
+    "\n--- 并行依赖安装 ---" |> cyan |> output
+    
+    let vscodeDir = key__dir.["code"] + "/vscode"
+    let serverDir = key__dir.["code"] + "/Server"
+    let deployStampDir = "~/.deploy-stamps"
+    
+    let frontendJob = async {
+        let checkCmd = $"""mkdir -p {deployStampDir}
+FE_STAMP={deployStampDir}/bun-lock-hash
+NEW_HASH=$(cd ~/{vscodeDir} && md5sum bun.lockb 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
+OLD_HASH=$(cat $FE_STAMP 2>/dev/null || echo 'NO_STAMP')
+if [ "$NEW_HASH" = "NO_LOCK" ]; then
+    echo '[前端] 未找到 bun.lockb，强制安装'
+    if [ -f /root/.bun/bin/bun ]; then
+        cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
+    else
+        cd ~/{vscodeDir} && npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
+    fi
+    echo '[前端] 依赖安装完成'
+elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
+    echo '[前端] bun.lockb 未变化，跳过安装'
+else
+    echo "[前端] bun.lockb 已变化，重新安装..."
+    echo "  旧: $OLD_HASH"
+    echo "  新: $NEW_HASH"
+    if [ -f /root/.bun/bin/bun ]; then
+        cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
+    else
+        cd ~/{vscodeDir} && npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
+    fi
+    echo "$NEW_HASH" > $FE_STAMP
+    echo '[前端] 依赖安装完成'
+fi
+"""
+        do! Async.SwitchToThreadPool()
+        bashWithTimeout output credential checkCmd 180000 |> ignore
+    }
+    
+    let backendJob = async {
+        let checkCmd = $"""mkdir -p {deployStampDir}
+BE_STAMP={deployStampDir}/dotnet-lock-hash
+NEW_HASH=$(cd ~/{serverDir} && md5sum packages.lock.json 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
+OLD_HASH=$(cat $BE_STAMP 2>/dev/null || echo 'NO_STAMP')
+if [ "$NEW_HASH" = "NO_LOCK" ]; then
+    echo '[后端] 未找到 packages.lock.json，强制 restore'
+    cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>&1 || echo '[DEPLOY-WARN] dotnet restore 失败'
+    echo '[后端] 依赖安装完成'
+elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
+    echo '[后端] packages.lock.json 未变化，跳过 restore'
+else
+    echo "[后端] packages.lock.json 已变化，重新 restore..."
+    cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>&1 || echo '[DEPLOY-WARN] dotnet restore 失败'
+    echo "$NEW_HASH" > $BE_STAMP
+    echo '[后端] 依赖安装完成'
+fi
+"""
+        do! Async.SwitchToThreadPool()
+        bashWithTimeout output credential checkCmd 120000 |> ignore
+    }
+    
+    [ frontendJob; backendJob ]
+    |> Async.Parallel
+    |> Async.RunSynchronously
+    |> ignore
+
+/// 并行构建前后端
+let private parallelBuild output credential code =
+    "\n--- 并行构建 ---" |> cyan |> output
+    
+    let frontendJob = async {
+        let ok = buildFrontend output credential code
+        return if ok then "[前端] 构建成功" else "[DEPLOY-WARN] 前端构建失败"
+    }
+    
+    let backendJob = async {
+        let ok = buildBackend output credential code
+        return if ok then "[后端] 构建成功" else "[DEPLOY-WARN] 后端构建失败"
+    }
+    
+    let results = 
+        [ frontendJob; backendJob ]
+        |> Async.Parallel
+        |> Async.RunSynchronously
+    
+    results |> Array.iter (fun r -> r |> output)
+
+
+// ==================== 部署代码（重构版） ====================
+
+/// 部署代码（从 GitHub 更新所有仓库）- 内部并行化
+let private exeDeployCodeV2
+    output
+    credential
+    code
+    (logPath: string option)
+    (isScpPush: bool) =
+
+    let porto,user,server,target,portArg = credentialExpand credential
+    let devRoot = "Dev"
+
+    // 如果指定了日志路径，创建双输出函数（同时写控制台和日志文件）
+    let output =
+        match logPath with
+        | Some path ->
+            let dir = Path.GetDirectoryName(path)
+            if not (String.IsNullOrEmpty(dir)) && not (Directory.Exists(dir)) then
+                Directory.CreateDirectory(dir) |> ignore
+            fun (msg: string) ->
+                output msg
+                try File.AppendAllText(path, msg + Environment.NewLine) with _ -> ()
+        | None -> output
+
+    try
+        // === Phase 1: 目录检查 ===
+        "1. 检查并创建所有必要目录..." |> cyan |> output
+        
+        let key__dir = new Dictionary<string,string>()
+        key__dir["Dev"] <- devRoot
+        key__dir["code"] <- devRoot + "/" + code
+        key__dir["Common"] <- devRoot + "/Common"
+        key__dir["JCS"] <- devRoot + "/JCS"
+        key__dir["FsRoot"] <- "FsRoot"
+        key__dir["FsRootCode"] <- "FsRoot/" + code
+        
+        let dirs = [|
+            ("Dev 根目录", key__dir["Dev"])
+            ("主项目目录", key__dir["code"])
+            ("Common 目录", key__dir["Common"])
+            ("JCS 目录", key__dir["JCS"])
+            ("FsRoot 根目录", key__dir["FsRoot"])
+            ("FsRoot 项目目录", key__dir["FsRootCode"])
+        |]
+        
+        let allDirsExist = ensureDirectories output credential dirs
+        if allDirsExist |> not then
+            "⚠ 部分目录创建失败，尝试继续..." |> yellow |> output
+        
+        // === Phase 2: 并行 git pull ===
+        "2. 并行更新仓库..." |> cyan |> output
+        parallelGitPull output credential key__dir code isScpPush
+        writeDeployProgress output credential code "phase3_pulled" "" "代码已拉取到远程" "" "" ""
+        
+        // === Phase 3: 环境检查 ===
+        "3. 确保环境就绪..." |> cyan |> output
+        ensureEnvironment output credential |> ignore
+        
+        // === Phase 4: 并行依赖安装 ===
+        "4. 并行安装依赖..." |> cyan |> output
+        parallelDepInstall output credential key__dir
+        writeDeployProgress output credential code "phase3_deps" "" "依赖安装完成，准备构建..." "" "" ""
+        
+        // === Phase 5: 版本快照 ===
+        "5. 版本快照..." |> cyan |> output
+        let preGitHash = remoteGitHash output credential (key__dir["code"])
+        let preCommonHash = remoteGitHash output credential key__dir["Common"]
+        let preJcsHash = remoteGitHash output credential key__dir["JCS"]
+        $"  部署前 Git Hash → {code}: {preGitHash} | Common: {preCommonHash} | JCS: {preJcsHash}" |> cyan |> output
+        writeDeployProgress output credential code "phase3_build" "" "正在编译前后端..." preGitHash "" ""
+        
+        // === Phase 6: 并行构建 ===
+        "6. 并行构建前后端..." |> cyan |> output
+        parallelBuild output credential code
+        writeDeployProgress output credential code "phase3_built" "" "编译完成，准备重启服务..." preGitHash "" ""
+        
+        // === Phase 7: 启动服务 ===
+        writeDeployProgress output credential code "phase4_restarting" "" "重启远程服务..." "" "" ""
+        "7. 启动服务..." |> cyan |> output
+        let serviceRunning = checkDotNetServiceRunning output credential code
+        if serviceRunning then
+            $"✓ {code} systemd 服务已在运行，自动重启加载新代码..." |> green |> output
+            let restartCmd = $"systemctl restart {code.ToLower()}"
+            let restartResult = bash output credential restartCmd
+            $"  重启结果: {restartResult.Trim()}" |> output
+            System.Threading.Thread.Sleep(3000)
+            let postRestartCheck = bash output credential $"systemctl is-active {code.ToLower()}"
+            if postRestartCheck.Trim() = "active" then
+                $"✓ {code} 服务已成功重启" |> green |> output
+            else
+                $"⚠ 服务重启后状态: {postRestartCheck.Trim()}" |> yellow |> output
+        else
+            startServiceVerbose output credential code |> ignore
+        
+        // === Phase 8: 部署后验证 ===
+        "\n========================================" |> cyan |> output
+        "📊 部署结果汇总报告" |> cyan |> output
+        "========================================" |> cyan |> output
+        
+        let postGitHash = remoteGitHash output credential (key__dir["code"])
+        let postCommonHash = remoteGitHash output credential key__dir["Common"]
+        let postJcsHash = remoteGitHash output credential key__dir["JCS"]
+        
+        let hashChanged pre post = if pre <> "-" && post <> "-" && pre <> post then "✅ 已更新" else if pre = post then "⚠ 未变化" else "—"
+        $"  Git Hash:" |> output
+        $"    {code}:  {preGitHash} → {postGitHash}  {hashChanged preGitHash postGitHash}" |> output
+        $"    Common: {preCommonHash} → {postCommonHash}  {hashChanged preCommonHash postCommonHash}" |> output
+        $"    JCS:    {preJcsHash} → {postJcsHash}  {hashChanged preJcsHash postJcsHash}" |> output
+        
+        let vscodeDir = key__dir["code"] + "/vscode"
+        let distCount = remoteDistFileCount output credential vscodeDir
+        $"  前端构建: dist 产物 {distCount} 项" |> output
+        
+        let port = match code with | "WYI" -> "9000" | "Aiarwa" -> "9020" | _ -> "5000"
+        $"  运行时版本 (API):" |> output
+        let versionJson = remoteQueryVersion output credential port code
+        $"    {versionJson}" |> output
+        
+        let serviceStatus = bash output credential $"systemctl is-active {code.ToLower()}"
+        let serviceIcon = if serviceStatus.Trim() = "active" then "✅" else "❌"
+        $"  服务状态: {serviceIcon} {serviceStatus.Trim()}" |> output
+        writeDeployProgress output credential code "phase4_verified" "" "部署验证完成" preGitHash postGitHash ""
+        
+        // 保存部署后的 git hash，供下次部署时判断是否需要 git pull
+        "  保存版本快照..." |> cyan |> output
+        let saveHashCmd = $"""mkdir -p ~/.deploy-stamps
+echo "{postGitHash}" > ~/.deploy-stamps/git-hash-{code}
+echo "{postCommonHash}" > ~/.deploy-stamps/git-hash-Common
+echo "{postJcsHash}" > ~/.deploy-stamps/git-hash-JCS
+echo "[版本快照] 已保存" """
+        bash output credential saveHashCmd |> ignore
+        
+        let logFileInfo = 
+            match logPath with
+            | Some p -> $"📋 部署日志: {p}"
+            | None -> $"📋 服务日志: /tmp/{code.ToLower()}.log"
+        let deployDir = key__dir.["code"]
+        $"\n📁 部署目录: ~/{deployDir}  |  {logFileInfo}" |> output
+        "========================================" |> cyan |> output
+        
+    with ex ->
+        $"部署过程中发生错误: {ex.Message}" |> red |> output
+        "请检查远程服务器状态" |> yellow |> output
+        // 尝试恢复服务：如果异常发生在 Phase 7（启动服务）之前，服务可能已经停了
+        try
+            $"\n⚠ 尝试恢复 {code} 服务（容错）..." |> yellow |> output
+            let running = checkDotNetServiceRunning output credential code
+            if not running then
+                startServiceVerbose output credential code |> ignore
+                System.Threading.Thread.Sleep(3000)
+                let status = bash output credential $"systemctl is-active {code.ToLower()}"
+                if status.Trim() = "active" then
+                    $"✓ {code} 服务已恢复运行" |> green |> output
+                else
+                    $"⚠ 服务恢复失败，状态: {status.Trim()}" |> red |> output
+        with ex2 ->
+            $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
+
+
+// ==================== 主流程（重构版） ====================
+
+let routine 
+    (runtime: RuntimeTemplate<_,_,_,_>)
+    (deployLogPath: string option) =
+
+    let host = runtime.host
+    let credential = host.deploy.credential
+    let porto,user,server,target,portArg = credentialExpand credential
+    let devDir = host.disk + "Dev/" + runtime.projectCode
+    let output = runtime.output
+    let code = runtime.projectCode
+    
+    let mutable startedAt = ""
+    let mutable localGitHash = ""
+    let mutable serviceWasRunning = false
+    
+    try
+        sshPrivateKeyPath <- devDir + "/id_rsa"
+        startedAt <- DateTime.UtcNow.ToString("o")
+        $">>> 开始部署至 {user}@{server}..." |> cyan |> output
+        localGitHash <- gitHashLocal()
+        $"  本地 {code} Git Hash: {localGitHash}" |> cyan |> output
+        writeDeployProgress output credential code "starting" startedAt "开始部署前期准备..." localGitHash "" ""
+        
+        serviceWasRunning <- false
+        // === Phase 1: 本地准备（SSH 检查 + 源码推送） ===
+        "Phase 1/4: 本地准备..." |> cyan |> output
+        writeDeployProgress output credential code "phase1_pushing" startedAt "推送源码到远程..." localGitHash "" ""
+        
+        "1.1 切换到项目目录: " + devDir |> cyan |> output
+        let exeLocal args = exec output devDir "powershell" args |> ignore
+        "cd " + devDir |> exeLocal
+            
+        "1.2 检查 SSH 免密登录..." |> cyan |> output
+        checkSSHAuth output credential (host.disk + "Dev/" + runtime.projectCode, host.deploy.gitEmail)
+        
+        // 1.3 判断目标服务器是否在内网，选择最优推送路径
+        let isPrivate = isPrivateNetwork server
+        if isPrivate then
+            $"1.3 检测到内网目标 ({server})，优先使用 scp 直推源码..." |> cyan |> output
+        else
+            $"1.3 目标为外网 ({server})，使用 GitHub 中转..." |> cyan |> output
+        
+        let isScpPush, codePushedOk =
+            if isPrivate then
+                // 内网优先：直接 scp 源码，快 3-5 倍且避免无意义 git push
+                let ok = pushSourceViaScp output code credential host.disk true
+                (true, ok)
+            else
+                // 外网：先尝试 GitHub 中转
+                "推送本地所有仓库变更到 GitHub..." |> cyan |> output
+                let gitPushOk = pushAllLocalRepos output code host.deploy.gitName host.deploy.gitEmail host.disk
+                if gitPushOk then
+                    (false, true)  // GitHub push 成功，不是 scp
+                else
+                    // GitHub 不可用时 fallback 到 scp
+                    $"\n⚠ GitHub push 失败，启动 scp 直推方案..." |> orange |> output
+                    let ok = pushSourceViaScp output code credential host.disk false
+                    (true, ok)
+
+        // === Phase 2: 停服务 + 健康检查 ===
+        writeDeployProgress output credential code "phase2_stopping" startedAt "停止远程服务..." localGitHash "" ""
+        "\nPhase 2/4: 停服务 + 健康检查..." |> cyan |> output
+        
+        "2.1 暂停远程服务..." |> cyan |> output
+        serviceWasRunning <- checkDotNetServiceRunning output credential code
+        if serviceWasRunning then
+            $"  停止 {code} 服务..." |> yellow |> output
+            let stopCmd = $"systemctl stop {code.ToLower()}"
+            let stopResult = bash output credential stopCmd
+            $"  停止结果: {stopResult.Trim()}" |> output
+            System.Threading.Thread.Sleep(2000)
+            let postStopCheck = bash output credential $"systemctl is-active {code.ToLower()}"
+            if postStopCheck.Trim() = "inactive" then
+                $"✓ {code} 服务已停止" |> green |> output
+            else
+                $"⚠ 服务状态: {postStopCheck.Trim()}，继续..." |> yellow |> output
+        
+        // DB 和 CF 只做轻量健康检查，失败不阻断
+        "2.2 DB 健康检查..." |> cyan |> output
+        checkDbHealth output credential |> ignore
+        
+        "2.3 CF 健康检查..." |> cyan |> output
+        checkCfHealth output credential |> ignore
+
+        // === Phase 3: 部署代码 ===
+        writeDeployProgress output credential code "phase3_building" startedAt "远程构建前后端..." localGitHash "" ""
+        "\nPhase 3/4: 部署代码..." |> cyan |> output
+        
+        // 检查源码推送是否成功
+        if not codePushedOk then
+            "❌ 源码推送失败，中止部署" |> red |> output
+            $"  请检查 SSH 连接、服务器磁盘空间、或手动执行：`scp -r C:\\Dev\\{code} root@5.78.201.21:~/Dev/`" |> yellow |> output
+            writeDeployProgress output credential code "phase3_failed" startedAt "源码推送失败，中止部署" localGitHash "" ""
+        else
+            exeDeployCodeV2 output credential code deployLogPath isScpPush
+            writeDeployProgress output credential code "phase4_verifying" startedAt "部署后验证..." localGitHash "" ""
+        
+        // === Phase 4: 部署后检查 + 清理 ===
+        // 无论部署是否执行，都要检查服务状态
+        "\nPhase 4/4: 部署后检查..." |> cyan |> output
+        "4.1 清理 SSH 隧道..." |> cyan |> output
+        stopAllSshTunnels output
+        
+        // 4.2 最终服务健康检查（最后防线）
+        "4.2 最终服务健康检查..." |> cyan |> output
+        try
+            let finalStatus = bash output credential $"systemctl is-active {code.ToLower()}"
+            $"  服务状态: {finalStatus.Trim()}" |> output
+            if finalStatus.Trim() <> "active" then
+                $"⚠ 服务未运行（状态: {finalStatus.Trim()}），尝试启动..." |> yellow |> output
+                if serviceWasRunning then
+                    startServiceVerbose output credential code |> ignore
+                    System.Threading.Thread.Sleep(3000)
+                    let retryStatus = bash output credential $"systemctl is-active {code.ToLower()}"
+                    if retryStatus.Trim() = "active" then
+                        $"✓ {code} 服务已恢复运行" |> green |> output
+                    else
+                        $"⚠ 服务恢复失败，状态: {retryStatus.Trim()}" |> red |> output
+                else
+                    $"  服务在部署前未运行，跳过启动" |> cyan |> output
+            else
+                $"✓ {code} 服务运行正常" |> green |> output
+        with exCheck ->
+            $"[WARN] 最终健康检查异常: {exCheck.Message}" |> yellow |> output
+        
+        "\n✅ 部署流程完成 " |> green |> output
+        writeDeployProgress output credential code "done" startedAt "部署流程全部完成" localGitHash "" ""
+
+    with ex ->
+        $"\n❌ 部署过程中发生错误: {ex.Message}" |> red |> output
+        $"{ex.StackTrace}" |> output
+        "请检查远程服务器状态" |> yellow |> output
+        writeDeployProgress output credential code "failed" startedAt "部署失败" localGitHash "" ex.Message
+        
+        if serviceWasRunning then
+            $"\n⚠ 尝试恢复 {code} 服务..." |> yellow |> output
+            try
+                let startCmd = $"systemctl start {code.ToLower()}"
+                let startResult = bash output credential startCmd
+                $"  启动结果: {startResult.Trim()}" |> output
+                System.Threading.Thread.Sleep(3000)
+                let postStartCheck = bash output credential $"systemctl is-active {code.ToLower()}"
+                if postStartCheck.Trim() = "active" then
+                    $"✓ {code} 服务已恢复运行" |> green |> output
+                else
+                    $"⚠ 服务恢复失败，状态: {postStartCheck.Trim()}" |> red |> output
+            with ex2 ->
+                $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
+        
+        try
+            stopAllSshTunnels output
+        with _ -> ()

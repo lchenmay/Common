@@ -8,71 +8,37 @@ open System.Collections.Generic
 
 open jCQT.AI.Tensor
 
-// ============================================================
 type Op =
-    | Leaf
-    | Param
-    | Add
-    | Mul
-    | Relu
-    | Mse
-    override this.ToString() =
-        match this with
-        | Leaf -> "leaf"
-        | Param -> "param"
-        | Add -> "add"
-        | Mul -> "mul"
-        | Relu -> "relu"
-        | Mse -> "mse"
+| Leaf
+| Param
+| Add
+| Mul
+| Relu
+| Mse
 
-// ============================================================
 let private nextId = ref 0
 
 type Scalar = {
-    id: int
-    mutable value: float
-    mutable grad: float
-    prev: Scalar list
-    op: Op
-    mutable backwardFn: (unit -> unit) option
-}
+  id: int
+  mutable value: float
+  mutable grad: float
+  prev: Scalar[]
+  op: Op
+  backwardFn: (unit -> unit) option }
 
 // ============================================================
 module Scalar =
 
-
-    // 原有
-    //let create v prev op =
-    //    let id = Interlocked.Increment nextId
-    //    { id = id; value = v; grad = 0.0; prev = prev; op = op; backwardFn = None }
-    //let leaf v =
-    //    create v [] Leaf
-
-    //let param v =
-    //    create v [] Param
-
-    // 我的修改1: 通过高阶函数变元的重排，简化参数
-
     let create prev op v =
         let id = Interlocked.Increment nextId
         { id = id; value = v; grad = 0.0; prev = prev; op = op; backwardFn = None }
 
-    let leaf = create [] Leaf
-
-    let param v = create [] Param
-
-    // 我的修改2：利用高阶函数进一步简化
-
-    let create prev op v =
-        let id = Interlocked.Increment nextId
-        { id = id; value = v; grad = 0.0; prev = prev; op = op; backwardFn = None }
-
-    let createEmpty = create [] 
+    let createEmpty = create [||] 
     let leaf = createEmpty Leaf
-    let param v = createEmpty Param
+    let param = createEmpty Param
 
     let add a b =
-        let c = create (a.value + b.value) [a; b] Add
+        let c = create [| a; b |] Add (a.value + b.value)
         c.backwardFn <- Some (fun () ->
             a.grad <- a.grad + c.grad
             b.grad <- b.grad + c.grad
@@ -80,7 +46,7 @@ module Scalar =
         c
 
     let mul a b =
-        let c = create (a.value * b.value) [a; b] Mul
+        let c = create [| a; b |] Mul (a.value * b.value)
         c.backwardFn <- Some (fun () ->
             a.grad <- a.grad + c.grad * b.value
             b.grad <- b.grad + c.grad * a.value
@@ -88,7 +54,7 @@ module Scalar =
         c
 
     let relu a =
-        let c = create (max 0.0 a.value) [a] Relu
+        let c = create [| a |] Relu (max 0.0 a.value)
         c.backwardFn <- Some (fun () ->
             if a.value > 0.0 then
                 a.grad <- a.grad + c.grad
@@ -140,7 +106,7 @@ module Loss =
 
     let mse yPred yTrue =
         let diff = yPred.value - yTrue
-        let loss = Scalar.create (diff * diff) [yPred] Mse
+        let loss = Scalar.create [| yPred |] Mse (diff * diff)
         loss.backwardFn <- Some (fun () ->
             yPred.grad <- yPred.grad + loss.grad * 2.0 * (yPred.value - yTrue)
         )

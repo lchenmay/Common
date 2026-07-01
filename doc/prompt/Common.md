@@ -10,6 +10,9 @@
   - **UtilVortice** → Vortice 2D 桌面应用公共功能  
 
 **F# 编程规范（用于代码审查与生成）：**
+
+> **完整文档**: `c:\Dev\.codebuddy\fsharp-programming.md`（19 条规范，含详细示例和引用）
+
 1. **Open 顺序**（按依赖强度从弱到强，分组空行）：  
    `System.` → 第三方如 `Avalonia.` → `Util.` → 公共库如 `UtilKestrel.` → `Code.Shared.` → `Code.BizLogics.` → 本命名空间  
 2. **复查 open**：确保无缺失命名空间  

@@ -83,7 +83,7 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
         
         $"克隆 {repoName} 仓库到 ~/{targetDir}..." |> cyan |> output
         let cloneCmd = $"cd ~ && git clone {repoUrl} {targetDir}"
-        let cloneResult = bashWithTimeout output credential cloneCmd 120000  // 2分钟超时
+        let cloneResult = bashWithTimeout output credential cloneCmd 300000  // 5分钟超时
         cloneResult |> output
         
         if isGitSuccess cloneResult then
@@ -137,7 +137,7 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
                     
                     $"克隆 {repoName} 仓库到 ~/{targetDir}..." |> cyan |> output
                     let cloneCmd = $"cd ~ && git clone {repoUrl} {targetDir}"
-                    let cloneResult = bashWithTimeout output credential cloneCmd 120000
+                    let cloneResult = bashWithTimeout output credential cloneCmd 300000  // 5分钟超时
                     cloneResult |> output
                     
                     if isGitSuccess cloneResult then

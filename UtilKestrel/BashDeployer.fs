@@ -157,11 +157,11 @@ let private pushSourceViaScp output code credential disk isPrimary =
     let portArg = match porto with Some p -> $"-P {p}" | None -> ""
     let privateKeyArg = getSshPrivateKeyArg()
     
-    // 源目录 → 目标目录映射
+    // 源目录 → 目标目录映射（远程路径使用绝对路径 /root/Dev/）
     let repos = [|
-        (code, Path.Combine(disk, $"Dev\{code}"), $"~/Dev/{code}")
-        ("Common", Path.Combine(disk, "Dev\Common"), $"~/Dev/Common")
-        ("JCS", Path.Combine(disk, "Dev\JCS"), $"~/Dev/JCS")
+        (code, Path.Combine(disk, $"Dev\{code}"), $"/root/Dev/{code}")
+        ("Common", Path.Combine(disk, "Dev\Common"), $"/root/Dev/Common")
+        ("JCS", Path.Combine(disk, "Dev\JCS"), $"/root/Dev/JCS")
     |]
     
     let mutable allSuccess = true
@@ -381,10 +381,10 @@ let deleteAllRepos output credential code =
     $"\n=== 开始删除所有仓库目录 ===" |> yellow |> output
     
     let repos = [|
-        ("主项目", $"Dev/{code}")
-        ("Common", "Dev/Common")
-        ("JCS", "Dev/JCS")
-        ("Dev 根目录", "Dev")
+        ("主项目", $"/root/Dev/{code}")
+        ("Common", "/root/Dev/Common")
+        ("JCS", "/root/Dev/JCS")
+        ("Dev 根目录", "/root/Dev")
     |]
     
     repos |> Array.iter (fun (name, path) ->
@@ -396,6 +396,7 @@ let deleteAllRepos output credential code =
 // ==================== 版本检查函数 ====================
 
 /// 远程获取仓库的 git hash
+/// repoPath 应该是相对路径（如 Dev/WYI），函数会自动添加 ~/ 前缀
 let remoteGitHash output credential repoPath =
     try
         let cmd = $"cd ~/{repoPath} && git rev-parse --short=8 HEAD 2>/dev/null || echo '-'"
@@ -404,6 +405,7 @@ let remoteGitHash output credential repoPath =
     with _ -> "-"
 
 /// 远程检查 dist 目录是否有产物（返回文件数）
+/// vscodeDir 应该是相对路径（如 Dev/WYI/vscode），函数会自动添加 ~/ 前缀
 let remoteDistFileCount output credential vscodeDir =
     try
         let cmd = $"if [ -d ~/{vscodeDir}/dist ]; then ls ~/{vscodeDir}/dist 2>/dev/null | wc -l; else echo '0'; fi"
@@ -616,6 +618,7 @@ let getRepoUrl code =
     | "Aiarwa" -> "https://github.com/lchenmay/Aiarwa.git"
     | "Common" -> "https://github.com/lchenmay/Common.git"
     | "JCS" -> "https://github.com/lchenmay/JCS.git"
+    | "WYI" -> "https://github.com/R77R77R/WYI.git"
     | _ -> $"https://github.com/siduochen/{code}.git"
 
 /// 部署代码（从 GitHub 更新所有仓库）- 逐条执行
@@ -715,8 +718,8 @@ let exeDeployCode
         // ========================================
         "6. 更新项目依赖..." |> cyan |> output
         
-        // 前端依赖
-        let vscodeDir = key__dir["code"] + "/vscode"
+        // 前端依赖（vscodeDir 使用相对路径，以便 cd ~/ 正确展开）
+        let vscodeDir = $"Dev/{code}/vscode"
         let updateFrontendCmd = $"""
 cd ~/{vscodeDir}
 if [ -f package.json ]; then
@@ -733,8 +736,8 @@ fi
         let updateResult = bashWithTimeout output credential updateFrontendCmd 180000
         updateResult |> output
         
-        // 后端依赖
-        let serverDir = key__dir["code"] + "/Server"
+        // 后端依赖（serverDir 使用相对路径，以便 cd ~/ 正确展开）
+        let serverDir = $"Dev/{code}/Server"
         let updateBackendCmd = $"""
 cd ~/{serverDir}
 if ls *.fsproj 1>/dev/null 2>&1; then
@@ -910,7 +913,7 @@ let private parallelGitPull output credential (key__dir: Dictionary<string,strin
 STAMP_FILE={deployStampDir}/git-hash-{name}
 OLD_HASH=$(cat $STAMP_FILE 2>/dev/null || echo 'NO_STAMP')
 NEW_HASH=$(cd ~/{dir} && git ls-remote origin HEAD 2>/dev/null | cut -f1 | cut -c1-8 || echo 'FETCH_FAIL')
-if [ "$NEW_HASH" = "FETCH_FAIL" ]; then
+if [ -z "$NEW_HASH" ] || [ "$NEW_HASH" = "FETCH_FAIL" ]; then
     echo 'FETCH_FAIL'
 elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
     echo "SKIP:$NEW_HASH"
@@ -928,9 +931,7 @@ fi"""
                     updateSingleRepo output credential name (getRepoUrl name) dir |> ignore
                     $"[{name}] git pull 完成" |> output
                 else
-                    $"[{name}] 无法获取上次部署 hash，执行全量 git pull..." |> yellow |> output
-                    updateSingleRepo output credential name (getRepoUrl name) dir |> ignore
-                    $"[{name}] git pull 完成" |> output
+                    $"[{name}] 无法获取远程 hash（网络问题？），跳过 git pull" |> yellow |> output
         }
     
     [ pullJob code key__dir["code"]

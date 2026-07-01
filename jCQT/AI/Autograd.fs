@@ -2,8 +2,6 @@ module jCQT.AI.Autograd
 
 #nowarn "64"
 
-open LanguagePrimitives
-
 open System
 open System.Threading
 open System.Collections.Generic
@@ -11,25 +9,25 @@ open System.Collections.Generic
 open jCQT.AI.Tensor
 
 // ============================================================
-// 操作类型枚举（替代 string）
-// ============================================================
-
 type Op =
-| Leaf 
-| Param 
-| Add 
-| Mul 
-| Relu 
-| Mse
+    | Leaf
+    | Param
+    | Add
+    | Mul
+    | Relu
+    | Mse
+    override this.ToString() =
+        match this with
+        | Leaf -> "leaf"
+        | Param -> "param"
+        | Add -> "add"
+        | Mul -> "mul"
+        | Relu -> "relu"
+        | Mse -> "mse"
 
 // ============================================================
-// 计算图节点（标量）- 正确实现反向传播
-// ============================================================
-
 let private nextId = ref 0
 
-/// 可微分的标量（构建计算图）
-/// 设计：每个节点存储输入节点列表，backward 函数负责将梯度传播到输入
 type Scalar = {
     id: int
     mutable value: float
@@ -40,25 +38,39 @@ type Scalar = {
 }
 
 // ============================================================
-// Scalar 模块（函数式风格，无 static member）
-// ============================================================
-
 module Scalar =
 
-    /// 创建标量节点（scalar 是第一个参数）
-    let create v prev op =
+
+    // 原有
+    //let create v prev op =
+    //    let id = Interlocked.Increment nextId
+    //    { id = id; value = v; grad = 0.0; prev = prev; op = op; backwardFn = None }
+    //let leaf v =
+    //    create v [] Leaf
+
+    //let param v =
+    //    create v [] Param
+
+    // 我的修改1: 通过高阶函数变元的重排，简化参数
+
+    let create prev op v =
         let id = Interlocked.Increment nextId
         { id = id; value = v; grad = 0.0; prev = prev; op = op; backwardFn = None }
 
-    /// 叶子节点（常量，不需要梯度）
-    let leaf v =
-        create v [] Leaf
+    let leaf = create [] Leaf
 
-    /// 参数节点（需要梯度）
-    let param v =
-        create v [] Param
+    let param v = create [] Param
 
-    /// 加法运算：c = a + b（a 是第一个参数，便于管道符）
+    // 我的修改2：利用高阶函数进一步简化
+
+    let create prev op v =
+        let id = Interlocked.Increment nextId
+        { id = id; value = v; grad = 0.0; prev = prev; op = op; backwardFn = None }
+
+    let createEmpty = create [] 
+    let leaf = createEmpty Leaf
+    let param v = createEmpty Param
+
     let add a b =
         let c = create (a.value + b.value) [a; b] Add
         c.backwardFn <- Some (fun () ->
@@ -67,7 +79,6 @@ module Scalar =
         )
         c
 
-    /// 乘法运算：c = a * b（a 是第一个参数）
     let mul a b =
         let c = create (a.value * b.value) [a; b] Mul
         c.backwardFn <- Some (fun () ->
@@ -76,130 +87,76 @@ module Scalar =
         )
         c
 
-    /// ReLU 激活函数
     let relu a =
         let c = create (max 0.0 a.value) [a] Relu
         c.backwardFn <- Some (fun () ->
-            // ∂L/∂a = ∂L/∂c * (a > 0 ? 1 : 0)
             if a.value > 0.0 then
                 a.grad <- a.grad + c.grad
         )
         c
 
 // ============================================================
-// 标量反向传播（正确实现）
-// ============================================================
-
-/// 反向传播（从输出节点开始，构建计算图并传播梯度）
 let backward output =
-    // 1. 构建计算图的所有节点（拓扑排序，后序遍历）
     let visited = HashSet<int>()
     let topo = ResizeArray<Scalar>()
 
     let rec buildTopo node =
         if visited.Add(node.id) then
-            // 先访问所有输入节点（依赖）
             for input in node.prev do
                 buildTopo input
-            // 再添加当前节点（后序遍历，确保输入节点在前）
             topo.Add(node)
 
     buildTopo output
 
-    // 2. 设置输出节点的梯度为 1.0
     output.grad <- 1.0
 
-    // 3. 反向遍历（从输出到输入），依次调用 backwardFn
-    //    topo 是按计算顺序排列的（输入在前，输出在后）
-    //    所以需要反转，从输出开始向后传播
-    for node in List.rev (List.ofSeq topo) do
+    for i = topo.Count - 1 downto 0 do
+        let node = topo.[i]
         match node.backwardFn with
         | Some f -> f ()
         | None -> ()
 
 // ============================================================
-// 优化器
-// ============================================================
-
-/// SGD 优化器
-type SGD =
-    {
-        /// 学习率
-        lr: float
-
-        /// 参数列表
-        parameters: Scalar list
-    }
-
-// ============================================================
-// SGD 模块（函数式风格，无 member 方法）
-// ============================================================
+type SGD = {
+    lr: float
+    parameters: Scalar list
+}
 
 module SGD =
 
-    /// 创建 SGD 优化器
     let create lr parameters =
         { lr = lr; parameters = parameters }
 
-    /// 执行一步优化（w = w - lr * dw）
     let step (optimizer: SGD) =
         for p in optimizer.parameters do
             p.value <- p.value - optimizer.lr * p.grad
 
-    /// 清零梯度
     let zeroGrad (optimizer: SGD) =
         for p in optimizer.parameters do
             p.grad <- 0.0
 
 // ============================================================
-// 损失函数
-// ============================================================
-
 module Loss =
 
-    /// 均方误差损失：L = (y_pred - y_true)²
     let mse yPred yTrue =
         let diff = yPred.value - yTrue
         let loss = Scalar.create (diff * diff) [yPred] Mse
         loss.backwardFn <- Some (fun () ->
-            // ∂L/∂y_pred = 2 * (y_pred - y_true)
             yPred.grad <- yPred.grad + loss.grad * 2.0 * (yPred.value - yTrue)
         )
         loss
 
 // ============================================================
-// 向量和矩阵自动微分操作（待实现）
-// ============================================================
-// 注意：以下模块因 F# 泛型类型推断问题暂时注释
-// 使用时需要内联向量/矩阵操作或添加显式类型注解
-//
-// module VctA = ...  // 向量自动微分操作
-// module MatA = ...  // 矩阵自动微分操作
-// module LossT = ...  // 张量损失函数
-//
-// ============================================================
-
-// ============================================================
-// 示例
-// ============================================================
-
 module Examples =
 
-    /// 测试标量 Autograd
     let testScalar () =
         printfn "=== 测试标量 Autograd ==="
-
-        // 计算图：y = w * x + b
         let x = Scalar.leaf 2.0
         let w = Scalar.param 0.5
         let b = Scalar.param 0.0
-
         let wx = Scalar.mul w x
         let y = Scalar.add wx b
-
-        // 反向传播
         backward y
-
         printfn "y = w * x + b"
         printfn "x = %f" x.value
         printfn "w = %f, dw = %f" w.value w.grad
@@ -208,48 +165,27 @@ module Examples =
         printfn "期望：dw = 2.0, db = 1.0"
         printfn "实际：dw = %f, db = %f" w.grad b.grad
 
-    /// 线性回归示例
     let linearRegression () =
         printfn "=== 线性回归示例 ==="
-
-        // 数据
         let xData = [| 1.0; 2.0; 3.0; 4.0 |]
         let yData = [| 2.0; 4.0; 6.0; 8.0 |]
-
-        // 参数初始化
         let w = Scalar.param 0.0
         let b = Scalar.param 0.0
-
-        // 优化器
         let optimizer = SGD.create 0.01 [w; b]
-
-        // 训练循环
         for epoch = 1 to 1000 do
             SGD.zeroGrad optimizer
-
             let mutable totalLoss = 0.0
             for i = 0 to xData.Length - 1 do
                 let x = Scalar.leaf xData.[i]
                 let yTrue = yData.[i]
-
-                // 前向传播：y_pred = w * x + b
                 let wx = Scalar.mul w x
                 let yPred = Scalar.add wx b
-
-                // 损失函数：MSE
                 let loss = Loss.mse yPred yTrue
                 totalLoss <- totalLoss + loss.value
-
-                // 反向传播
                 backward loss
-
-            // 优化器步进
             SGD.step optimizer
-
-            // 打印进度
             if epoch % 100 = 0 then
                 printfn "Epoch %d, Loss: %.6f" epoch (totalLoss / float xData.Length)
-
         printfn ""
         printfn "训练完成："
         printfn "w = %f (期望 2.0)" w.value

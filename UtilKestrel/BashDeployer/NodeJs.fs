@@ -210,6 +210,11 @@ let buildFrontend output credential code =
             debugDistBefore |> output
             
             // ====== 正式构建 ======
+            // 步骤0: 强制更新 @lchenmay/jcs-common（确保生产环境使用最新版）
+            "[DEBUG] --- 步骤0: bun update @lchenmay/jcs-common ---" |> yellow |> output
+            let updateJcsCommonResult = bashWithTimeout output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun update @lchenmay/jcs-common 2>&1; echo '[DEBUG] bun update jcs-common exit code:' $?" 120000
+            updateJcsCommonResult |> output
+
             // 步骤1: bun install（180s 超时，适应慢速网络和大依赖）
             "[DEBUG] --- 步骤1: bun install ---" |> yellow |> output
             let installResult = bashWithTimeout output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun install 2>&1; echo '[DEBUG] bun install exit code:' $?" 180000

@@ -31,7 +31,7 @@ export const loader = async (url: string, postdata: any, h: Function, ex: Functi
     if (rep?.Er == 'OK') {
       h(rep)
     } else {
-      if (rep?.Er == 'Unauthorized') {
+      if (rep?.Er == 'Unauthorized' && !url.includes('/auth')) {
         const rt = (globalThis as any).runtime
         if (rt) rt.session = ''
         try { localStorage.removeItem('session') } catch (_) {}

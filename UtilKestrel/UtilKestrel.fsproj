@@ -44,6 +44,7 @@
     <Compile Include="BashDeployer\Process.fs" />
     <Compile Include="BashDeployer\File.fs" />
     <Compile Include="BashDeployer\Deploy.fs" />
+    <Compile Include="bashdeployer\Thumbnail.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -34,8 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Util\Util.fsproj" />
     <ProjectReference Include="..\jCQT\jCQT.fsproj" />
+    <ProjectReference Include="..\Util\Util.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

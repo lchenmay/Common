@@ -57,6 +57,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\jCQT\jCQT.fsproj" />
     <ProjectReference Include="..\UtilOpen\UtilOpen.fsproj" />
     <ProjectReference Include="..\Util\Util.fsproj" />
   </ItemGroup>

@@ -283,8 +283,9 @@ let bashWithRetry output credential cmd (timeoutMs: int) (maxRetries: int) : str
     let mutable attempt = 0
     while attempt <= maxRetries && String.IsNullOrWhiteSpace result do
         if attempt > 0 then
-            System.Threading.Thread.Sleep(1000)
-            $"重试 ({attempt}/{maxRetries})..." |> yellow |> output
+            let delayMs = 1000 * (1 <<< (attempt - 1))  // 指数退避: 1s, 2s, 4s, 8s...
+            System.Threading.Thread.Sleep(delayMs)
+            $"重试 ({attempt}/{maxRetries}, 等待{delayMs/1000}s)..." |> yellow |> output
         result <- bashWithTimeout output credential cmd timeoutMs |> fun s -> s.Trim()
         attempt <- attempt + 1
     result

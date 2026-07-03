@@ -70,10 +70,10 @@ let private syncViaScp output credential (repoName: string) (targetDir: string) 
 let updateSingleRepo output credential (repoName: string) (repoUrl: string) (targetDir: string) =
     $"\n--- 处理 {repoName} 仓库 ---" |> yellow |> output
     
-    // 1. 检查目录是否存在
+    // 1. 检查目录是否存在（轻量命令，10s足够）
     $"\n检查目录 ~/{targetDir} 是否存在..." |> cyan |> output
     let checkDirCmd = $"if [ -d ~/{targetDir} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
-    let dirExists = bash output credential checkDirCmd
+    let dirExists = bashWithRetry output credential checkDirCmd 10000 3
     dirExists |> output
     
     if dirExists.Contains("NOT_EXISTS") then
@@ -83,8 +83,8 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
         bash output credential mkdirCmd |> ignore
         
         $"克隆 {repoName} 仓库到 ~/{targetDir}..." |> cyan |> output
-        let cloneCmd = $"cd ~ && git clone {repoUrl} {targetDir}"
-        let cloneResult = bashWithTimeout output credential cloneCmd 300000  // 5分钟超时
+        let cloneCmd = $"cd ~ && GIT_TERMINAL_PROMPT=0 git -c gc.auto=0 clone {repoUrl} {targetDir}"
+        let cloneResult = bashWithTimeout output credential cloneCmd 120000  // 2分钟超时
         cloneResult |> output
         
         if isGitSuccess cloneResult then
@@ -104,28 +104,28 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
         // 目录存在 → 检查是否是 git 仓库
         $"目录存在，检查是否是 Git 仓库..." |> cyan |> output
         let checkGitCmd = $"if [ -d ~/{targetDir}/.git ]; then echo 'IS_GIT'; else echo 'NOT_GIT'; fi"
-        let isGit = bash output credential checkGitCmd
+        let isGit = bashWithRetry output credential checkGitCmd 10000 3
         isGit |> output
         
         if isGit.Contains("NOT_GIT") then
             // 目录存在但不是 git 仓库 → 先尝试 git init
             $"⚠ 目录存在但不是 Git 仓库，尝试初始化..." |> yellow |> output
-            let initCmd = $"cd ~/{targetDir} && git init && git remote add origin {repoUrl}"
+            let initCmd = $"cd ~/{targetDir} && GIT_TERMINAL_PROMPT=0 git -c gc.auto=0 init && git remote add origin {repoUrl}"
             let initResult = bash output credential initCmd
             initResult |> output
             
             // 然后 fetch 和 reset
             $"从远程拉取..." |> cyan |> output
-            let fetchCmd = $"cd ~/{targetDir} && git fetch --all"
-            let fetchResult = bashWithTimeout output credential fetchCmd 180000
+            let fetchCmd = $"cd ~/{targetDir} && GIT_TERMINAL_PROMPT=0 git -c gc.auto=0 fetch --all"
+            let fetchResult = bashWithTimeout output credential fetchCmd 60000
             fetchResult |> output
             
             if isGitFailure fetchResult then
                 $"⚠ git fetch 失败，GitHub 可能不可用，改用 scp 同步" |> yellow |> output
                 syncViaScp output credential repoName targetDir
             else
-                let resetCmd = $"cd ~/{targetDir} && git reset --hard origin/main"
-                let resetResult = bash output credential resetCmd
+                let resetCmd = $"cd ~/{targetDir} && GIT_TERMINAL_PROMPT=0 git -c gc.auto=0 reset --hard origin/main"
+                let resetResult = bashWithTimeout output credential resetCmd 30000
                 resetResult |> output
                 
                 if resetResult.Contains("HEAD is now at") then
@@ -137,8 +137,8 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
                     bash output credential rmCmd |> ignore
                     
                     $"克隆 {repoName} 仓库到 ~/{targetDir}..." |> cyan |> output
-                    let cloneCmd = $"cd ~ && git clone {repoUrl} {targetDir}"
-                    let cloneResult = bashWithTimeout output credential cloneCmd 300000  // 5分钟超时
+                    let cloneCmd = $"cd ~ && GIT_TERMINAL_PROMPT=0 git -c gc.auto=0 clone {repoUrl} {targetDir}"
+                    let cloneResult = bashWithTimeout output credential cloneCmd 120000  // 2分钟超时
                     cloneResult |> output
                     
                     if isGitSuccess cloneResult then
@@ -154,10 +154,10 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
             // 是 git 仓库 → git pull 更新
             $"更新 {repoName} 仓库..." |> cyan |> output
             
-            // 1. fetch（增加超时到 180s 适应慢速 GitHub 连接和大仓库）
+            // 1. fetch（-c gc.auto=0 防止后台 gc 导致 SSH 进程挂起不退出）
             "  - git fetch --all" |> cyan |> output
-            let fetchCmd = $"cd ~/{targetDir} && git fetch --all"
-            let fetchResult = bashWithTimeout output credential fetchCmd 180000
+            let fetchCmd = $"cd ~/{targetDir} && GIT_TERMINAL_PROMPT=0 git -c gc.auto=0 fetch --all"
+            let fetchResult = bashWithTimeout output credential fetchCmd 60000
             fetchResult |> output
             
             if isGitFailure fetchResult then
@@ -166,8 +166,8 @@ let updateSingleRepo output credential (repoName: string) (repoUrl: string) (tar
             else
                 // 2. reset --hard 确保与远程同步（fetch 后 reset 即可，无需单独 pull）
                 "  - git reset --hard origin/main" |> cyan |> output
-                let resetCmd = $"cd ~/{targetDir} && git reset --hard origin/main"
-                let resetResult = bash output credential resetCmd
+                let resetCmd = $"cd ~/{targetDir} && GIT_TERMINAL_PROMPT=0 git -c gc.auto=0 reset --hard origin/main"
+                let resetResult = bashWithTimeout output credential resetCmd 30000
                 resetResult |> output
                 
                 if resetResult.Contains("HEAD is now at") then

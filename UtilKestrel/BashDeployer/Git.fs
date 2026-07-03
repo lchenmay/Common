@@ -416,9 +416,9 @@ let parallelGitPull output credential (key__dir: Dictionary<string,string>) code
                     let lastSlash = dir.LastIndexOf('/')
                     let parentDir = if lastSlash > 0 then dir.Substring(0, lastSlash) else "."
                     let repoName = if lastSlash > 0 then dir.Substring(lastSlash + 1) else dir
-                    let cloneCmd = $"cd ~/{parentDir} && git clone {repoUrl} {repoName}"
+                    let cloneCmd = $"cd ~/{parentDir} && GIT_TERMINAL_PROMPT=0 git -c gc.auto=0 clone {repoUrl} {repoName}"
                     $"[{name}] 执行: git clone {repoUrl} ~/{dir}" |> cyan |> output
-                    let cloneResult = bashWithTimeout output credential cloneCmd 120000  // 2分钟超时
+                    let cloneResult = bashWithTimeout output credential cloneCmd 60000  // 1分钟超时
                     
                     let cloneFailed = 
                         cloneResult.Contains("fatal") || cloneResult.Contains("error") || 
@@ -464,9 +464,9 @@ fi"""
                         let lastSlash = dir.LastIndexOf('/')
                         let parentDir = if lastSlash > 0 then dir.Substring(0, lastSlash) else "."
                         let repoName = if lastSlash > 0 then dir.Substring(lastSlash + 1) else dir
-                        let cloneCmd = $"cd ~/{parentDir} && git clone {repoUrl} {repoName}"
+                        let cloneCmd = $"cd ~/{parentDir} && GIT_TERMINAL_PROMPT=0 git -c gc.auto=0 clone {repoUrl} {repoName}"
                         $"[{name}] 执行: git clone {repoUrl} ~/{dir}" |> cyan |> output
-                        let cloneResult = bashWithTimeout output credential cloneCmd 120000  // 2分钟超时
+                        let cloneResult = bashWithTimeout output credential cloneCmd 60000  // 1分钟超时
                         
                         let cloneFailed = 
                             cloneResult.Contains("fatal") || cloneResult.Contains("error") || 
@@ -480,9 +480,8 @@ fi"""
                             $"✓ [{name}] git clone 完成" |> green |> output
         }
     
+    // 串行执行 3 个 repo 的 git 操作，避免并行 SSH 连接风暴
     [ pullJob code key__dir["code"]
       pullJob "Common" key__dir["Common"]
       pullJob "JCS" key__dir["JCS"] ]
-    |> Async.Parallel
-    |> Async.RunSynchronously
-    |> ignore
+    |> List.iter (fun job -> job |> Async.RunSynchronously)

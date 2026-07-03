@@ -198,7 +198,8 @@ let buildFrontend output credential code =
             "[DEBUG] --- 构建调试开始 ---" |> yellow |> output
             
             // 调试1: Node.js 版本和路径
-            let debugNode = bash output credential "echo '[DEBUG] which node:' && which node 2>&1 || echo 'NOT_FOUND'; echo '[DEBUG] node -v:' && node -v 2>&1 || echo 'NODE_NOT_FOUND'; echo '[DEBUG] node -e check:' && node -e \"console.log('node works')\" 2>&1 || echo 'NODE_EVAL_FAILED'"
+            // 注意：避免 node -e 中使用单引号，否则会与外层 bash -c 的单引号冲突
+            let debugNode = bash output credential "echo '[DEBUG] which node:' && which node 2>&1 || echo 'NOT_FOUND'; echo '[DEBUG] node -v:' && node -v 2>&1 || echo 'NODE_NOT_FOUND'; echo '[DEBUG] node -e check:' && node -e \"console.log(42)\" 2>&1 || echo 'NODE_EVAL_FAILED'"
             debugNode |> output
             
             // 调试2: 检查 vite.js 是否存在

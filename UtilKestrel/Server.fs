@@ -180,38 +180,51 @@ let runServer
 
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory bin)
     })) |> ignore
-
-    // 新增：处理 /api/public/upload 路由 (在通用分发前拦截)
-    app.MapPost("/api/public/upload", Func<HttpContext, Task>(fun httpx -> task {
+    
+    app.MapPost("/api/{scheme}/upload", Func<string, HttpContext, Task>(fun scheme httpx -> task {
         try
-            "/api/public/upload/" 
-            |> green |> output
+            $"/api/{scheme}/upload/" |> green |> output
 
             if not httpx.Request.HasFormContentType then
                 httpx.Response.StatusCode <- 415
                 return ()
+            else
 
-            let files = 
-                httpx.Request.Form.Files
-                |> Seq.toArray
-            
-            if files.Length <> 1 then
-                return ()
-            
-            let file = files[0]
-            
-            file.FileName + " " + file.Length.ToString() + " bytes"
-            |> green |> output
+                // session 鉴权（仅 eu 需要）
+                if scheme = "eu" then
+                    let form = httpx.Request.Form
+                    let session = form.["session"].ToString().Replace("\"", "")
+                    match runtime.sessions.TryGet session with
+                    | Some s when DateTime.UtcNow.Ticks <= s.expiry.Ticks -> ()
+                    | _ ->
+                        "[Upload] Unauthorized" |> red |> output
+                        httpx.Response.StatusCode <- 401
+                        httpx.Response.ContentType <- "application/json; charset=utf-8"
+                        do! httpx.Response.WriteAsJsonAsync({| Er = "Unauthorized" |})
+                        return ()
 
-            let rep = incomingFile httpx file |> Async.RunSynchronously
+                let files =
+                    httpx.Request.Form.Files
+                    |> Seq.toArray
 
-            let bin = 
-                rep
-                |> Util.Json.json__strFinal
-                |> System.Text.Encoding.UTF8.GetBytes
+                if files.Length <> 1 then
+                    httpx.Response.StatusCode <- 400
+                    return ()
 
-            httpx.Response.ContentType <- "application/json; charset=utf-8"
-            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(bin))
+                let file = files.[0]
+
+                file.FileName + " " + file.Length.ToString() + " bytes"
+                |> green |> output
+
+                let! rep = incomingFile httpx file |> Async.StartImmediateAsTask
+
+                let bin =
+                    rep
+                    |> Util.Json.json__strFinal
+                    |> System.Text.Encoding.UTF8.GetBytes
+
+                httpx.Response.ContentType <- "application/json; charset=utf-8"
+                do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(bin))
 
         with ex ->
             "[Upload Error] " + ex.Message

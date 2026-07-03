@@ -1,5 +1,7 @@
 module UtilKestrel.BashDeployer.DotNet
 
+open System
+
 open Util.Linux.Bash
 open Util.Monitor
 open UtilKestrel.Types
@@ -62,11 +64,29 @@ let buildBackend output credential code =
                 bash output credential $"cd ~/{serverDir} && dotnet clean --configuration Release" |> ignore
 
                 "  - dotnet publish --configuration Release --output /root/publish/{code}" |> cyan |> output
-                let publishResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet publish --configuration Release --output /root/publish/{code} --verbosity minimal /nowarn:NU1603" 300000
+                let publishResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet publish --configuration Release --output /root/publish/{code} --no-restore --verbosity minimal /nowarn:NU1603" 300000
                 publishResult |> output
                 
-                "✓ 后端构建完成" |> green |> output
-                true
+                let hasBuildOutput = not (String.IsNullOrWhiteSpace(publishResult))
+                let hasErrors =
+                    hasBuildOutput
+                    && (publishResult.Contains("error FS")
+                        || publishResult.Contains("error CS")
+                        || publishResult.Contains("error MSB")
+                        || (publishResult.Contains("ExitCode") && not (publishResult.Contains("ExitCode 0"))))
+                if hasErrors then
+                    $"❌ dotnet publish 编译错误" |> red |> output
+                    false
+                else
+                    // 有正常输出 或 输出为空（实时回调已消费）→ 都做文件级验证
+                    let verifyCmd = $"if [ -d /root/publish/{code} ] && [ -f /root/publish/{code}/Server.dll ]; then echo 'PUBLISH_OK'; else echo 'PUBLISH_MISSING'; fi"
+                    let verify = bash output credential verifyCmd
+                    if verify.Trim() = "PUBLISH_OK" then
+                        "✓ 后端构建完成" |> green |> output
+                        true
+                    else
+                        $"❌ publish 输出目录/文件缺失: /root/publish/{code}" |> red |> output
+                        false
     else
         $"✓ .NET SDK 已安装: {dotnetVersion.Trim()}" |> green |> output
         
@@ -92,8 +112,26 @@ let buildBackend output credential code =
             bash output credential $"cd ~/{serverDir} && dotnet clean --configuration Release" |> ignore
 
             "  - dotnet publish --configuration Release --output /root/publish/{code}" |> cyan |> output
-            let publishResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet publish --configuration Release --output /root/publish/{code} --verbosity minimal /nowarn:NU1603" 300000
+            let publishResult = bashWithTimeout output credential $"cd ~/{serverDir} && dotnet publish --configuration Release --output /root/publish/{code} --no-restore --verbosity minimal /nowarn:NU1603" 300000
             publishResult |> output
             
-            "✓ 后端构建完成" |> green |> output
-            true
+            let hasBuildOutput = not (String.IsNullOrWhiteSpace(publishResult))
+            let hasErrors =
+                hasBuildOutput
+                && (publishResult.Contains("error FS")
+                    || publishResult.Contains("error CS")
+                    || publishResult.Contains("error MSB")
+                    || (publishResult.Contains("ExitCode") && not (publishResult.Contains("ExitCode 0"))))
+            if hasErrors then
+                $"❌ dotnet publish 编译错误" |> red |> output
+                false
+            else
+                // 有正常输出 或 输出为空（实时回调已消费）→ 都做文件级验证
+                let verifyCmd = $"if [ -d /root/publish/{code} ] && [ -f /root/publish/{code}/Server.dll ]; then echo 'PUBLISH_OK'; else echo 'PUBLISH_MISSING'; fi"
+                let verify = bash output credential verifyCmd
+                if verify.Trim() = "PUBLISH_OK" then
+                    "✓ 后端构建完成" |> green |> output
+                    true
+                else
+                    $"❌ publish 输出目录/文件缺失: /root/publish/{code}" |> red |> output
+                    false

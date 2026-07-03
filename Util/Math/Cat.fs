@@ -120,6 +120,11 @@ let processOptionWithNone h none o =
     | Some v -> h v
     | None -> none()
 
+let processOptionWithDefault h defaultRes o =
+    match o with
+    | Some v -> h v
+    | None -> defaultRes
+
 let processOption h o =
     match o with
     | Some v -> h v

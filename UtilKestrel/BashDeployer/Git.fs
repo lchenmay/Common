@@ -362,7 +362,7 @@ let parallelGitPull output credential (key__dir: Dictionary<string,string>) code
             else
                 // ✅ 检查目录是否存在且是 git 仓库
                 let checkDirCmd = $"if [ -d ~/{dir} ] && [ -d ~/{dir}/.git ]; then echo 'IS_GIT'; else echo 'NOT_GIT'; fi"
-                let dirCheck = bashWithRetry output credential checkDirCmd 5000 5
+                let dirCheck = bashWithRetry output credential checkDirCmd 10000 5
                 
                 if dirCheck <> "IS_GIT" then
                     // 目录不存在或不是 git 仓库 → clone
@@ -373,7 +373,7 @@ let parallelGitPull output credential (key__dir: Dictionary<string,string>) code
                     
                     // 如果目录存在但不是 git 仓库，先删除
                     let cleanCmd = $"if [ -d ~/{dir} ] && [ ! -d ~/{dir}/.git ]; then rm -rf ~/{dir}; echo 'CLEANED'; fi"
-                    bashWithRetry output credential cleanCmd 5000 5 |> ignore
+                    bashWithRetry output credential cleanCmd 10000 5 |> ignore
                     
                     // clone 仓库
                     let repoUrl = getRepoUrl name
@@ -418,7 +418,7 @@ fi"""
                         $"[{name}] 无法获取远程 hash（网络问题？），尝试重新 clone..." |> yellow |> output
                         let repoUrl = getRepoUrl name
                         let cleanCmd = $"rm -rf ~/{dir}"
-                        bashWithRetry output credential cleanCmd 5000 5 |> ignore
+                        bashWithRetry output credential cleanCmd 10000 5 |> ignore
                         
                         // clone 仓库
                         let lastSlash = dir.LastIndexOf('/')

@@ -206,16 +206,12 @@ let private exeDeployCodeV2
         key__dir["code"] <- devRoot + "/" + code
         key__dir["Common"] <- devRoot + "/Common"
         key__dir["JCS"] <- devRoot + "/JCS"
-        key__dir["FsRoot"] <- "FsRoot"
-        key__dir["FsRootCode"] <- "FsRoot/" + code
         
         let dirs = [|
             ("Dev 根目录", key__dir["Dev"])
             ("主项目目录", key__dir["code"])
             ("Common 目录", key__dir["Common"])
             ("JCS 目录", key__dir["JCS"])
-            ("FsRoot 根目录", key__dir["FsRoot"])
-            ("FsRoot 项目目录", key__dir["FsRootCode"])
         |]
         
         let allDirsExist = ensureDirectories output credential dirs
@@ -355,6 +351,11 @@ let routine
     let mutable localGitHash = ""
     let mutable serviceWasRunning = false
     
+    // 部署事件收集器（用于最终分类总结）
+    let okEvents = ResizeArray<string>()
+    let warnEvents = ResizeArray<string>()
+    let errEvents = ResizeArray<string>()
+    
     try
         sshPrivateKeyPath <- devDir + "/id_rsa"
         startedAt <- DateTime.UtcNow.ToString("o")
@@ -371,6 +372,7 @@ let routine
         let socketCheckResult = bashWithTimeout output credential socketCheckCmd 10000
         if socketCheckResult.Contains("SOCKET_OK") then
             "✓ SSH socket 健康状态正常" |> green |> output
+            okEvents.Add("SSH Socket 连接正常")
         else
             $"[SSH] socket 响应异常: {socketCheckResult.Trim()}" |> yellow |> output
             "  正在清理损坏的 socket 并重建连接..." |> yellow |> output
@@ -381,8 +383,10 @@ let routine
                 let retryResult = bashWithTimeout output credential socketCheckCmd 10000
                 if retryResult.Contains("SOCKET_OK") then
                     "✓ SSH socket 已修复，连接正常" |> green |> output
+                    warnEvents.Add("SSH Socket 异常，已自动恢复")
                 else
                     $"[SSH] socket 修复失败，后续远程命令可能出错: {retryResult.Trim()}" |> red |> output
+                    errEvents.Add("SSH Socket 修复失败")
         
         // === Phase 1: 本地准备（SSH 检查 + 源码推送） ===
         
@@ -428,6 +432,11 @@ let routine
                     let ok = pushSourceViaScp output code credential host.disk false
                     (true, ok)
 
+        if codePushedOk then
+            okEvents.Add("源码推送成功")
+        else
+            errEvents.Add("源码推送失败")
+
         // === Phase 2: 停服务 + 健康检查 ===
         writeDeployProgress output credential code "phase2_stopping" startedAt "停止远程服务..." localGitHash "" ""
         "\nPhase 2/4: 停服务 + 健康检查..." |> cyan |> output
@@ -443,15 +452,35 @@ let routine
             let postStopCheck = bash output credential $"systemctl is-active {code.ToLower()}"
             if postStopCheck.Trim() = "inactive" then
                 $"✓ {code} 服务已停止" |> green |> output
+                okEvents.Add($"服务 {code} 已停止")
             else
                 $"⚠ 服务状态: {postStopCheck.Trim()}，继续..." |> yellow |> output
+                warnEvents.Add($"服务停止后状态异常: {postStopCheck.Trim()}")
         
         // DB 和 CF 只做轻量健康检查，失败不阻断
         "2.2 DB 健康检查..." |> cyan |> output
-        checkDbHealth output credential |> ignore
+        let dbHealthy = checkDbHealth output credential
+        if not dbHealthy then
+            warnEvents.Add("DB 健康检查未通过（已继续）")
         
         "2.3 CF 健康检查..." |> cyan |> output
-        checkCfHealth output credential |> ignore
+        let cfHealthy = checkCfHealth output credential
+        if not cfHealthy then
+            warnEvents.Add("CF 健康检查未通过（已继续）")
+
+        // === Phase 2.5: 确保运行时文件存储目录（独立于构建目录） ===
+        "2.4 确保运行时 fsRoot 目录..." |> cyan |> output
+        if System.String.IsNullOrWhiteSpace(host.fsroot) then
+            "⚠ host.fsroot 为空，跳过运行时文件目录检查" |> yellow |> output
+            warnEvents.Add("FsRoot 为空，已跳过")
+        else
+            $"  目标路径: {host.fsroot}" |> cyan |> output
+            let fsRootOk = ensureAbsolutePath output credential host.fsroot
+            if fsRootOk then
+                okEvents.Add("FsRoot 目录就绪")
+            else
+                "⚠ FsRoot 目录检查有失败，尝试继续..." |> yellow |> output
+                warnEvents.Add("FsRoot 目录检查有失败")
 
         // === Phase 3: 部署代码 ===
         writeDeployProgress output credential code "phase3_building" startedAt "远程构建前后端..." localGitHash "" ""
@@ -464,6 +493,7 @@ let routine
             writeDeployProgress output credential code "phase3_failed" startedAt "源码推送失败，中止部署" localGitHash "" ""
         else
             exeDeployCodeV2 output credential code deployLogPath isScpPush host.disk
+            okEvents.Add("代码构建部署完成")
             writeDeployProgress output credential code "phase4_verifying" startedAt "部署后验证..." localGitHash "" ""
         
         // === Phase 4: 部署后检查 + 清理 ===
@@ -479,28 +509,73 @@ let routine
             let finalStatus = bash output credential $"systemctl is-active {code.ToLower()}"
             $"  服务状态: {finalStatus.Trim()}" |> output
             if finalStatus.Trim() <> "active" then
-                $"⚠ 服务未运行（状态: {finalStatus.Trim()}），尝试启动..." |> yellow |> output
-                if serviceWasRunning then
-                    startServiceVerbose output credential code |> ignore
-                    let healthy, _ = waitForHttpReady output credential port 15
-                    if healthy then
+                $"⚠ 服务未运行（状态: {finalStatus.Trim()}），启动服务..." |> yellow |> output
+                startServiceVerbose output credential code |> ignore
+                let healthy, _ = waitForHttpReady output credential port 15
+                if healthy then
+                    if serviceWasRunning then
                         $"✓ {code} 服务已恢复运行（HTTP 探活通过）" |> green |> output
+                        warnEvents.Add($"服务曾停止，已恢复运行（HTTP 探活通过）")
                     else
-                        $"⚠ 服务恢复失败：HTTP 探活未通过" |> red |> output
-                        checkCrashLoop output credential code
+                        $"✓ {code} 服务已启动（HTTP 探活通过）" |> green |> output
+                        okEvents.Add($"服务 {code} 已成功启动（HTTP 探活通过）")
                 else
-                    $"  服务在部署前未运行，跳过启动" |> cyan |> output
+                    $"⚠ 服务启动失败：HTTP 探活未通过" |> red |> output
+                    errEvents.Add("HTTP 探活未通过，服务可能未正常启动")
+                    checkCrashLoop output credential code
             else
                 // systemd active 但也要 HTTP 探活确认
                 let healthy, httpCode = waitForHttpReady output credential port 10
                 if healthy then
                     $"✓ {code} 服务运行正常（HTTP 探活通过）" |> green |> output
+                    okEvents.Add($"服务 {code} 运行正常（HTTP 探活通过）")
                 else
                     $"⚠ {code} systemd 运行中但 HTTP 探活未通过（{httpCode}），可能仍在启动中" |> yellow |> output
+                    warnEvents.Add($"systemd 运行中但 HTTP 探活未通过（{httpCode}）")
         with exCheck ->
             $"[WARN] 最终健康检查异常: {exCheck.Message}" |> yellow |> output
+            warnEvents.Add($"最终健康检查异常: {exCheck.Message}")
         
-        "\n✅ 部署流程完成 " |> green |> output
+        // === 部署总结 ===
+        let printSummary () =
+            "\n" |> output
+            "══════════════════════════════════════════════════" |> cyan |> output
+            $"              部署总结 — {code} @ {server}" |> output
+            "══════════════════════════════════════════════════" |> cyan |> output
+            "" |> output
+            
+            if okEvents.Count > 0 then
+                "✅ 成功项:" |> green |> output
+                for e in okEvents do
+                    $"  ✓ {e}" |> output
+                "" |> output
+            
+            if warnEvents.Count > 0 then
+                "⚠ 注意项:" |> yellow |> output
+                for e in warnEvents do
+                    $"  ⚠ {e}" |> output
+                "" |> output
+            
+            if errEvents.Count > 0 then
+                "❌ 失败项:" |> red |> output
+                for e in errEvents do
+                    $"  ✗ {e}" |> output
+                "" |> output
+            
+            if errEvents.Count > 0 then
+                "══════════════════════════════════════════════════" |> red |> output
+                "  ⚠⚠⚠ 部署完成但存在问题，请检查上述失败项 ⚠⚠⚠" |> red |> output
+                "══════════════════════════════════════════════════" |> red |> output
+            elif warnEvents.Count > 0 then
+                "══════════════════════════════════════════════════" |> yellow |> output
+                "  ⚠ 部署完成但有注意事项，请查看上述注意项" |> yellow |> output
+                "══════════════════════════════════════════════════" |> yellow |> output
+            else
+                "══════════════════════════════════════════════════" |> green |> output
+                "  ✅ 全部检查通过，部署成功！" |> green |> output
+                "══════════════════════════════════════════════════" |> green |> output
+
+        printSummary()
         writeDeployProgress output credential code "done" startedAt "部署流程全部完成" localGitHash "" ""
 
     with ex ->
@@ -508,6 +583,8 @@ let routine
         $"{ex.StackTrace}" |> output
         "请检查远程服务器状态" |> yellow |> output
         writeDeployProgress output credential code "failed" startedAt "部署失败" localGitHash "" ex.Message
+        
+        errEvents.Add($"部署异常: {ex.Message}")
         
         if serviceWasRunning then
             $"\n⚠ 尝试恢复 {code} 服务..." |> yellow |> output
@@ -519,12 +596,44 @@ let routine
                 let healthy, _ = waitForHttpReady output credential port 15
                 if healthy then
                     $"✓ {code} 服务已恢复运行（HTTP 探活通过）" |> green |> output
+                    warnEvents.Add("异常后服务已恢复运行")
                 else
                     $"⚠ 服务恢复失败，HTTP 探活未通过" |> red |> output
+                    errEvents.Add("异常后服务恢复失败，HTTP 探活未通过")
                     checkCrashLoop output credential code
             with ex2 ->
                 $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
+                errEvents.Add($"服务恢复异常: {ex2.Message}")
         
         try
             stopAllSshTunnels output
         with _ -> ()
+        
+        // 输出部署总结（异常分支）
+        "\n" |> output
+        "══════════════════════════════════════════════════" |> red |> output
+        $"              部署总结 — {code} @ {server} (异常终止)" |> output
+        "══════════════════════════════════════════════════" |> red |> output
+        "" |> output
+        
+        if okEvents.Count > 0 then
+            "✅ 成功项:" |> green |> output
+            for e in okEvents do
+                $"  ✓ {e}" |> output
+            "" |> output
+        
+        if warnEvents.Count > 0 then
+            "⚠ 注意项:" |> yellow |> output
+            for e in warnEvents do
+                $"  ⚠ {e}" |> output
+            "" |> output
+        
+        if errEvents.Count > 0 then
+            "❌ 失败项:" |> red |> output
+            for e in errEvents do
+                $"  ✗ {e}" |> output
+            "" |> output
+        
+        "══════════════════════════════════════════════════" |> red |> output
+        "  ❌❌❌ 部署异常终止，请检查上述失败项 ❌❌❌" |> red |> output
+        "══════════════════════════════════════════════════" |> red |> output

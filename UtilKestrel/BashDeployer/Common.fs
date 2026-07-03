@@ -69,11 +69,11 @@ let isPrivateNetwork (server: string) =
 /// 获取仓库 URL
 let getRepoUrl code =
     match code with
-    | "Aiarwa" -> "https://github.com/lchenmay/Aiarwa.git"
-    | "Common" -> "https://github.com/lchenmay/Common.git"
-    | "JCS" -> "https://github.com/lchenmay/JCS.git"
-    | "WYI" -> "https://github.com/R77R77R/WYI.git"
-    | _ -> $"https://github.com/siduochen/{code}.git"
+    | "Aiarwa" -> "git@github.com:lchenmay/Aiarwa.git"
+    | "Common" -> "git@github.com:lchenmay/Common.git"
+    | "JCS" -> "git@github.com:lchenmay/JCS.git"
+    | "WYI" -> "git@github.com:R77R77R/WYI.git"
+    | _ -> $"git@github.com:siduochen/{code}.git"
 
 
 // ==================== 版本检查函数 ====================

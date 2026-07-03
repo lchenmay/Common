@@ -185,6 +185,56 @@ let ensureDirectory output credential targetDir =
         true
 
 
+/// 从根目录逐级检查并创建绝对路径（用于 fsRoot 等独立运行时目录，不依赖 $HOME）
+/// 例如 "/root/FsRoot/WYI" → 逐级检查 /root → /root/FsRoot → /root/FsRoot/WYI
+let ensureAbsolutePath output credential (absPath: string) =
+    $"\n=== 逐级检查绝对路径: {absPath} ===" |> cyan |> output
+    
+    if System.String.IsNullOrWhiteSpace(absPath) then
+        "⚠ 路径为空，跳过" |> yellow |> output
+        false
+    else
+        // 拆分路径: "/root/FsRoot/WYI" → ["root"; "FsRoot"; "WYI"]
+        let parts = absPath.Split('/') |> Array.filter (fun s -> s.Length > 0)
+        
+        let mutable current = ""
+        let mutable allOk = true
+        
+        for part in parts do
+            current <- current + "/" + part
+            
+            // 检查当前层级目录是否存在
+            let checkCmd = $"if [ -d {current} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
+            let checkResult = bashWithRetry output credential checkCmd 5000 5
+            
+            if checkResult = "NOT_EXISTS" then
+                $"  创建: {current}" |> cyan |> output
+                let mkdirCmd = $"mkdir {current}"
+                bashWithRetry output credential mkdirCmd 5000 5 |> ignore
+                
+                // 验证创建是否成功
+                let verifyCmd = $"if [ -d {current} ]; then echo 'CREATED'; else echo 'FAILED'; fi"
+                let verifyResult = bashWithRetry output credential verifyCmd 5000 5
+                
+                if verifyResult = "CREATED" then
+                    $"  ✓ {current} 创建成功" |> green |> output
+                    bashWithRetry output credential $"chmod 755 {current}" 5000 5 |> ignore
+                else
+                    $"  ❌ {current} 创建失败" |> red |> output
+                    allOk <- false
+            elif checkResult = "EXISTS" then
+                $"  ✓ {current} 已存在" |> green |> output
+            else
+                $"  ⚠ {current} 检查异常: {checkResult}" |> yellow |> output
+        
+        if allOk then
+            $"✓ 绝对路径就绪: {absPath}" |> green |> output
+        else
+            $"⚠ 绝对路径创建有失败: {absPath}" |> yellow |> output
+        
+        allOk
+
+
 /// 确保多个目录存在
 let ensureDirectories output credential dirs =
     $"\n=== 确保所有目录存在 ===" |> cyan |> output
@@ -299,7 +349,7 @@ let private createOrUpdateSystemdService output credential (code: string) =
         $"StandardError=append:{logFile}\n" +
         "Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false\n" +
         "Environment=ASPNETCORE_ENVIRONMENT=Production\n" +
-        "TimeoutStopSec=30\n" +
+        "TimeoutStopSec=90\n" +
         "KillSignal=SIGTERM\n" +
         "MemoryMax=512M\n" +
         "CPUQuota=200%\n" +

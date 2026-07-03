@@ -34,6 +34,7 @@ let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
             port = 1723
             rdbms = Util.Db.Rdbms.PostgreSql
             conn = ""
+            fsroot = ""
             url = ""
             cert = ""
             certpwd = ""

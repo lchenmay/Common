@@ -220,6 +220,7 @@ let saveApi
     onSucCreateo
     onSucUpdateeo
     metadata 
+    usero
     json = 
     
     json 
@@ -237,7 +238,7 @@ let saveApi
                         |> metadata.rcd_update output with
                     | Some rcd -> 
                         match onSucUpdateeo with
-                        | Some h -> h rcd |> ignore
+                        | Some h -> h usero rcd |> ignore
                         | None -> ()
 
                         [| ("data",metadata.rcd__json rcd) |]
@@ -249,7 +250,7 @@ let saveApi
                         |> metadata.p_create output with
                     | Some rcd -> 
                         match onSucCreateo with
-                        | Some h -> h rcd |> ignore
+                        | Some h -> h usero rcd |> ignore
                         | None -> ()
 
                         [| ("data",metadata.rcd__json rcd) |]
@@ -258,17 +259,17 @@ let saveApi
             | None -> InternalEr.InvalideParameter)
         (fun _ -> InternalEr.InvalideParameter)
 
-type ApiDbCtx<'Data,'p> = {
+type ApiDbCtx<'Data,'p, 'User> = {
 marshall:MarshallTypes<'Data>
 metadata:MetadataTypes<'p>
-__items: unit -> 'Data[]
-listFilter: Json -> 'Data -> bool
-key__sortingo: (int -> string -> ('Data[] -> 'Data[]) option) option
-searching: string -> 'Data -> bool
+__items: 'User option -> 'Data[]
+listFilter: 'User option -> Json -> 'Data -> bool
+key__sortingo: ('User option -> int -> string -> ('Data[] -> 'Data[]) option) option
+searching: 'User option -> string -> 'Data -> bool
 rcd__existing: Rcd<'p> -> bool
-onSucCreateo: (Rcd<'p> -> Rcd<'p>) option
-onSucUpdateo: (Rcd<'p> -> Rcd<'p>) option
-continueo: (string -> Json -> InternalEr) option }
+onSucCreateo: ('User option -> Rcd<'p> -> Rcd<'p>) option
+onSucUpdateo: ('User option -> Rcd<'p> -> Rcd<'p>) option
+continueo: ('User option -> string -> Json -> InternalEr) option }
 
 let empty__ApiDbCtx
     (marshall,metadata)
@@ -305,81 +306,83 @@ let sortBy__functoro direction sortBy =
 
 let apiBuilder
     output 
-    (adx:ApiDbCtx<'Data,'p>)
-    json: InternalEr = 
+    (adx:ApiDbCtx<'Data,'p,'User>)
+    json = 
 
-    let act = json |> tryFindStrByAtt "act"
+      (fun usero ->
 
-    let sorting ary = 
-        match adx.key__sortingo with
-        | Some key__sorting -> 
-            let sort = json |> tryFindStrByAtt "sort"
-            let direction = 
-                if sort.StartsWith "+" then
-                    +1
-                else if sort.StartsWith "-" then
-                    -1
+        let act = json |> tryFindStrByAtt "act"
+
+        let sorting ary = 
+            match adx.key__sortingo with
+            | Some key__sorting -> 
+                let sort = json |> tryFindStrByAtt "sort"
+                let direction = 
+                    if sort.StartsWith "+" then
+                        +1
+                    else if sort.StartsWith "-" then
+                        -1
+                    else
+                        0
+                if direction <> 0 then
+                    match key__sorting usero direction (sort.Substring 1) with
+                    | Some sorting -> ary |> sorting
+                    | None -> ary
                 else
-                    0
-            if direction <> 0 then
-                match key__sorting direction (sort.Substring 1) with
-                | Some sorting -> ary |> sorting
-                | None -> ary
-            else
-                ary
-        | None -> ary
+                    ary
+            | None -> ary
 
-    match act with
-    | "ls-all" ->  
-        adx.__items()
-        |> sorting
-        |> paging adx.marshall.data__json json 
-        |> InternalEr.Ok
+        match act with
+        | "ls-all" ->  
+            adx.__items usero
+            |> sorting
+            |> paging adx.marshall.data__json json 
+            |> InternalEr.Ok
 
-    | "ls" ->  
-        adx.__items()
-        |> Array.filter (adx.listFilter json)
-        |> sorting
-        |> paging adx.marshall.data__json json 
-        |> InternalEr.Ok
+        | "ls" ->  
+            adx.__items usero
+            |> Array.filter (adx.listFilter usero json)
+            |> sorting
+            |> paging adx.marshall.data__json json 
+            |> InternalEr.Ok
 
-    | "search" ->
-        let term = (json |> tryFindStrByAtt "term").ToLower()
-        let limit = 
-            let v = json |> tryFindStrByAtt "limit" |> parse_int32
-            if v <= 5 then
-                5
-            else
-                v
-        let filter = adx.searching term
+        | "search" ->
+            let term = (json |> tryFindStrByAtt "term").ToLower()
+            let limit = 
+                let v = json |> tryFindStrByAtt "limit" |> parse_int32
+                if v <= 5 then
+                    5
+                else
+                    v
+            let filter = adx.searching usero term
 
-        let data = 
-            let items =
-                adx.__items()
-                |> Array.filter filter
-            if items.Length > limit then
-                Array.sub items 0 limit
-            else
-                items
-            |> Array.map adx.marshall.data__json
-            |> Json.Ary
+            let data = 
+                let items =
+                    adx.__items usero
+                    |> Array.filter filter
+                if items.Length > limit then
+                    Array.sub items 0 limit
+                else
+                    items
+                |> Array.map adx.marshall.data__json
+                |> Json.Ary
 
-        [| ("data",data) |]
-        |> InternalEr.Ok
+            [| ("data",data) |]
+            |> InternalEr.Ok
 
-    | "save" -> 
-        saveApi 
-            output 
-            adx.rcd__existing
-            adx.onSucCreateo
-            adx.onSucUpdateo
-            adx.metadata
-            json
-    | _ -> 
-        match adx.continueo with
-        | Some switcher -> switcher act json
-        | None -> InternalEr.InvalideParameter
-
+        | "save" -> 
+            saveApi 
+                output 
+                adx.rcd__existing
+                adx.onSucCreateo
+                adx.onSucUpdateo
+                adx.metadata
+                usero
+                json
+        | _ -> 
+            match adx.continueo with
+            | Some switcher -> switcher usero act json
+            | None -> InternalEr.InvalideParameter)
 
 let apiMonitorPerf x = 
 

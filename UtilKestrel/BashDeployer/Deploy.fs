@@ -150,16 +150,22 @@ echo '[后端] 依赖安装完成'
     |> ignore
 
 /// 并行构建前后端
+/// 返回 (前端成功, 后端成功)
 let private parallelBuild output credential code =
     "\n--- 并行构建 ---" |> cyan |> output
     
+    let frontendOk = ref true
+    let backendOk = ref true
+    
     let frontendJob = async {
         let ok = buildFrontend output credential code
+        frontendOk := ok
         return if ok then "[前端] 构建成功" else "[DEPLOY-WARN] 前端构建失败"
     }
     
     let backendJob = async {
         let ok = buildBackend output credential code
+        backendOk := ok
         return if ok then "[后端] 构建成功" else "[DEPLOY-WARN] 后端构建失败"
     }
     
@@ -169,6 +175,8 @@ let private parallelBuild output credential code =
         |> Async.RunSynchronously
     
     results |> Array.iter (fun r -> r |> output)
+    
+    (!frontendOk, !backendOk)
 
 
 // ==================== 部署代码（重构版） ====================
@@ -260,7 +268,11 @@ let private exeDeployCodeV2
         
         // === Phase 6: 并行构建 ===
         "6. 并行构建前后端..." |> cyan |> output
-        parallelBuild output credential code
+        let frontOk, backOk = parallelBuild output credential code
+        if not backOk then
+            "❌ 后端构建失败，请检查构建日志" |> red |> output
+        if not frontOk then
+            "❌ 前端构建失败，dist 产物缺失" |> red |> output
         writeDeployProgress output credential code "phase3_built" "" "编译完成，准备重启服务..." preGitHash "" ""
         
         // === Phase 7: 启动服务 ===
@@ -460,6 +472,8 @@ let routine
         "\nPhase 2/4: 停服务 + 健康检查..." |> cyan |> output
         
         "2.1 暂停远程服务..." |> cyan |> output
+        // 重载 systemd 配置（防止 unit file changed 警告）
+        bash output credential "systemctl daemon-reload" |> ignore
         serviceWasRunning <- checkDotNetServiceRunning output credential code
         if serviceWasRunning then
             $"  停止 {code} 服务..." |> yellow |> output
@@ -511,7 +525,12 @@ let routine
             writeDeployProgress output credential code "phase3_failed" startedAt "源码推送失败，中止部署" localGitHash "" ""
         else
             exeDeployCodeV2 output credential code deployLogPath isScpPush host.disk
-            okEvents.Add("代码构建部署完成")
+            // 部署后检查前端 dist 产物
+            let distCount = remoteDistFileCount output credential $"Dev/{code}/vscode"
+            if distCount = "0" then
+                errEvents.Add("前端构建失败：dist 目录为空")
+            else
+                okEvents.Add("代码构建部署完成")
             writeDeployProgress output credential code "phase4_verifying" startedAt "部署后验证..." localGitHash "" ""
         
         // === Phase 4: 部署后检查 + 清理 ===

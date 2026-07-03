@@ -319,11 +319,36 @@ let pushSourceViaScp output code credential disk isPrimary =
 
 // =================== 并行 Git Pull ===================
 
+/// 检测远程服务器上 gh CLI 是否已认证（返回 true 表示可用 HTTPS 协议操作 GitHub）
+let private checkGhAuthenticated output credential =
+    try
+        let result = bashWithTimeout output credential "gh auth status 2>&1" 10000
+        let ok = result.Contains("Logged in to github.com")
+        if ok then
+            "✓ 远程 gh CLI 已认证，优先使用 HTTPS 协议操作 GitHub" |> green |> output
+            true
+        else
+            false
+    with _ -> false
+
 /// 并行 git pull 三个仓库（智能跳过：远程无新提交则跳过）
 /// 如果目录不是 git 仓库，先 clone；clone 失败时 fallback 到 scp 从本地推送
+/// gh HTTPS 优先，SSH key 为备份方案
 let parallelGitPull output credential (key__dir: Dictionary<string,string>) code (isScpPush: bool) disk =
     "\n--- 并行 git pull ---" |> cyan |> output
     let deployStampDir = "~/.deploy-stamps"
+    
+    // 检测远程 gh CLI 是否可用（仅非 scp 模式下检测，scp 模式不需要 git）
+    let ghAvailable = not isScpPush && checkGhAuthenticated output credential
+    
+    // 如果 gh 可用，配置 git credential helper
+    if ghAvailable then
+        bash output credential "gh auth setup-git 2>/dev/null || true" |> ignore
+    
+    /// 根据 gh 可用性选择 repo URL（HTTPS 优先，SSH 备份）
+    let selectRepoUrl name =
+        if ghAvailable then getRepoUrlHttps name
+        else getRepoUrl name
     
     /// clone 失败时，通过 scp 从本地直推源码到远程（fallback）
     let scpFallback (name: string) (dir: string) =
@@ -386,7 +411,7 @@ let parallelGitPull output credential (key__dir: Dictionary<string,string>) code
                     bashWithRetry output credential cleanCmd 10000 5 |> ignore
                     
                     // clone 仓库
-                    let repoUrl = getRepoUrl name
+                    let repoUrl = selectRepoUrl name
                     // dir 格式: "Dev/WYI" → parentDir: "Dev", repoName: "WYI"
                     let lastSlash = dir.LastIndexOf('/')
                     let parentDir = if lastSlash > 0 then dir.Substring(0, lastSlash) else "."
@@ -426,12 +451,12 @@ fi"""
                     elif checkResult.StartsWith("PULL:") then
                         let hash = checkResult.Substring(5)
                         $"[{name}] 远程有新提交 (hash: {hash})，git pull..." |> output
-                        updateSingleRepo output credential name (getRepoUrl name) dir |> ignore
+                        updateSingleRepo output credential name (selectRepoUrl name) dir |> ignore
                         $"[{name}] git pull 完成" |> output
                     else
                         // FETCH_FAIL → 可能是 origin 配置错误，尝试重新 clone
                         $"[{name}] 无法获取远程 hash（网络问题？），尝试重新 clone..." |> yellow |> output
-                        let repoUrl = getRepoUrl name
+                        let repoUrl = selectRepoUrl name
                         let cleanCmd = $"rm -rf ~/{dir}"
                         bashWithRetry output credential cleanCmd 10000 5 |> ignore
                         

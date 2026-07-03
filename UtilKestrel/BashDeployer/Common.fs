@@ -13,8 +13,9 @@ let writeDeployProgress output credential code phase startedAt currentStep gitBe
         let updatedAt = DateTime.UtcNow.ToString("o")
         let elapsed =
             if startedAt <> "" then
-                try let s = (DateTime.UtcNow - DateTime.Parse(startedAt)).TotalSeconds |> int
-                    s.ToString() + "s"
+                try let startTime = DateTime.Parse(startedAt, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal ||| System.Globalization.DateTimeStyles.AdjustToUniversal)
+                    let s = (DateTime.UtcNow - startTime).TotalSeconds |> int
+                    (if s < 0 then 0 else s).ToString() + "s"
                 with _ -> "?"
             else "0s"
         let esc (s: string) = s.Replace("\\", "/").Replace("\"", "'").Replace("\n", " ").Replace("\r", "")
@@ -66,7 +67,7 @@ let isPrivateNetwork (server: string) =
 
 // ==================== 仓库 URL ====================
 
-/// 获取仓库 URL
+/// 获取仓库 URL（SSH 协议）
 let getRepoUrl code =
     match code with
     | "Aiarwa" -> "git@github.com:lchenmay/Aiarwa.git"
@@ -74,6 +75,15 @@ let getRepoUrl code =
     | "JCS" -> "git@github.com:lchenmay/JCS.git"
     | "WYI" -> "git@github.com:R77R77R/WYI.git"
     | _ -> $"git@github.com:siduochen/{code}.git"
+
+/// 获取仓库 URL（HTTPS 协议，配合 gh auth 使用）
+let getRepoUrlHttps code =
+    match code with
+    | "Aiarwa" -> "https://github.com/lchenmay/Aiarwa.git"
+    | "Common" -> "https://github.com/lchenmay/Common.git"
+    | "JCS" -> "https://github.com/lchenmay/JCS.git"
+    | "WYI" -> "https://github.com/R77R77R/WYI.git"
+    | _ -> $"https://github.com/siduochen/{code}.git"
 
 
 // ==================== 版本检查函数 ====================

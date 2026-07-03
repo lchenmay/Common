@@ -142,7 +142,7 @@ let ensureDirectory output credential targetDir =
     if checkResult = "NOT_EXISTS" then
         // 目录不存在，创建
         $"创建目录 ~/{targetDir}..." |> cyan |> output
-        let mkdirCmd = $"mkdir -p $HOME/{targetDir}"
+        let mkdirCmd = $"mkdir -p $HOME/{targetDir} && echo 'MKDIR_OK'"
         bashWithRetry output credential mkdirCmd 5000 5 |> ignore
         
         // 验证创建是否成功
@@ -151,8 +151,8 @@ let ensureDirectory output credential targetDir =
         
         if verifyResult = "CREATED" then
             $"✓ 目录 ~/{targetDir} 创建成功" |> green |> output
-            // 设置权限
-            let chmodCmd = $"chmod -R 755 $HOME/{targetDir}"
+            // 设置权限（加输出后缀防止 bashWithRetry 因无输出而重试）
+            let chmodCmd = $"chmod -R 755 $HOME/{targetDir} 2>/dev/null; echo 'CHMOD_OK'"
             bashWithRetry output credential chmodCmd 5000 5 |> ignore
             "✓ 权限已设置为 755" |> green |> output
             true
@@ -175,7 +175,7 @@ let ensureDirectory output credential targetDir =
             true
         else
             "⚠ 权限不正确，修复中..." |> yellow |> output
-            let fixPermCmd = $"chmod -R 755 $HOME/{targetDir}"
+            let fixPermCmd = $"chmod -R 755 $HOME/{targetDir} 2>/dev/null; echo 'CHMOD_OK'"
             bashWithRetry output credential fixPermCmd 5000 5 |> ignore
             "✓ 权限已修复为 755" |> green |> output
             true
@@ -217,7 +217,7 @@ let ensureAbsolutePath output credential (absPath: string) =
             
             if checkResult = "NOT_EXISTS" then
                 $"  创建: {current}" |> cyan |> output
-                let mkdirCmd = $"mkdir {current}"
+                let mkdirCmd = $"mkdir {current} 2>/dev/null; echo 'MKDIR_DONE'"
                 bashWithRetry output credential mkdirCmd 5000 5 |> ignore
                 
                 // 验证创建是否成功
@@ -226,7 +226,7 @@ let ensureAbsolutePath output credential (absPath: string) =
                 
                 if verifyResult = "CREATED" then
                     $"  ✓ {current} 创建成功" |> green |> output
-                    bashWithRetry output credential $"chmod 755 {current}" 5000 5 |> ignore
+                    bashWithRetry output credential $"chmod 755 {current} 2>/dev/null; echo 'CHMOD_OK'" 5000 5 |> ignore
                 else
                     $"  ❌ {current} 创建失败" |> red |> output
                     allOk <- false

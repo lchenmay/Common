@@ -113,6 +113,10 @@ let ensureBunInstalled output credential =
     else
         "⚠ Bun 未安装，正在安装..." |> yellow |> output
         
+        // 预装 unzip（bun.sh 安装脚本依赖，缺失会导致安装失败）
+        let preInstallCmd = "apt-get install -y unzip 2>/dev/null || true"
+        bash output credential preInstallCmd |> ignore
+        
         // 先安装 Node.js（Bun 安装脚本可能需要）
         ensureNodeInstalled output credential |> ignore
         
@@ -199,7 +203,7 @@ let buildFrontend output credential code =
             
             // 调试1: Node.js 版本和路径
             // 注意：避免 node -e 中使用单引号，否则会与外层 bash -c 的单引号冲突
-            let debugNode = bash output credential "echo '[DEBUG] which node:' && which node 2>&1 || echo 'NOT_FOUND'; echo '[DEBUG] node -v:' && node -v 2>&1 || echo 'NODE_NOT_FOUND'; echo '[DEBUG] node -e check:' && node -e \"console.log(42)\" 2>&1 || echo 'NODE_EVAL_FAILED'"
+            let debugNode = bash output credential "echo '[DEBUG] which node:' && which node 2>&1 || echo NOT_FOUND; echo '[DEBUG] node -v:' && node -v 2>&1 || echo NODE_NOT_FOUND; echo '[DEBUG] node ok:' && node -e '42' 2>&1 || echo NODE_EVAL_FAILED"
             debugNode |> output
             
             // 调试2: 检查 vite.js 是否存在
@@ -256,11 +260,20 @@ let buildFrontend output credential code =
                 "❌ 前端构建后 dist 目录为空或不存在！" |> red |> output
                 false
         else
-            "  使用 npm 安装..." |> cyan |> output
+            "  使用 npm 安装 + 构建前端（Bun 不可用）..." |> cyan |> output
+            
+            // 步骤0: 安装依赖
             let npmResult = bash output credential $"cd $HOME/{vscodeDir} && npm install"
             npmResult |> output
             
-            let buildResult = bash output credential $"cd $HOME/{vscodeDir} && npm run build 2>&1"
+            // 步骤1: 生成路由（用 node 跑，不用 bun）
+            "[DEBUG] --- npm: node generateRoutes.cjs ---" |> yellow |> output
+            let genResult = bash output credential $"cd $HOME/{vscodeDir} && node generateRoutes.cjs 2>&1; echo '[DEBUG] generateRoutes exit code:' $?"
+            genResult |> output
+            
+            // 步骤2: vite build（用 node 跑，不用 bun bd）
+            "[DEBUG] --- npm: node vite build ---" |> yellow |> output
+            let buildResult = bashWithTimeout output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 180000
             buildResult |> output
             
             let distCount = remoteDistFileCount output credential vscodeDir

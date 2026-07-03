@@ -73,6 +73,8 @@ let buildBackend output credential code =
                     && (publishResult.Contains("error FS")
                         || publishResult.Contains("error CS")
                         || publishResult.Contains("error MSB")
+                        || publishResult.Contains("error NETSDK")
+                        || publishResult.Contains(" : error ")
                         || (publishResult.Contains("ExitCode") && not (publishResult.Contains("ExitCode 0"))))
                 if hasErrors then
                     $"❌ dotnet publish 编译错误" |> red |> output
@@ -121,6 +123,8 @@ let buildBackend output credential code =
                 && (publishResult.Contains("error FS")
                     || publishResult.Contains("error CS")
                     || publishResult.Contains("error MSB")
+                    || publishResult.Contains("error NETSDK")
+                    || publishResult.Contains(" : error ")
                     || (publishResult.Contains("ExitCode") && not (publishResult.Contains("ExitCode 0"))))
             if hasErrors then
                 $"❌ dotnet publish 编译错误" |> red |> output

@@ -148,6 +148,9 @@ export const createJlib =
 		debugger: getDebugger()
 	}
 
+	// 挂到 globalThis，供 api.ts / fetch.ts / auth.ts 跨模块读取
+	;(globalThis as any).runtime = rt
+
 	return {
 		vue: vue,
 		rt: rt

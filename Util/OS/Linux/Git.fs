@@ -29,6 +29,7 @@ let private syncViaScp output credential (repoName: string) (targetDir: string) 
     let porto, user, server = credential
     let portArg = match porto with Some p -> $"-P {p}" | None -> ""
     let privateKeyArg = getSshPrivateKeyArg()
+    let controlOpts = getSshControlOpts()
     
     // 从同一服务器的 ~/source/{repoName}/ 目录同步
     // 假设源服务器上已有代码（可能是之前通过其他方式部署的）
@@ -41,7 +42,7 @@ let private syncViaScp output credential (repoName: string) (targetDir: string) 
     
     // rsync 首选（增量同步），scp 备用
     let scpArgs = 
-        $"{privateKeyArg} {portArg} -r -o StrictHostKeyChecking=no " +
+        $"{privateKeyArg} {portArg} -r -o StrictHostKeyChecking=no {controlOpts} " +
         $"{user}@{server}:{sourcePath}* {destPath}"
     
     $"  scp {user}@{server}:{sourcePath}* -> {destPath}" |> cyan |> output

@@ -42,11 +42,12 @@ let setupRemoteGitSshKey output credential localDiskPath =
     else
         let _, _, _, target, portArg = credentialExpand credential
         let privKeyArg = getSshPrivateKeyArg()
+        let controlOpts = getSshControlOpts()
 
         // 1. scp 密钥到远程
         "  1. 复制密钥到远程..." |> cyan |> output
         let scpCmd =
-            let args = [ privKeyArg; portArg; "-o StrictHostKeyChecking=no" ]
+            let args = [ privKeyArg; portArg; "-o StrictHostKeyChecking=no"; controlOpts ]
                        |> List.filter (fun s -> not (String.IsNullOrWhiteSpace s))
                        |> String.concat " "
             $"{args} \"{localPriv}\" \"{localPub}\" {target}:~/.ssh/"
@@ -225,6 +226,7 @@ let pushSourceViaScp output code credential disk isPrimary =
     let porto, user, server = credential
     let portArg = match porto with Some p -> $"-P {p}" | None -> ""
     let privateKeyArg = getSshPrivateKeyArg()
+    let controlOpts = getSshControlOpts()
     
     // 源目录 → 目标目录映射（远程路径使用绝对路径 /root/Dev/）
     let repos = [|
@@ -248,7 +250,7 @@ let pushSourceViaScp output code credential disk isPrimary =
             // Windows 路径需要转换：将反斜杠替换为正斜杠（scp 需要）
             let normalizedPath = localPath.Replace('\\', '/')
             let scpArgs = 
-                $"{privateKeyArg} {portArg} -r -o StrictHostKeyChecking=no " +
+                $"{privateKeyArg} {portArg} -r -o StrictHostKeyChecking=no {controlOpts} " +
                 $"\"{normalizedPath}/*\" {user}@{server}:{remotePath}/"
             
             $"  scp {localPath}\\* -> {server}:{remotePath}/" |> cyan |> output
@@ -285,12 +287,13 @@ let parallelGitPull output credential (key__dir: Dictionary<string,string>) code
         $"\n⚠ [{name}] git clone 失败，改用 scp 从本地直推源码..." |> orange |> output
         let localPath = $"{disk}Dev/{name}".Replace('\\', '/')
         let privKeyArg = getSshPrivateKeyArg()
+        let controlOpts = getSshControlOpts()
         let porto, user, server = credential
         let portArg = match porto with Some p -> $"-P {p}" | None -> ""
         let target = $"{user}@{server}"
         let remotePath = $"~/{dir}"
         let scpArgs =
-            let args = [ privKeyArg; portArg; "-r"; "-o StrictHostKeyChecking=no" ]
+            let args = [ privKeyArg; portArg; "-r"; "-o StrictHostKeyChecking=no"; controlOpts ]
                        |> List.filter (fun s -> not (String.IsNullOrWhiteSpace s))
                        |> String.concat " "
             $"{args} \"{localPath}/*\" {target}:{remotePath}/"

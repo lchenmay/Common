@@ -31,8 +31,9 @@ const request = (method: "POST" | "GET") => async (url: string, data: Record<str
   if (clerkToken) headers['Authorization'] = `Bearer ${clerkToken}`
 
   const runtime = (globalThis as any).runtime
-  if (method === "POST" && runtime?.session)
-    data['session'] = runtime.session
+  const session = runtime?.session || localStorage.getItem('session') || ''
+  if (method === "POST" && session)
+    data['session'] = session
 
   const fetchOptions: RequestInit = { method, headers }
   if (method === "POST") {

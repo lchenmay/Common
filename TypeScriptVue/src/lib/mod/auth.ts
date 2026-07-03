@@ -32,8 +32,13 @@ export const LoginOption__RT = async (options: LoginOption, postFn: Function, no
   const res = await postFn('/api/public/auth', options)
   if (res.session) {
     if (notifySuc) notifySuc("Login Suc")
-    ;(globalThis as any).runtime.session = String(res.session)
-    if(res.ec) (globalThis as any).runtime.user = res.ec
+    const s = String(res.session)
+    ;(globalThis as any).runtime.session = s
+    try { localStorage.setItem('session', JSON.stringify(s)) } catch {}
+    if(res.ec) {
+      ;(globalThis as any).runtime.user = res.ec
+      try { localStorage.setItem('runtime.user', JSON.stringify(res.ec)) } catch {}
+    }
   } 
   return res
 }

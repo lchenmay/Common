@@ -2,15 +2,10 @@
 
 open System
 open System.Net.Http
+open System.Net.Http.Headers
 open System.Text
 
 open Util.Json
-
-// 静态客户端定义
-let client = 
-    let c = new System.Net.Http.HttpClient()
-    c.Timeout <- TimeSpan.FromSeconds 300.0
-    c
 
 
 /// 基础 POST 函数：执行 GraphQL 查询，返回原始 JSON 字符串（仅在无错误时返回 Some）
@@ -18,16 +13,31 @@ let postToMonday
     output apiKey 
     queryText =
 
-    client.DefaultRequestHeaders.Remove("Authorization") |> ignore
-    client.DefaultRequestHeaders.Add("Authorization", "" + apiKey) |> ignore
-    client.DefaultRequestHeaders.Remove("API-Version") |> ignore
-    client.DefaultRequestHeaders.Add("API-Version", "2023-10") |> ignore
-
-    let payload = System.Text.Json.JsonSerializer.Serialize({| query = queryText |})
-    let content = new StringContent(payload, Encoding.UTF8, "application/json")
-
     try
-        let resp = client.PostAsync("https://api.monday.com/v2", content).Result
+        // 诊断：输出 apiKey 前缀
+        let keyPreview = 
+            if String.IsNullOrWhiteSpace apiKey then "[空]"
+            elif apiKey.Length > 10 then apiKey.Substring(0, 10) + "..."
+            else apiKey
+        $"[postToMonday] apiKey 前缀: {keyPreview}" |> output
+
+        use client = new HttpClient()
+        client.Timeout <- TimeSpan.FromSeconds 300.0
+
+        use req = new HttpRequestMessage(HttpMethod.Post, "https://api.monday.com/v2")
+
+        // 只用强类型 Authorization 属性设置，空值会得到有效处理
+        if not (String.IsNullOrWhiteSpace apiKey) then
+            req.Headers.Authorization <- new AuthenticationHeaderValue(apiKey)
+        else
+            "⚠️ [postToMonday] apiKey 为空！请检查 CONFIG 表 ApiKeyMonday" |> output
+
+        req.Headers.Add("API-Version", "2023-10")
+
+        let payload = System.Text.Json.JsonSerializer.Serialize({| query = queryText |})
+        req.Content <- new StringContent(payload, Encoding.UTF8, "application/json")
+
+        let resp = client.Send(req)
         if resp.IsSuccessStatusCode then
             let json = resp.Content.ReadAsStringAsync().Result
             // 检查 GraphQL 层错误（Monday 通常返回 200 但带 errors 字段）
@@ -41,7 +51,7 @@ let postToMonday
             $"HTTP Error: {(int resp.StatusCode)} - {errorBody}" |> output
             None
     with ex ->
-        $"请求异常: {ex.Message}" |> output
+        $"请求异常: {ex.Message}\n{ex.StackTrace}" |> output
         None
         
         

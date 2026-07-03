@@ -41,6 +41,22 @@ let getSshPrivateKeyArg() =
     | "" -> ""
     | path -> $"-i \"{path}\""
 
+/// 确保 SSH ControlPath 目录存在，返回可用的 ControlPath 路径
+let private ensureSshControlDir() =
+    let dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh", "controlmasters")
+    if not (Directory.Exists dir) then
+        Directory.CreateDirectory dir |> ignore
+    dir
+
+/// 获取 SSH 连接复用选项（ControlMaster），复用同一条 TCP 连接避免重复握手
+/// - ControlMaster=auto: 自动复用已有连接，没有则创建
+/// - ControlPath: 使用 %C 哈希作为 socket 名，兼容 Windows 文件名限制
+/// - ControlPersist=600: 连接保持 10 分钟，期间新连接可复用
+let getSshControlOpts() =
+    let controlDir = ensureSshControlDir()
+    let controlPath = (Path.Combine(controlDir, "ssh-%C")).Replace('\\', '/')
+    $"-o ControlMaster=auto -o ControlPath=\"{controlPath}\" -o ControlPersist=600"
+
 /// 懒加载：扫描系统查找 Git 安装目录（仅计算一次）
 let private gitPathCache = lazy (
     let commonPaths = [|
@@ -146,7 +162,8 @@ let bashWithTimeout output credential (cmd: string) (timeoutMs: int) : string =
             cleanCommand cmd
     
     let privateKeyArg = getSshPrivateKeyArg()
-    let sshOpts = "-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+    let controlOpts = getSshControlOpts()
+    let sshOpts = $"-o StrictHostKeyChecking=no -o ConnectTimeout=10 {controlOpts}"
     let args = 
         match porto with
         | Some p -> $"{sshOpts} {privateKeyArg} -p {p} {user}@{server} \"{effectiveCmd}\""
@@ -323,6 +340,7 @@ let startSSHTunnel output (localPort:int) credential (remotePort:int) : bool =
     let porto, user, server = credential
     let portArg = match porto with Some p -> $"-p {p}" | None -> ""
     let privateKeyArg = getSshPrivateKeyArg()
+    let controlOpts = getSshControlOpts()
     
     // -N: 不执行远程命令（纯转发）
     // -o ExitOnForwardFailure=yes: 转发失败则退出
@@ -330,6 +348,7 @@ let startSSHTunnel output (localPort:int) credential (remotePort:int) : bool =
     let args = 
         $"{privateKeyArg} {portArg} -o StrictHostKeyChecking=no " +
         $"-o ExitOnForwardFailure=yes -o ServerAliveInterval=60 " +
+        $"{controlOpts} " +
         $"-N -L {localPort}:localhost:{remotePort} {user}@{server}"
     
     $"启动 SSH 隧道: localhost:{localPort} -> {server}:{remotePort}" 

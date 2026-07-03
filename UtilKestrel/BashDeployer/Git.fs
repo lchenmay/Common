@@ -1,6 +1,7 @@
 module UtilKestrel.BashDeployer.Git
 
 open System
+open System.Diagnostics
 open System.IO
 open System.Collections.Generic
 open Util.Linux.Linux
@@ -154,28 +155,61 @@ let private pushLocalRepoWithRetry output repoPath gitName gitEmail (maxRetries:
     
     success
 
+/// 前置验证 Git 可用性（在 git push 之前调用，防止盲目重试）
+let private verifyGitAvailable output =
+    try
+        let gitExe =
+            [| @"C:\Program Files\Git\cmd\git.exe"
+               @"C:\Program Files\Git\bin\git.exe"
+               @"C:\Program Files (x86)\Git\cmd\git.exe" |]
+            |> Array.tryFind File.Exists
+        match gitExe with
+        | Some exe ->
+            let psi = ProcessStartInfo(exe, "--version")
+            psi.RedirectStandardOutput <- true
+            psi.RedirectStandardError <- true
+            psi.UseShellExecute <- false
+            psi.CreateNoWindow <- true
+            use p = Process.Start(psi)
+            let ver = p.StandardOutput.ReadToEnd().Trim()
+            p.WaitForExit(3000) |> ignore
+            $"✓ Git 已就绪: {ver}" |> green |> output
+            true
+        | None ->
+            "❌ 找不到 Git 可执行文件，请确认 Git 已安装在默认路径" |> red |> output
+            false
+    with ex ->
+        $"❌ Git 检查异常: {ex.Message}" |> red |> output
+        false
+
 /// 推送所有本地仓库变更（带验证和重试）
 /// 返回：所有仓库是否都成功推送
 let pushAllLocalRepos output code gitName gitEmail disk =
     $"\n=== 开始推送所有本地仓库变更 ===" |> yellow |> output
     
-    let repos = [|
-        ("主项目", $"{disk}Dev/{code}")
-        ("Common", $"{disk}Dev/Common")
-        ("JCS", $"{disk}Dev/JCS")
-    |]
-    
-    let mutable allSuccess = true
-    repos |> Array.iter (fun (name, path) ->
-        if Directory.Exists(path) then
-            let ok = pushLocalRepoWithRetry output path gitName gitEmail 3
-            if not ok then allSuccess <- false
-        else
-            $"⚠ 目录不存在: {path}" |> yellow |> output
-        "\n" |> output)
-    
-    "=== 所有本地仓库推送完成 ===" |> yellow |> output
-    allSuccess
+    // 前置检查：确保 Git 可用再推送
+    $"前置检查: 验证 Git 可用性..." |> cyan |> output
+    if not (verifyGitAvailable output) then
+        "❌ Git 不可用，跳过 GitHub 推送（部署将使用 scp 直推方案）" |> yellow |> output
+        false
+    else
+        let repos = [|
+            ("主项目", $"{disk}Dev/{code}")
+            ("Common", $"{disk}Dev/Common")
+            ("JCS", $"{disk}Dev/JCS")
+        |]
+        
+        let mutable allSuccess = true
+        repos |> Array.iter (fun (name, path) ->
+            if Directory.Exists(path) then
+                let ok = pushLocalRepoWithRetry output path gitName gitEmail 3
+                if not ok then allSuccess <- false
+            else
+                $"⚠ 目录不存在: {path}" |> yellow |> output
+            "\n" |> output)
+        
+        "=== 所有本地仓库推送完成 ===" |> yellow |> output
+        allSuccess
 
 /// 通过 scp 直接推送源码到目标服务器（内网优先方案 / GitHub 不可用时的 fallback）
 /// 将本地 Dev/{code}, Dev/Common, Dev/JCS 目录直接 scp 到远程服务器

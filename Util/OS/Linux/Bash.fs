@@ -41,6 +41,42 @@ let getSshPrivateKeyArg() =
     | "" -> ""
     | path -> $"-i \"{path}\""
 
+/// 懒加载：扫描系统查找 Git 安装目录（仅计算一次）
+let private gitPathCache = lazy (
+    let commonPaths = [|
+        @"C:\Program Files\Git\cmd"
+        @"C:\Program Files\Git\bin"
+        @"C:\Program Files (x86)\Git\cmd"
+        @"C:\Program Files (x86)\Git\bin"
+    |]
+    let gitDir = commonPaths |> Array.tryFind (fun dir ->
+        File.Exists(Path.Combine(dir, "git.exe")))
+    match gitDir with
+    | Some dir -> Some dir
+    | None ->
+        // 从注册表查找 Git for Windows 安装路径
+        try
+            use key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\GitForWindows")
+            if key <> null then
+                let installPath = key.GetValue("InstallPath") :?> string
+                if not (String.IsNullOrEmpty(installPath)) then
+                    let cmdDir = Path.Combine(installPath, "cmd")
+                    if Directory.Exists(cmdDir) then Some cmdDir else None
+                else None
+            else None
+        with _ -> None
+)
+
+/// 获取增强版 PATH：自动补充 Git 目录，确保子进程能找到 git
+let private getAugmentedPath() =
+    let currentPath = Environment.GetEnvironmentVariable("PATH")
+    let currentPath = if isNull currentPath then "" else currentPath
+    match gitPathCache.Force() with
+    | Some gitDir ->
+        if currentPath.Contains(gitDir) then currentPath
+        else gitDir + ";" + currentPath
+    | None -> currentPath
+
 /// 执行本地命令（支持自定义超时）- 修复编码和 PowerShell 兼容
 let execWithTimeout output setDir (fileName: string) (args: string) (timeoutMs: int) : string =
     $"{fileName}: {args}" |> cyan |> output
@@ -56,6 +92,9 @@ let execWithTimeout output setDir (fileName: string) (args: string) (timeoutMs: 
     // 设置 UTF-8 编码
     psi.StandardOutputEncoding <- Encoding.UTF8
     psi.StandardErrorEncoding <- Encoding.UTF8
+
+    // 自动注入 Git 路径到子进程 PATH，防止父进程启动时 PATH 不含 Git
+    psi.Environment.["PATH"] <- getAugmentedPath()
 
     use proc = new Process(StartInfo = psi)
     let outputBuilder = StringBuilder()

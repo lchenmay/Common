@@ -1,3 +1,5 @@
+import { Router } from "vue-router"
+
 declare global {
 
     namespace JSX {
@@ -14,7 +16,7 @@ declare global {
 
     interface Runtime<User,Data> {
         host: Host
-        router: any
+        router: Router
         session: string
         mor: any
         user: User

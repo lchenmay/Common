@@ -1,5 +1,7 @@
 
 import * as vue from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+
 
 // ===== Theme 管理 =====
 export type Theme = 'day' | 'dark'
@@ -124,7 +126,7 @@ export const setLocalStorage = (key: string, value: any) => {
 // 创建 jlib 的工厂函数
 // 应用可以传入自己的 runtime 来覆盖默认值
 export const createJlib =
-	<User,Data>(mor: any,router: any,user:User,data:Data, defaultLang?: Lang) => {
+	<User,Data>(mor:any,routes:any,user:User,data:Data, defaultLang?: Lang) => {
 
 	// 如果调用方指定了默认语言，则设置它
 	if (defaultLang !== undefined) {
@@ -133,7 +135,10 @@ export const createJlib =
 
 	const rt = {
 		host: initHost(),
-		router: router,
+		router: createRouter({
+			history: createMemoryHistory(),
+			routes: routes
+		}),
 		session: getLocalStorage("session", ''),
 		mor: mor,
 		user: user,

@@ -3,11 +3,80 @@ module UtilKestrel.BashDeployer.Git
 open System
 open System.IO
 open System.Collections.Generic
+open Util.Linux.Linux
 open Util.Linux.Bash
 open Util.Linux.Git
 open Util.Monitor
 open UtilKestrel.Types
 open UtilKestrel.BashDeployer.Common
+
+// =================== Git SSH ===================
+
+/// 检查本地 GitHub SSH 密钥是否存在
+/// localDiskPath: "C:/Dev/" — 检查该目录下的 id_git 和 id_git.pub
+/// 不存在时提示用户生成并上传 GitHub，等待确认后继续
+let checkLocalGitSshKey output localDiskPath =
+    let privKey = localDiskPath + "id_git"
+    let pubKey  = localDiskPath + "id_git.pub"
+
+    if File.Exists pubKey && File.Exists privKey then
+        $"✓ 本地 GitHub SSH 密钥已就绪: {pubKey}" |> green |> output
+    else
+        "⚠ 本地 GitHub SSH 密钥不存在" |> yellow |> output
+        $"  生成方式: ssh-keygen -t ed25519 -f {localDiskPath}id_git -C git -N ''" |> orange |> output
+        $"  然后将 {localDiskPath}id_git.pub 添加到 https://github.com/settings/keys" |> yellow |> output
+        "  完成后按任意键继续..." |> yellow |> output
+        Console.ReadKey() |> ignore
+        "\n" |> output
+
+/// 把本地 GitHub SSH 密钥部署到远程服务器
+/// localDiskPath: "C:/Dev/" — 读取 id_git / id_git.pub
+/// 自动完成: scp → chmod 600 → 写 ~/.ssh/config → 验证 ssh -T git@github.com
+let setupRemoteGitSshKey output credential localDiskPath =
+    let localPriv = localDiskPath + "id_git"
+    let localPub  = localDiskPath + "id_git.pub"
+
+    if not (File.Exists localPriv && File.Exists localPub) then
+        "⚠ 本地 GitHub SSH 密钥不存在，跳过远程部署" |> yellow |> output
+    else
+        let _, _, _, target, portArg = credentialExpand credential
+        let privKeyArg = getSshPrivateKeyArg()
+
+        // 1. scp 密钥到远程
+        "  1. 复制密钥到远程..." |> cyan |> output
+        let scpCmd =
+            $"scp {privKeyArg} {portArg} -o StrictHostKeyChecking=no " +
+            $"\"{localPriv}\" \"{localPub}\" {target}:~/.ssh/"
+        execWithTimeout output "" "scp" scpCmd 30000 |> ignore
+
+        // 2. 设权限
+        "  2. 设置权限..." |> cyan |> output
+        bash output credential "chmod 600 ~/.ssh/id_git ~/.ssh/id_git.pub" |> ignore
+
+        // 3. 写 SSH config（幂等）
+        "  3. 写入 SSH config..." |> cyan |> output
+        bash 
+          output 
+          credential 
+          """grep -q 'Host github.com' ~/.ssh/config || cat >> ~/.ssh/config << 'EOF'
+Host github.com
+    User git
+    IdentityFile ~/.ssh/id_git
+    IdentitiesOnly yes
+    StrictHostKeyChecking accept-new
+EOF""" 
+          |> ignore
+
+        // 4. 验证
+        "  4. 验证 GitHub SSH 连接..." |> cyan |> output
+        let testResult = bash output credential "ssh -T -o StrictHostKeyChecking=accept-new git@github.com 2>&1"
+        if testResult.Contains("successfully authenticated") then
+            "  ✓ 远程 GitHub SSH 连接正常" |> green |> output
+        else
+            $"  ⚠ GitHub SSH 验证返回: {testResult.Trim()}" |> yellow |> output
+
+
+
 
 // =================== Git 推送函数 ===================
 

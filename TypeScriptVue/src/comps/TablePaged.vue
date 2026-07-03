@@ -56,7 +56,7 @@
                     <tr v-for="(i, index) in s.items"
                       v-else
                       :key="index"
-                      @click="props.onRowClick(i)"
+                      @click="props.onRowClick?.(i)"
                       class="table-row table-row-border cursor-pointer hover:bg-slate-50">
 
                         <td class="table-cell text-center" style="width: 50px">
@@ -170,8 +170,8 @@ export interface TableField {
   key: string,
   row__cell?: Function,
   row__style?: Function,
-  sortable: boolean,
-  style?: Function,
+  sortable?: boolean,
+  style?: string | Function,
   text?: string,
   width?: string
 }
@@ -183,13 +183,16 @@ export interface Paging{
   pages: number
 }
 
-const props = defineProps(['lang','fields','api','hpostdata','onRowClick','selected'])
-props.lang as string
-props.fields as TableField[]
-props.api as string
-props.hpostdata as Function
-props.onRowClick as Function
-props.selected as Data[] | undefined
+interface TablePagedProps {
+  lang?: string
+  fields: TableField[]
+  api: string
+  hpostdata?: Function
+  onRowClick?: (data: Data) => void
+  selected?: Data[]
+}
+
+const props = defineProps<TablePagedProps>()
 
 // theme 从 common.ts 导入
 
@@ -292,18 +295,19 @@ const toggleRow = (item: Data) => {
 // 改变全选状态
 const toggleAll = () => {
   if (!props.selected) return
+  const selected = props.selected
 
   if (isAllSelected.value) {
     s.items.forEach(item => {
-      const idx = props.selected.indexOf(item)
+      const idx = selected.indexOf(item)
       if (idx !== -1) {
-        props.selected.splice(idx, 1)
+        selected.splice(idx, 1)
       }
     })
   } else {
     s.items.forEach(item => {
       if (!isRowSelected(item)) {
-        props.selected.push(item)
+        selected.push(item)
       }
     })
   }

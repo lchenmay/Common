@@ -294,24 +294,34 @@ let routine
         writeDeployProgress output credential code "starting" startedAt "开始部署前期准备..." localGitHash "" ""
         
         serviceWasRunning <- false
+        
         // === Phase 1: 本地准备（SSH 检查 + 源码推送） ===
+        
         "Phase 1/4: 本地准备..." |> cyan |> output
         writeDeployProgress output credential code "phase1_pushing" startedAt "推送源码到远程..." localGitHash "" ""
         
-        "1.1 切换到项目目录: " + devDir |> cyan |> output
+        // 1.1 检查本地 GitHub SSH 密钥
+        "1.1 检查本地 GitHub SSH 密钥..." |> cyan |> output
+        checkLocalGitSshKey output host.disk
+
+        "1.2 切换到项目目录: " + devDir |> cyan |> output
         let exeLocal args = exec output devDir "powershell" args |> ignore
         "cd " + devDir |> exeLocal
             
-        "1.2 检查 SSH 免密登录..." |> cyan |> output
+        $"1.3 检查 SSH -> [{server}] 免密登录..." |> cyan |> output
         checkSSHAuth output credential (host.disk + "Dev/" + runtime.projectCode, host.deploy.gitEmail)
         
-        // 1.3 判断目标服务器是否在内网，选择最优推送路径
+        // 1.4 部署 GitHub SSH 密钥到远程
+        "1.4 部署 GitHub SSH 密钥到远程..." |> cyan |> output
+        setupRemoteGitSshKey output credential host.disk
+
+        // 1.5 判断目标服务器是否在内网，选择最优推送路径
         let isPrivate = isPrivateNetwork server
         if isPrivate then
-            $"1.3 检测到内网目标 ({server})，优先使用 scp 直推源码..." |> cyan |> output
+            $"1.5 检测到内网目标 ({server})，优先使用 scp 直推源码..." |> cyan |> output
         else
-            $"1.3 目标为外网 ({server})，使用 GitHub 中转..." |> cyan |> output
-        
+            $"1.5 目标为外网 ({server})，使用 GitHub 中转..." |> cyan |> output
+       
         let isScpPush, codePushedOk =
             if isPrivate then
                 // 内网优先：直接 scp 源码，快 3-5 倍且避免无意义 git push

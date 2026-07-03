@@ -53,7 +53,7 @@
 
 import * as vue from 'vue'
 
-import { Crud } from '@lchenmay/jcs-common'
+import Crud from '~/comps/Crud.vue'
 import Markdown from './comps/Markdown.vue'
 import { amt__2digitDollar } from './lib/util/text'
 

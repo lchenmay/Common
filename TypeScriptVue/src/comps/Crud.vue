@@ -1,12 +1,12 @@
 <template>
 
   <SearchField 
-    :api="props.api" 
-    :item__key="props.data__id" 
-    :item__text="props.data__desc" 
+    :api="props.api!" 
+    :item__key="props.data__id!" 
+    :item__text="props.data__desc!" 
     :onselect="openTab" />
   <TabContainer ref="tabRef" :default-tab-type="'dashboard'" :show-add-btn="props.showAddBtn !== false"
-    @onClickCreate="openTab(props.empty__data())" />
+    @onClickCreate="openTab(props.empty__data!())" />
 
 </template>
 
@@ -23,40 +23,34 @@ import { theme } from '../lib/common'
 // 确保 theme 在 script 中被引用（TypeScript 不检查 template）
 void theme.value
 
-const props = defineProps([
-  'lang',
-  'caption',
-  'api',
-  'fields',
-  'hpostdata',
-  'component',
-  'selected',
-  'showAddBtn',
-  'data__title', 'empty__data', 'data__id', 'data__desc',
-  'tag'])
-props.lang as string
-props.caption as string
-props.api as string
-props.fields as TableField[]
-props.hpostdata as Function
-props.component as Component
-props.selected as Data[]
-props.showAddBtn as boolean | undefined
-props.data__title as Function
-props.empty__data as Function
-props.data__id as Function
-props.data__desc as Function
+interface CrudProps {
+  lang?: string
+  caption?: string
+  api?: string
+  fields?: TableField[]
+  hpostdata?: Function
+  component?: Component
+  selected?: Data[]
+  showAddBtn?: boolean
+  data__title?: (data: Data) => string
+  empty__data?: () => Data
+  data__id?: (data: Data) => string
+  data__desc?: (data: Data) => string
+  tag?: any
+}
+
+const props = defineProps<CrudProps>()
 
 // theme 从 common.ts 导入（响应式 ref）
 const tabRef = ref<InstanceType<typeof TabContainer>>()
 
 const openTab = (i: Data) => {
-  let id = props.data__id(i)
+  let id = props.data__id!(i)
   tabRef.value?.createTab({
     id: id + '',
     type: 'VIEW',
-    title: (id == 0 ? "新建" : (props.data__title(i))),
-    component: markRaw(props.component),
+    title: (id == '0' ? "新建" : (props.data__title!(i))),
+    component: markRaw(props.component!),
     props: {
       data: i,
       tag: props.tag
@@ -70,12 +64,12 @@ vue.onMounted(async () => {
   tabRef.value?.createTab({
     id: 'LIST',
     type: 'LIST',
-    title: props.caption,
+    title: props.caption!,
     component: TablePaged,
     props: {
       'lang': props.lang,
-      fields: props.fields,
-      api: props.api,
+      fields: props.fields!,
+      api: props.api!,
       hpostdata: props.hpostdata,
       selected: props.selected,
       onRowClick: openTab

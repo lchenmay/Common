@@ -1,6 +1,6 @@
 {
   "name": "@lchenmay/jcs-common",
-  "version": "1.0.185",
+  "version": "1.0.186",
   "type": "module",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

@@ -20,8 +20,8 @@
         </div>
       </div>
       
-      <!-- 可选：添加按钮 -->
-      <button v-if="showAddBtn" class="tab-add-btn" @click="emit('onClickCreate')">
+      <!-- 可选：添加按钮（默认显示，仅当显式设为 false 时隐藏） -->
+      <button v-if="showAddBtn !== false" class="tab-add-btn" @click="emit('onClickCreate')">
         <svg class="tab-add-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>

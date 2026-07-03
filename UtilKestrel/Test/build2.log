@@ -1,0 +1,35 @@
+  正在确定要还原的项目…
+  所有项目均是最新的，无法还原。
+c:\Dev\Common\UtilKestrel\Test\Program.fs(30,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(31,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(32,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(36,13): error FS0039: 未定义值或构造函数“loadAll”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(37,14): error FS0072: 查找基于此程序点之前的信息的不确定类型的对象。在此程序点之前可能需要类型批注来约束对象的类型。这可能允许解析查找。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(38,33): error FS0072: 查找基于此程序点之前的信息的不确定类型的对象。在此程序点之前可能需要类型批注来约束对象的类型。这可能允许解析查找。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(40,40): error FS0501: 成员或对象构造函数“ToString”需要 0 个参数，而此处给定了 1 个参数。所需签名为“Object.ToString() : string”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(51,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(55,9): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(72,18): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(74,34): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(78,17): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(85,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+
+生成失败。
+
+c:\Dev\Common\UtilKestrel\Test\Program.fs(30,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(31,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(32,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(36,13): error FS0039: 未定义值或构造函数“loadAll”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(37,14): error FS0072: 查找基于此程序点之前的信息的不确定类型的对象。在此程序点之前可能需要类型批注来约束对象的类型。这可能允许解析查找。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(38,33): error FS0072: 查找基于此程序点之前的信息的不确定类型的对象。在此程序点之前可能需要类型批注来约束对象的类型。这可能允许解析查找。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(40,40): error FS0501: 成员或对象构造函数“ToString”需要 0 个参数，而此处给定了 1 个参数。所需签名为“Object.ToString() : string”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(51,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(55,9): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(72,18): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(74,34): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(78,17): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+c:\Dev\Common\UtilKestrel\Test\Program.fs(85,5): error FS0039: 未定义值、命名空间、类型或模块“sc”。 [c:\Dev\Common\UtilKestrel\Test\UtilKestrel.Test.fsproj]
+    0 个警告
+    13 个错误
+
+已用时间 00:00:02.29

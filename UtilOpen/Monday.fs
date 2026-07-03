@@ -26,9 +26,9 @@ let postToMonday
 
         use req = new HttpRequestMessage(HttpMethod.Post, "https://api.monday.com/v2")
 
-        // 只用强类型 Authorization 属性设置，空值会得到有效处理
+        // 同时尝试 Bearer 和原始值两种格式进行诊断
         if not (String.IsNullOrWhiteSpace apiKey) then
-            req.Headers.Authorization <- new AuthenticationHeaderValue(apiKey)
+            req.Headers.Authorization <- new AuthenticationHeaderValue("Bearer", apiKey)
         else
             "⚠️ [postToMonday] apiKey 为空！请检查 CONFIG 表 ApiKeyMonday" |> output
 
@@ -252,3 +252,38 @@ let GetBillsRaw output apikey boardId =
 let VerifyMondayTokenRaw output apikey =
     let query = "{ me { id name email } }"
     postToMonday output apikey query
+
+/// 诊断：尝试两种 Authorization 格式并对比结果
+let VerifyMondayConnection output apikey =
+    let apiUrl = "https://api.monday.com/v2"
+    let query = System.Text.Json.JsonSerializer.Serialize({| query = "{ me { id name email account { id name } } }" |})
+    
+    let tryAuth (label: string) (setAuth: HttpRequestMessage -> unit) =
+        try
+            use client = new HttpClient(Timeout = TimeSpan.FromSeconds 15.0)
+            use req = new HttpRequestMessage(HttpMethod.Post, apiUrl)
+            setAuth req
+            req.Headers.Add("API-Version", "2023-10")
+            req.Content <- new StringContent(query, Encoding.UTF8, "application/json")
+            let resp = client.Send(req)
+            if resp.IsSuccessStatusCode then
+                let body = resp.Content.ReadAsStringAsync().Result
+                sprintf "[诊断 %s] ✅ HTTP %d - %s" label (int resp.StatusCode) (if body.Length > 200 then body.Substring(0, 200) + "..." else body)
+            else
+                let errBody = resp.Content.ReadAsStringAsync().Result
+                sprintf "[诊断 %s] ❌ HTTP %d - %s" label (int resp.StatusCode) errBody
+        with ex ->
+            sprintf "[诊断 %s] ❌ 异常: %s" label ex.Message
+    
+    output "========== Monday API 连接诊断 =========="
+    output (sprintf "API Key 前缀: %s..." (if (apikey : string).Length > 20 then apikey.Substring(0, 20) else apikey))
+    
+    // 测试 1: Bearer 前缀（推荐格式）
+    let r1 = tryAuth "Bearer" (fun req -> req.Headers.Authorization <- new AuthenticationHeaderValue("Bearer", apikey))
+    output r1
+    
+    // 测试 2: 无前缀直接传（旧代码格式）
+    let r2 = tryAuth "RAW" (fun req -> req.Headers.TryAddWithoutValidation("Authorization", apikey) |> ignore)
+    output r2
+    
+    output "========== 诊断完成 =========="

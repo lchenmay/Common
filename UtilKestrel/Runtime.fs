@@ -52,6 +52,6 @@ let empty__Runtime<'User,'SessionData,'HostData,'RuntimeData>
         langs = [| en |]
         users = createModDictInt64 4
         sessions = createModDictStr 4
-        output = output
+        output = sc.output
         projectCode = projectCode }
 

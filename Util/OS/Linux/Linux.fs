@@ -137,23 +137,23 @@ let ensureDirectory output credential targetDir =
     
     // 检查目录是否存在 - 使用 $HOME 代替 ~（~ 在 SSH 双引号内不会展开）
     let checkCmd = $"if [ -d $HOME/{targetDir} ]; then echo 'EXISTS'; else echo 'NOT_EXISTS'; fi"
-    let checkResult = bash output credential checkCmd |> fun s -> s.Trim()
+    let checkResult = bashWithRetry output credential checkCmd 5000 5
     
     if checkResult = "NOT_EXISTS" then
         // 目录不存在，创建
         $"创建目录 ~/{targetDir}..." |> cyan |> output
         let mkdirCmd = $"mkdir -p $HOME/{targetDir}"
-        bash output credential mkdirCmd |> ignore
+        bashWithRetry output credential mkdirCmd 5000 5 |> ignore
         
         // 验证创建是否成功
         let verifyCmd = $"if [ -d $HOME/{targetDir} ]; then echo 'CREATED'; else echo 'FAILED'; fi"
-        let verifyResult = bash output credential verifyCmd |> fun s -> s.Trim()
+        let verifyResult = bashWithRetry output credential verifyCmd 5000 5
         
         if verifyResult = "CREATED" then
             $"✓ 目录 ~/{targetDir} 创建成功" |> green |> output
             // 设置权限
             let chmodCmd = $"chmod -R 755 $HOME/{targetDir}"
-            bash output credential chmodCmd |> ignore
+            bashWithRetry output credential chmodCmd 5000 5 |> ignore
             "✓ 权限已设置为 755" |> green |> output
             true
         else
@@ -164,7 +164,7 @@ let ensureDirectory output credential targetDir =
         
         // 检查权限
         let permCmd = $"if [ -w $HOME/{targetDir} ] && [ -r $HOME/{targetDir} ] && [ -x $HOME/{targetDir} ]; then echo 'PERM_OK'; else echo 'PERM_BAD'; fi"
-        let permResult = bash output credential permCmd |> fun s -> s.Trim()
+        let permResult = bashWithRetry output credential permCmd 5000 5
         
         if String.IsNullOrEmpty(permResult) then
             // 命令超时或失败，跳过权限检查（避免不必要的 chmod）
@@ -176,7 +176,7 @@ let ensureDirectory output credential targetDir =
         else
             "⚠ 权限不正确，修复中..." |> yellow |> output
             let fixPermCmd = $"chmod -R 755 $HOME/{targetDir}"
-            bash output credential fixPermCmd |> ignore
+            bashWithRetry output credential fixPermCmd 5000 5 |> ignore
             "✓ 权限已修复为 755" |> green |> output
             true
     else

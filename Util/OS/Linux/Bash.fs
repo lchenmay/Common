@@ -154,6 +154,19 @@ let bashWithTimeout output credential (cmd: string) (timeoutMs: int) : string =
     
     execWithTimeout output "" "ssh" args timeoutMs
 
+/// SSH 远程执行 — 短超时+自动重试，适合轻量级命令（目录检查、mkdir、rm 等）
+/// timeoutMs: 单次超时（毫秒），maxRetries: 超时后最多重试次数
+let bashWithRetry output credential cmd (timeoutMs: int) (maxRetries: int) : string =
+    let mutable result = ""
+    let mutable attempt = 0
+    while attempt <= maxRetries && String.IsNullOrWhiteSpace result do
+        if attempt > 0 then
+            System.Threading.Thread.Sleep(1000)
+            $"重试 ({attempt}/{maxRetries})..." |> yellow |> output
+        result <- bashWithTimeout output credential cmd timeoutMs |> fun s -> s.Trim()
+        attempt <- attempt + 1
+    result
+
 /// SSH 远程执行（默认120秒超时，适应慢速 GitHub 连接和大文件操作）
 let bash output credential cmd : string =
     bashWithTimeout output credential cmd 120000

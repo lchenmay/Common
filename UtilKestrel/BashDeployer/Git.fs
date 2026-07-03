@@ -46,8 +46,10 @@ let setupRemoteGitSshKey output credential localDiskPath =
         // 1. scp 密钥到远程
         "  1. 复制密钥到远程..." |> cyan |> output
         let scpCmd =
-            $"scp {privKeyArg} {portArg} -o StrictHostKeyChecking=no " +
-            $"\"{localPriv}\" \"{localPub}\" {target}:~/.ssh/"
+            let args = [ privKeyArg; portArg; "-o StrictHostKeyChecking=no" ]
+                       |> List.filter (fun s -> not (String.IsNullOrWhiteSpace s))
+                       |> String.concat " "
+            $"{args} \"{localPriv}\" \"{localPub}\" {target}:~/.ssh/"
         execWithTimeout output "" "scp" scpCmd 30000 |> ignore
 
         // 2. 设权限
@@ -273,10 +275,32 @@ let pushSourceViaScp output code credential disk isPrimary =
 // =================== 并行 Git Pull ===================
 
 /// 并行 git pull 三个仓库（智能跳过：远程无新提交则跳过）
-/// 如果目录不是 git 仓库，先 clone
-let parallelGitPull output credential (key__dir: Dictionary<string,string>) code (isScpPush: bool) =
+/// 如果目录不是 git 仓库，先 clone；clone 失败时 fallback 到 scp 从本地推送
+let parallelGitPull output credential (key__dir: Dictionary<string,string>) code (isScpPush: bool) disk =
     "\n--- 并行 git pull ---" |> cyan |> output
     let deployStampDir = "~/.deploy-stamps"
+    
+    /// clone 失败时，通过 scp 从本地直推源码到远程（fallback）
+    let scpFallback (name: string) (dir: string) =
+        $"\n⚠ [{name}] git clone 失败，改用 scp 从本地直推源码..." |> orange |> output
+        let localPath = $"{disk}Dev/{name}".Replace('\\', '/')
+        let privKeyArg = getSshPrivateKeyArg()
+        let porto, user, server = credential
+        let portArg = match porto with Some p -> $"-P {p}" | None -> ""
+        let target = $"{user}@{server}"
+        let remotePath = $"~/{dir}"
+        let scpArgs =
+            let args = [ privKeyArg; portArg; "-r"; "-o StrictHostKeyChecking=no" ]
+                       |> List.filter (fun s -> not (String.IsNullOrWhiteSpace s))
+                       |> String.concat " "
+            $"{args} \"{localPath}/*\" {target}:{remotePath}/"
+        $"  scp {localPath}\\* -> {server}:{remotePath}/" |> cyan |> output
+        let result = execWithTimeout output "" "scp" scpArgs 600000  // 10分钟超时
+        if result.Contains("fatal") || result.Contains("Error") || result.Contains("No such file") then
+            $"❌ [{name}] scp fallback 也失败了: {result}" |> red |> output
+        else
+            $"✓ [{name}] scp 推送完成" |> green |> output
+            if not (String.IsNullOrWhiteSpace result) then result |> output
     
     let pullJob (name: string) (dir: string) =
         async {
@@ -310,6 +334,7 @@ let parallelGitPull output credential (key__dir: Dictionary<string,string>) code
                     
                     if cloneResult.Contains("fatal") || cloneResult.Contains("error") then
                         $"❌ [{name}] git clone 失败: {cloneResult}" |> red |> output
+                        scpFallback name dir
                     else
                         $"✓ [{name}] git clone 完成" |> green |> output
                 else
@@ -352,7 +377,7 @@ fi"""
                         
                         if cloneResult.Contains("fatal") || cloneResult.Contains("error") then
                             $"❌ [{name}] git clone 失败: {cloneResult}" |> red |> output
-                            $"[{name}] 跳过 git pull" |> yellow |> output
+                            scpFallback name dir
                         else
                             $"✓ [{name}] git clone 完成" |> green |> output
         }

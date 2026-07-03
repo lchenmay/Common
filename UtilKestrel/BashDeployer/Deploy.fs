@@ -116,7 +116,8 @@ let private exeDeployCodeV2
     credential
     code
     (logPath: string option)
-    (isScpPush: bool) =
+    (isScpPush: bool)
+    disk =
 
     let porto,user,server,target,portArg = credentialExpand credential
     let devRoot = "Dev"
@@ -160,7 +161,7 @@ let private exeDeployCodeV2
         
         // === Phase 2: 并行 git pull ===
         "2. 并行更新仓库..." |> cyan |> output
-        parallelGitPull output credential key__dir code isScpPush
+        parallelGitPull output credential key__dir code isScpPush disk
         writeDeployProgress output credential code "phase3_pulled" "" "代码已拉取到远程" "" "" ""
         
         // === Phase 3: 环境检查 ===
@@ -374,7 +375,7 @@ let routine
             $"  请检查 SSH 连接、服务器磁盘空间、或手动执行：`scp -r C:\\Dev\\{code} root@5.78.201.21:~/Dev/`" |> yellow |> output
             writeDeployProgress output credential code "phase3_failed" startedAt "源码推送失败，中止部署" localGitHash "" ""
         else
-            exeDeployCodeV2 output credential code deployLogPath isScpPush
+            exeDeployCodeV2 output credential code deployLogPath isScpPush host.disk
             writeDeployProgress output credential code "phase4_verifying" startedAt "部署后验证..." localGitHash "" ""
         
         // === Phase 4: 部署后检查 + 清理 ===

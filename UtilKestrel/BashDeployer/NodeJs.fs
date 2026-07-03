@@ -104,7 +104,7 @@ let ensureBunInstalled output credential =
     let checkBunCmd = "if [ -f /root/.bun/bin/bun ] && [ -x /root/.bun/bin/bun ]; then echo 'INSTALLED'; else echo 'NOT_INSTALLED'; fi"
     let bunStatus = bash output credential checkBunCmd
     
-    if bunStatus.Contains("INSTALLED") then
+    if bunStatus.Trim() = "INSTALLED" then
         // 显示版本
         let versionCmd = "/root/.bun/bin/bun --version 2>/dev/null || echo 'unknown'"
         let version = bash output credential versionCmd
@@ -129,7 +129,7 @@ let ensureBunInstalled output credential =
         let verifyCmd = "if [ -f /root/.bun/bin/bun ] && [ -x /root/.bun/bin/bun ]; then echo 'INSTALLED'; else echo 'NOT_INSTALLED'; fi"
         let verifyResult = bash output credential verifyCmd
         
-        if verifyResult.Contains("INSTALLED") then
+        if verifyResult.Trim() = "INSTALLED" then
             let versionCmd = "/root/.bun/bin/bun --version 2>/dev/null || echo 'unknown'"
             let version = bash output credential versionCmd
             $"✓ Bun 安装成功: {version.Trim()}" |> green |> output
@@ -144,7 +144,7 @@ let ensureBunInstalled output credential =
             // 再次验证
             let retryVerifyCmd = "if command -v bun > /dev/null 2>&1; then echo 'INSTALLED'; else echo 'NOT_INSTALLED'; fi"
             let retryResult = bash output credential retryVerifyCmd
-            if retryResult.Contains("INSTALLED") then
+            if retryResult.Trim() = "INSTALLED" then
                 "✓ Bun 通过 npm 安装成功" |> green |> output
                 true
             else

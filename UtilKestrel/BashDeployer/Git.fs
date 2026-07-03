@@ -14,29 +14,34 @@ open UtilKestrel.BashDeployer.Common
 
 // =================== Git SSH ===================
 
+/// SSH 密钥文件名（统一存放于 {disk}Dev/ 目录下）
+let sshKeyFile = "id_git"
+
 /// 检查本地 GitHub SSH 密钥是否存在
-/// localDiskPath: "C:/Dev/" — 检查该目录下的 id_git 和 id_git.pub
+/// disk: "C:/" — 将在 {disk}Dev/ 下查找 {sshKeyFile} 和 {sshKeyFile}.pub
 /// 不存在时提示用户生成并上传 GitHub，等待确认后继续
-let checkLocalGitSshKey output localDiskPath =
-    let privKey = localDiskPath + "id_git"
-    let pubKey  = localDiskPath + "id_git.pub"
+let checkLocalGitSshKey output disk =
+    let keyPath = disk + "Dev/" + sshKeyFile
+    let privKey = keyPath
+    let pubKey  = keyPath + ".pub"
 
     if File.Exists pubKey && File.Exists privKey then
         $"✓ 本地 GitHub SSH 密钥已就绪: {pubKey}" |> green |> output
     else
         "⚠ 本地 GitHub SSH 密钥不存在" |> yellow |> output
-        $"  生成方式: ssh-keygen -t ed25519 -f {localDiskPath}id_git -C git -N ''" |> orange |> output
-        $"  然后将 {localDiskPath}id_git.pub 添加到 https://github.com/settings/keys" |> yellow |> output
+        $"  生成方式: ssh-keygen -t ed25519 -f {keyPath} -C git -N ''" |> orange |> output
+        $"  然后将 {pubKey} 添加到 https://github.com/settings/keys" |> yellow |> output
         "  完成后按任意键继续..." |> yellow |> output
         Console.ReadKey() |> ignore
         "\n" |> output
 
 /// 把本地 GitHub SSH 密钥部署到远程服务器
-/// localDiskPath: "C:/Dev/" — 读取 id_git / id_git.pub
-/// 自动完成: scp → chmod 600 → 写 ~/.ssh/config → 验证 ssh -T git@github.com
-let setupRemoteGitSshKey output credential localDiskPath =
-    let localPriv = localDiskPath + "id_git"
-    let localPub  = localDiskPath + "id_git.pub"
+/// disk: "C:/" — 从 {disk}Dev/ 读取 {sshKeyFile} / {sshKeyFile}.pub
+/// 自动完成: scp → chmod 600 → 覆写 ~/.ssh/config → 验证 ssh -T git@github.com
+let setupRemoteGitSshKey output credential disk =
+    let keyPath = disk + "Dev/" + sshKeyFile
+    let localPriv = keyPath
+    let localPub  = keyPath + ".pub"
 
     if not (File.Exists localPriv && File.Exists localPub) then
         "⚠ 本地 GitHub SSH 密钥不存在，跳过远程部署" |> yellow |> output
@@ -70,17 +75,18 @@ let setupRemoteGitSshKey output credential localDiskPath =
 
         // 2. 设权限
         "  2. 设置权限..." |> cyan |> output
-        bash output credential "chmod 600 ~/.ssh/id_git ~/.ssh/id_git.pub" |> ignore
+        bash output credential $"chmod 600 ~/.ssh/{sshKeyFile} ~/.ssh/{sshKeyFile}.pub" |> ignore
 
-        // 3. 写 SSH config（幂等）
-        "  3. 写入 SSH config..." |> cyan |> output
+        // 3. 覆写 SSH config（始终删除旧块后追加新块，防止 IdentityFile 过期残留）
+        "  3. 覆写 SSH config（防过期残留）..." |> cyan |> output
         bash 
           output 
           credential 
-          """grep -q 'Host github.com' ~/.ssh/config || cat >> ~/.ssh/config << 'EOF'
+          $"""sed -i '/^Host github\.com$/,/^\$/d' ~/.ssh/config 2>/dev/null
+cat >> ~/.ssh/config << 'EOF'
 Host github.com
     User git
-    IdentityFile ~/.ssh/id_git
+    IdentityFile ~/.ssh/{sshKeyFile}
     IdentitiesOnly yes
     StrictHostKeyChecking accept-new
 EOF""" 
@@ -90,8 +96,12 @@ EOF"""
         "  4. 验证 GitHub SSH 连接..." |> cyan |> output
         let testResult = bash output credential "ssh -T -o StrictHostKeyChecking=accept-new git@github.com 2>&1"
         // GitHub SSH 认证成功但无 Shell 时返回 ExitCode 1，属于正常行为
-        if testResult.Contains("successfully authenticated") || String.IsNullOrWhiteSpace testResult then
+        // 注意：GitHub 的 "successfully authenticated" 消息输出在 stderr，2>&1 合并后进入返回值
+        if testResult.Contains("successfully authenticated") then
             "  ✓ 远程 GitHub SSH 连接正常" |> green |> output
+        elif testResult.Contains("Permission denied") || testResult.Contains("publickey") then
+            $"  ❌ GitHub SSH 认证失败: 权限被拒绝或密钥无效" |> red |> output
+            $"  请确认 {sshKeyFile}.pub 已添加到 https://github.com/settings/keys" |> yellow |> output
         else
             $"  ⚠ GitHub SSH 验证返回: {testResult.Trim()}" |> yellow |> output
 
@@ -385,8 +395,13 @@ let parallelGitPull output credential (key__dir: Dictionary<string,string>) code
                     $"[{name}] 执行: git clone {repoUrl} ~/{dir}" |> cyan |> output
                     let cloneResult = bashWithTimeout output credential cloneCmd 120000  // 2分钟超时
                     
-                    if cloneResult.Contains("fatal") || cloneResult.Contains("error") then
-                        $"❌ [{name}] git clone 失败: {cloneResult}" |> red |> output
+                    let cloneFailed = 
+                        cloneResult.Contains("fatal") || cloneResult.Contains("error") || 
+                        cloneResult.Contains("Permission denied") || 
+                        String.IsNullOrWhiteSpace cloneResult
+                    if cloneFailed then
+                        let reason = if String.IsNullOrWhiteSpace cloneResult then "超时无响应" else cloneResult
+                        $"❌ [{name}] git clone 失败: {reason}" |> red |> output
                         scpFallback name dir
                     else
                         $"✓ [{name}] git clone 完成" |> green |> output
@@ -428,8 +443,13 @@ fi"""
                         $"[{name}] 执行: git clone {repoUrl} ~/{dir}" |> cyan |> output
                         let cloneResult = bashWithTimeout output credential cloneCmd 120000  // 2分钟超时
                         
-                        if cloneResult.Contains("fatal") || cloneResult.Contains("error") then
-                            $"❌ [{name}] git clone 失败: {cloneResult}" |> red |> output
+                        let cloneFailed = 
+                            cloneResult.Contains("fatal") || cloneResult.Contains("error") || 
+                            cloneResult.Contains("Permission denied") || 
+                            String.IsNullOrWhiteSpace cloneResult
+                        if cloneFailed then
+                            let reason = if String.IsNullOrWhiteSpace cloneResult then "超时无响应" else cloneResult
+                            $"❌ [{name}] git clone 失败: {reason}" |> red |> output
                             scpFallback name dir
                         else
                             $"✓ [{name}] git clone 完成" |> green |> output

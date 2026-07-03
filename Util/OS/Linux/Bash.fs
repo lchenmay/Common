@@ -207,11 +207,18 @@ let execWithTimeout output setDir (fileName: string) (args: string) (timeoutMs: 
     if not (proc.WaitForExit(timeoutMs)) then
         proc.Kill()
         $"命令执行超时（{timeoutMs}ms）" |> red |> output
-        ""
+        // 即使超时也返回已捕获的输出（命令可能已输出错误信息后才挂起）
+        let combined = outputBuilder.ToString() + errorBuilder.ToString()
+        if not (String.IsNullOrWhiteSpace combined) then combined
+        else ""
 
     elif proc.ExitCode <> 0 then
         $"ExitCode {proc.ExitCode}" |> red |> output
-        errorBuilder.ToString()
+        // 合并 stdout 和 stderr：当命令使用了 2>&1 时 stderr 重定向到了 stdout，
+        // errorBuilder 可能为空，此时 stdout 中包含了实际的错误信息
+        let combined = outputBuilder.ToString() + errorBuilder.ToString()
+        if not (String.IsNullOrWhiteSpace combined) then combined
+        else $"ExitCode {proc.ExitCode}"  // 兜底：确保调用方不会收到空字符串
 
     else
         outputBuilder.ToString()

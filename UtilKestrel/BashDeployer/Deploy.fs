@@ -221,6 +221,24 @@ let private exeDeployCodeV2
         // === Phase 2: 并行 git pull ===
         "2. 并行更新仓库..." |> cyan |> output
         parallelGitPull output credential key__dir code isScpPush disk
+        
+        // ── Phase 2.1: 代码目录存在性前置检查，避免克隆失败后级联失败 ──
+        "2.1 验证代码目录..." |> cyan |> output
+        let codeDir = key__dir.["code"]
+        let codeDirCheck = 
+            bashWithRetry output credential $"if [ -d ~/{codeDir} ] && [ -d ~/{codeDir}/.git ]; then echo 'OK'; elif [ -d ~/{codeDir} ]; then echo 'NO_GIT'; else echo 'NOT_EXISTS'; fi" 10000 3
+        match codeDirCheck with
+        | "OK" -> $"✓ 代码目录 ~/{codeDir} 就绪" |> green |> output
+        | "NO_GIT" -> 
+            $"❌ 代码目录 ~/{codeDir} 存在但不是 git 仓库（clone 失败），中止部署" |> red |> output
+            $"  请检查 GitHub SSH 密钥配置: {disk}Dev/{sshKeyFile}.pub 是否已添加到 https://github.com/settings/keys" |> yellow |> output
+        | _ ->
+            $"❌ 代码目录 ~/{codeDir} 不存在（clone 失败），中止部署" |> red |> output
+            $"  请检查 GitHub SSH 密钥配置: {disk}Dev/{sshKeyFile}.pub 是否已添加到 https://github.com/settings/keys" |> yellow |> output
+        
+        if codeDirCheck <> "OK" then
+            failwith $"代码目录 ~/{codeDir} 不存在或无效，无法继续部署"
+        
         writeDeployProgress output credential code "phase3_pulled" "" "代码已拉取到远程" "" "" ""
         
         // === Phase 3: 环境检查 ===

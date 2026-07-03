@@ -187,15 +187,23 @@ let ensureDirectory output credential targetDir =
 
 /// 从根目录逐级检查并创建绝对路径（用于 fsRoot 等独立运行时目录，不依赖 $HOME）
 /// 例如 "/root/FsRoot/WYI" → 逐级检查 /root → /root/FsRoot → /root/FsRoot/WYI
+/// 自动处理 Windows 风格路径: "C:\FsRoot\WYI" → "/FsRoot/WYI"
 let ensureAbsolutePath output credential (absPath: string) =
-    $"\n=== 逐级检查绝对路径: {absPath} ===" |> cyan |> output
+    // 规范化路径：反斜杠 → 正斜杠，去除 Windows 盘符（如 "C:"）
+    let cleanPath =
+        let s = absPath.Replace('\\', '/').TrimEnd('/')
+        // 去除 Windows 盘符（如 "C:"、"D:"），只匹配单个字母后跟冒号
+        let s2 = if s.Length >= 2 && s[1] = ':' && System.Char.IsLetter(s[0]) then s.Substring(2) else s
+        if s2.StartsWith('/') then s2 else "/" + s2
     
-    if System.String.IsNullOrWhiteSpace(absPath) then
+    $"\n=== 逐级检查绝对路径: {absPath} → {cleanPath} ===" |> cyan |> output
+    
+    if System.String.IsNullOrWhiteSpace(cleanPath) then
         "⚠ 路径为空，跳过" |> yellow |> output
         false
     else
         // 拆分路径: "/root/FsRoot/WYI" → ["root"; "FsRoot"; "WYI"]
-        let parts = absPath.Split('/') |> Array.filter (fun s -> s.Length > 0)
+        let parts = cleanPath.Split('/') |> Array.filter (fun s -> s.Length > 0)
         
         let mutable current = ""
         let mutable allOk = true
@@ -228,9 +236,9 @@ let ensureAbsolutePath output credential (absPath: string) =
                 $"  ⚠ {current} 检查异常: {checkResult}" |> yellow |> output
         
         if allOk then
-            $"✓ 绝对路径就绪: {absPath}" |> green |> output
+            $"✓ 绝对路径就绪: {cleanPath}" |> green |> output
         else
-            $"⚠ 绝对路径创建有失败: {absPath}" |> yellow |> output
+            $"⚠ 绝对路径创建有失败: {cleanPath}" |> yellow |> output
         
         allOk
 
@@ -297,16 +305,30 @@ let checkDotNetServiceRunning
 
     let svcName = getServiceName code
     // 用 systemctl is-active 精确判断
+    // 返回值含义: active=running, inactive=未启动/已停止, failed=启动后崩溃, activating=启动中
     let checkCmd = $"systemctl is-active {svcName} 2>/dev/null || echo 'inactive'"
     let result = bash output credential checkCmd
+    let state = result.Trim()
     
-    $"  [DEBUG] systemctl is-active {svcName}: {result.Trim()}" |> cyan |> output
+    $"  [DEBUG] systemctl is-active {svcName}: {state}" |> cyan |> output
     
-    if result.Trim() = "active" then
+    if state = "active" then
         $"✓ {code} systemd 服务正在运行" |> green |> output
         true
+    elif state = "failed" then
+        $"❌ {code} systemd 服务处于 failed 状态（曾启动但异常退出/被杀死）" |> red |> output
+        // 显示失败原因
+        $"  [DEBUG] systemctl status {svcName}:" |> cyan |> output
+        bash output credential $"systemctl status {svcName} 2>/dev/null || echo '(无状态信息)'" |> output
+        $"  [DEBUG] 检查 build 产物:" |> cyan |> output
+        let checkBuildCmd = $"ls -la $HOME/Dev/{code}/Server/bin/Release/net10.0/ 2>/dev/null | head -20 || echo '(build 输出目录不存在)'"
+        bash output credential checkBuildCmd |> output
+        false
+    elif state = "activating" || state = "deactivating" then
+        $"⚠ {code} systemd 服务处于 {state} 状态（正在过渡中）" |> yellow |> output
+        false
     else
-        $"⚠ {code} systemd 服务未运行" |> yellow |> output
+        $"⚠ {code} systemd 服务未运行 (state: {state})" |> yellow |> output
         // 额外调试
         $"  [DEBUG] systemctl status {svcName}:" |> cyan |> output
         bash output credential $"systemctl status {svcName} 2>/dev/null || echo '(无状态信息)'" |> output

@@ -17,6 +17,51 @@ open UtilKestrel.BashDeployer.PgSql
 open UtilKestrel.BashDeployer.Process
 open UtilKestrel.BashDeployer.File
 
+// ==================== 服务健康探活 ====================
+
+/// HTTP 探活：重试 curl 直到服务真正就绪或超时（超时 15s，间隔 2s）
+/// 返回 (isReady, httpStatusCode)
+let private waitForHttpReady output credential port maxSeconds =
+    let rec loop remaining =
+        if remaining <= 0 then
+            $"  ⚠ HTTP 探活超时（{maxSeconds}s），服务可能尚未完全就绪" |> yellow |> output
+            (false, "timeout")
+        else
+            let healthCmd = 
+                "curl -sf -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 http://localhost:" + port + "/api/admin/monitorVersion 2>/dev/null || echo '000'"
+            let code = (bash output credential healthCmd).Trim()
+            if code = "200" then
+                $"  ✓ HTTP 探活通过，服务已就绪 (localhost:{port}/api/admin/monitorVersion → {code})" |> green |> output
+                (true, code)
+            else
+                $"  ⏳ 等待服务就绪... HTTP {code}（{remaining}s 后超时）" |> cyan |> output
+                System.Threading.Thread.Sleep(2000)
+                loop (remaining - 2)
+    loop maxSeconds
+
+/// 检查 journalctl 近期是否有崩溃/重启循环迹象
+let private checkCrashLoop output credential (code: string) =
+    let svcName = code.ToLower()
+    let crashCmd = 
+        $"journalctl -u {svcName} --since '3 minutes ago' --no-pager -q 2>/dev/null | grep -ci 'signal\\|crash\\|killed\\|oom\\|fatal\\|start request repeated' || echo '0'"
+    let count = 
+        try
+            let result = (bash output credential crashCmd).Trim()
+            System.Int32.Parse(result)
+        with _ -> 0
+    if count > 3 then
+        $"⚠ journalctl 检测到 {svcName} 近期 {count} 条异常日志，可能崩溃循环" |> yellow |> output
+        let tailCmd = $"journalctl -u {svcName} --since '3 minutes ago' --no-pager -q -n 20 2>/dev/null"
+        $"  最近 20 行日志:" |> cyan |> output
+        bash output credential tailCmd |> output
+
+/// 获取服务 HTTP 端口
+let private servicePort code =
+    match code with
+    | "WYI" -> "9000"
+    | "Aiarwa" -> "9020"
+    | _ -> "5000"
+
 // ==================== 并行依赖安装 ====================
 
 /// 并行安装前后端依赖（智能跳过：lock 文件未变则跳过）
@@ -28,57 +73,75 @@ let private parallelDepInstall output credential (key__dir: Dictionary<string,st
     let deployStampDir = "~/.deploy-stamps"
     
     let frontendJob = async {
+        // ── 第一步：快速检查 hash（5秒超时）──
         let checkCmd = $"""mkdir -p {deployStampDir}
 FE_STAMP={deployStampDir}/bun-lock-hash
 NEW_HASH=$(cd ~/{vscodeDir} && md5sum bun.lockb 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
 OLD_HASH=$(cat $FE_STAMP 2>/dev/null || echo 'NO_STAMP')
-if [ "$NEW_HASH" = "NO_LOCK" ]; then
-    echo '[前端] 未找到 bun.lockb，强制安装'
-    if [ -f /root/.bun/bin/bun ]; then
-        cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
-    else
-        cd ~/{vscodeDir} && npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
-    fi
-    echo '[前端] 依赖安装完成'
-elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
-    echo '[前端] bun.lockb 未变化，跳过安装'
+if [[ "$NEW_HASH" = "NO_LOCK" ]]; then
+    echo 'NO_LOCK'
+elif [[ "$NEW_HASH" = "$OLD_HASH" ]]; then
+    echo 'SKIP'
 else
-    echo "[前端] bun.lockb 已变化，重新安装..."
-    echo "  旧: $OLD_HASH"
-    echo "  新: $NEW_HASH"
-    if [ -f /root/.bun/bin/bun ]; then
-        cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
-    else
-        cd ~/{vscodeDir} && npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
-    fi
-    echo "$NEW_HASH" > $FE_STAMP
-    echo '[前端] 依赖安装完成'
+    echo 'INSTALL'
 fi
 """
         do! Async.SwitchToThreadPool()
-        bashWithTimeout output credential checkCmd 180000 |> ignore
+        let action = (bashWithTimeout output credential checkCmd 5000).Trim()
+
+        // ── 第二步：按需安装（长超时，bun install 可能耗时较长）──
+        if action = "SKIP" then
+            "[前端] bun.lockb 未变化，跳过安装" |> output
+        else
+            if action = "NO_LOCK" then
+                "[前端] 未找到 bun.lockb，强制安装" |> output
+            else
+                "[前端] bun.lockb 已变化，重新安装..." |> output
+            let installCmd = $"""if [[ -f /root/.bun/bin/bun ]]; then
+    cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
+else
+    cd ~/{vscodeDir} && npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
+fi
+NEW_HASH=$(cd ~/{vscodeDir} && md5sum bun.lockb 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
+echo "$NEW_HASH" > {deployStampDir}/bun-lock-hash
+echo '[前端] 依赖安装完成'
+"""
+            do! Async.SwitchToThreadPool()
+            bashWithTimeout output credential installCmd 180000 |> ignore
     }
     
     let backendJob = async {
+        // ── 第一步：快速检查 hash（5秒超时）──
         let checkCmd = $"""mkdir -p {deployStampDir}
 BE_STAMP={deployStampDir}/dotnet-lock-hash
 NEW_HASH=$(cd ~/{serverDir} && md5sum packages.lock.json 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
 OLD_HASH=$(cat $BE_STAMP 2>/dev/null || echo 'NO_STAMP')
-if [ "$NEW_HASH" = "NO_LOCK" ]; then
-    echo '[后端] 未找到 packages.lock.json，强制 restore'
-    cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>&1 || echo '[DEPLOY-WARN] dotnet restore 失败'
-    echo '[后端] 依赖安装完成'
-elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
-    echo '[后端] packages.lock.json 未变化，跳过 restore'
+if [[ "$NEW_HASH" = "NO_LOCK" ]]; then
+    echo 'NO_LOCK'
+elif [[ "$NEW_HASH" = "$OLD_HASH" ]]; then
+    echo 'SKIP'
 else
-    echo "[后端] packages.lock.json 已变化，重新 restore..."
-    cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>&1 || echo '[DEPLOY-WARN] dotnet restore 失败'
-    echo "$NEW_HASH" > $BE_STAMP
-    echo '[后端] 依赖安装完成'
+    echo 'INSTALL'
 fi
 """
         do! Async.SwitchToThreadPool()
-        bashWithTimeout output credential checkCmd 120000 |> ignore
+        let action = (bashWithTimeout output credential checkCmd 5000).Trim()
+
+        // ── 第二步：按需 restore（长超时）──
+        if action = "SKIP" then
+            "[后端] packages.lock.json 未变化，跳过 restore" |> output
+        else
+            if action = "NO_LOCK" then
+                "[后端] 未找到 packages.lock.json，强制 restore" |> output
+            else
+                "[后端] packages.lock.json 已变化，重新 restore..." |> output
+            let installCmd = $"""cd ~/{serverDir} && dotnet restore --verbosity quiet /p:NoWarn=NU1603 2>&1 || echo '[DEPLOY-WARN] dotnet restore 失败'
+NEW_HASH=$(cd ~/{serverDir} && md5sum packages.lock.json 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
+echo "$NEW_HASH" > {deployStampDir}/dotnet-lock-hash
+echo '[后端] 依赖安装完成'
+"""
+            do! Async.SwitchToThreadPool()
+            bashWithTimeout output credential installCmd 120000 |> ignore
     }
     
     [ frontendJob; backendJob ]
@@ -189,20 +252,25 @@ let private exeDeployCodeV2
         // === Phase 7: 启动服务 ===
         writeDeployProgress output credential code "phase4_restarting" "" "重启远程服务..." "" "" ""
         "7. 启动服务..." |> cyan |> output
+        let port = servicePort code
         let serviceRunning = checkDotNetServiceRunning output credential code
         if serviceRunning then
             $"✓ {code} systemd 服务已在运行，自动重启加载新代码..." |> green |> output
             let restartCmd = $"systemctl restart {code.ToLower()}"
             let restartResult = bash output credential restartCmd
             $"  重启结果: {restartResult.Trim()}" |> output
-            System.Threading.Thread.Sleep(3000)
-            let postRestartCheck = bash output credential $"systemctl is-active {code.ToLower()}"
-            if postRestartCheck.Trim() = "active" then
-                $"✓ {code} 服务已成功重启" |> green |> output
+            // HTTP 探活确认服务真正就绪（最多 15 秒）
+            let healthy, _ = waitForHttpReady output credential port 15
+            if healthy then
+                $"✓ {code} 服务已成功重启并就绪" |> green |> output
             else
-                $"⚠ 服务重启后状态: {postRestartCheck.Trim()}" |> yellow |> output
+                let status = (bash output credential $"systemctl is-active {code.ToLower()}").Trim()
+                $"⚠ 服务状态: {status}，HTTP 探活未通过" |> yellow |> output
+                checkCrashLoop output credential code
         else
             startServiceVerbose output credential code |> ignore
+            // 首次启动也探活
+            waitForHttpReady output credential port 15 |> ignore
         
         // === Phase 8: 部署后验证 ===
         "\n========================================" |> cyan |> output
@@ -256,15 +324,16 @@ echo "[版本快照] 已保存" """
         // 尝试恢复服务：如果异常发生在 Phase 7（启动服务）之前，服务可能已经停了
         try
             $"\n⚠ 尝试恢复 {code} 服务（容错）..." |> yellow |> output
+            let port = servicePort code
             let running = checkDotNetServiceRunning output credential code
             if not running then
                 startServiceVerbose output credential code |> ignore
-                System.Threading.Thread.Sleep(3000)
-                let status = bash output credential $"systemctl is-active {code.ToLower()}"
-                if status.Trim() = "active" then
-                    $"✓ {code} 服务已恢复运行" |> green |> output
+                let healthy, _ = waitForHttpReady output credential port 15
+                if healthy then
+                    $"✓ {code} 服务已恢复运行（HTTP 探活通过）" |> green |> output
                 else
-                    $"⚠ 服务恢复失败，状态: {status.Trim()}" |> red |> output
+                    $"⚠ 服务恢复失败，HTTP 探活未通过" |> red |> output
+                    checkCrashLoop output credential code
         with ex2 ->
             $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
 
@@ -295,6 +364,25 @@ let routine
         writeDeployProgress output credential code "starting" startedAt "开始部署前期准备..." localGitHash "" ""
         
         serviceWasRunning <- false
+        
+        // === Phase 0: SSH ControlMaster socket 健康检查 ===
+        "Phase 0: SSH ControlMaster socket 健康检查..." |> cyan |> output
+        let socketCheckCmd = "echo 'SOCKET_OK'"
+        let socketCheckResult = bashWithTimeout output credential socketCheckCmd 10000
+        if socketCheckResult.Contains("SOCKET_OK") then
+            "✓ SSH socket 健康状态正常" |> green |> output
+        else
+            $"[SSH] socket 响应异常: {socketCheckResult.Trim()}" |> yellow |> output
+            "  正在清理损坏的 socket 并重建连接..." |> yellow |> output
+            let cleaned = cleanSshControlSockets output
+            if cleaned > 0 then
+                $"  已清理 {cleaned} 个损坏 socket，重试验证..." |> yellow |> output
+                System.Threading.Thread.Sleep(500)
+                let retryResult = bashWithTimeout output credential socketCheckCmd 10000
+                if retryResult.Contains("SOCKET_OK") then
+                    "✓ SSH socket 已修复，连接正常" |> green |> output
+                else
+                    $"[SSH] socket 修复失败，后续远程命令可能出错: {retryResult.Trim()}" |> red |> output
         
         // === Phase 1: 本地准备（SSH 检查 + 源码推送） ===
         
@@ -387,22 +475,28 @@ let routine
         // 4.2 最终服务健康检查（最后防线）
         "4.2 最终服务健康检查..." |> cyan |> output
         try
+            let port = servicePort code
             let finalStatus = bash output credential $"systemctl is-active {code.ToLower()}"
             $"  服务状态: {finalStatus.Trim()}" |> output
             if finalStatus.Trim() <> "active" then
                 $"⚠ 服务未运行（状态: {finalStatus.Trim()}），尝试启动..." |> yellow |> output
                 if serviceWasRunning then
                     startServiceVerbose output credential code |> ignore
-                    System.Threading.Thread.Sleep(3000)
-                    let retryStatus = bash output credential $"systemctl is-active {code.ToLower()}"
-                    if retryStatus.Trim() = "active" then
-                        $"✓ {code} 服务已恢复运行" |> green |> output
+                    let healthy, _ = waitForHttpReady output credential port 15
+                    if healthy then
+                        $"✓ {code} 服务已恢复运行（HTTP 探活通过）" |> green |> output
                     else
-                        $"⚠ 服务恢复失败，状态: {retryStatus.Trim()}" |> red |> output
+                        $"⚠ 服务恢复失败：HTTP 探活未通过" |> red |> output
+                        checkCrashLoop output credential code
                 else
                     $"  服务在部署前未运行，跳过启动" |> cyan |> output
             else
-                $"✓ {code} 服务运行正常" |> green |> output
+                // systemd active 但也要 HTTP 探活确认
+                let healthy, httpCode = waitForHttpReady output credential port 10
+                if healthy then
+                    $"✓ {code} 服务运行正常（HTTP 探活通过）" |> green |> output
+                else
+                    $"⚠ {code} systemd 运行中但 HTTP 探活未通过（{httpCode}），可能仍在启动中" |> yellow |> output
         with exCheck ->
             $"[WARN] 最终健康检查异常: {exCheck.Message}" |> yellow |> output
         
@@ -418,15 +512,16 @@ let routine
         if serviceWasRunning then
             $"\n⚠ 尝试恢复 {code} 服务..." |> yellow |> output
             try
+                let port = servicePort code
                 let startCmd = $"systemctl start {code.ToLower()}"
                 let startResult = bash output credential startCmd
                 $"  启动结果: {startResult.Trim()}" |> output
-                System.Threading.Thread.Sleep(3000)
-                let postStartCheck = bash output credential $"systemctl is-active {code.ToLower()}"
-                if postStartCheck.Trim() = "active" then
-                    $"✓ {code} 服务已恢复运行" |> green |> output
+                let healthy, _ = waitForHttpReady output credential port 15
+                if healthy then
+                    $"✓ {code} 服务已恢复运行（HTTP 探活通过）" |> green |> output
                 else
-                    $"⚠ 服务恢复失败，状态: {postStartCheck.Trim()}" |> red |> output
+                    $"⚠ 服务恢复失败，HTTP 探活未通过" |> red |> output
+                    checkCrashLoop output credential code
             with ex2 ->
                 $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
         

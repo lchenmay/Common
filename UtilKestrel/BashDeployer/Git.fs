@@ -4,6 +4,7 @@ open System
 open System.Diagnostics
 open System.IO
 open System.Collections.Generic
+
 open Util.Linux.Linux
 open Util.Linux.Bash
 open Util.Linux.Git
@@ -44,14 +45,28 @@ let setupRemoteGitSshKey output credential localDiskPath =
         let privKeyArg = getSshPrivateKeyArg()
         let controlOpts = getSshControlOpts()
 
-        // 1. scp 密钥到远程
+        // 1. scp 密钥到远程（带 socket 损坏自动修复）
         "  1. 复制密钥到远程..." |> cyan |> output
-        let scpCmd =
-            let args = [ privKeyArg; portArg; "-o StrictHostKeyChecking=no"; controlOpts ]
-                       |> List.filter (fun s -> not (String.IsNullOrWhiteSpace s))
-                       |> String.concat " "
-            $"{args} \"{localPriv}\" \"{localPub}\" {target}:~/.ssh/"
-        execWithTimeout output "" "scp" scpCmd 30000 |> ignore
+        let buildScpArgs (includeControl: bool) =
+            let opts = if includeControl then controlOpts else ""
+            [ privKeyArg; portArg; "-o StrictHostKeyChecking=no"; opts ]
+            |> List.filter (fun s -> not (String.IsNullOrWhiteSpace s))
+            |> String.concat " "
+        let scpArgs = buildScpArgs true
+        let scpCmd = $"{scpArgs} \"{localPriv}\" \"{localPub}\" {target}:~/.ssh/"
+        let scpResult = execWithTimeout output "" "scp" scpCmd 30000
+
+        // ── 自动修复：检测 ControlMaster socket 损坏则清理并重试 ──
+        let scpResult =
+            if isSocketError scpResult then
+                "[SCP] 检测到 ControlMaster socket 损坏，自动清理并重试..." |> yellow |> output
+                cleanSshControlSockets output |> ignore
+                System.Threading.Thread.Sleep(500)
+                let retryArgs = buildScpArgs false
+                let retryCmd = $"{retryArgs} \"{localPriv}\" \"{localPub}\" {target}:~/.ssh/"
+                execWithTimeout output "" "scp" retryCmd 30000
+            else scpResult
+        scpResult |> ignore
 
         // 2. 设权限
         "  2. 设置权限..." |> cyan |> output
@@ -74,7 +89,8 @@ EOF"""
         // 4. 验证
         "  4. 验证 GitHub SSH 连接..." |> cyan |> output
         let testResult = bash output credential "ssh -T -o StrictHostKeyChecking=accept-new git@github.com 2>&1"
-        if testResult.Contains("successfully authenticated") then
+        // GitHub SSH 认证成功但无 Shell 时返回 ExitCode 1，属于正常行为
+        if testResult.Contains("successfully authenticated") || String.IsNullOrWhiteSpace testResult then
             "  ✓ 远程 GitHub SSH 连接正常" |> green |> output
         else
             $"  ⚠ GitHub SSH 验证返回: {testResult.Trim()}" |> yellow |> output
@@ -256,8 +272,25 @@ let pushSourceViaScp output code credential disk isPrimary =
             $"  scp {localPath}\\* -> {server}:{remotePath}/" |> cyan |> output
             let result = execWithTimeout output "" "scp" scpArgs 600000  // 10分钟超时（大文件）
             
+            // ── 自动修复：检测 ControlMaster socket 损坏则清理并重试 ──
+            let result =
+                if isSocketError result then
+                    $"[SCP] 检测到 ControlMaster socket 损坏，自动清理并重试..." |> yellow |> output
+                    cleanSshControlSockets output |> ignore
+                    System.Threading.Thread.Sleep(500)
+                    // 不带 ControlMaster 重试
+                    let retryArgs =
+                        let argsNoControl = [ privateKeyArg; portArg; "-r"; "-o StrictHostKeyChecking=no" ]
+                                            |> List.filter (fun s -> not (String.IsNullOrWhiteSpace s))
+                                            |> String.concat " "
+                        $"{argsNoControl} \"{normalizedPath}/*\" {user}@{server}:{remotePath}/"
+                    execWithTimeout output "" "scp" retryArgs 600000
+                else result
+            
             let hasError = result.Contains("fatal") || result.Contains("Error") || 
-                           result.Contains("Permission denied") || result.Contains("No such file")
+                           result.Contains("Permission denied") || result.Contains("No such file") ||
+                           result.Contains("Connection closed") || result.Contains("getsockname failed") ||
+                           result.Contains("Unknown error") || result.Contains("connection unexpectedly")
             if hasError then
                 $"❌ scp 推送 {name} 失败" |> red |> output
                 result |> output
@@ -299,7 +332,24 @@ let parallelGitPull output credential (key__dir: Dictionary<string,string>) code
             $"{args} \"{localPath}/*\" {target}:{remotePath}/"
         $"  scp {localPath}\\* -> {server}:{remotePath}/" |> cyan |> output
         let result = execWithTimeout output "" "scp" scpArgs 600000  // 10分钟超时
-        if result.Contains("fatal") || result.Contains("Error") || result.Contains("No such file") then
+        
+        // ── 自动修复：检测 ControlMaster socket 损坏则清理并重试 ──
+        let result =
+            if isSocketError result then
+                $"[SCP] 检测到 ControlMaster socket 损坏，自动清理并重试..." |> yellow |> output
+                cleanSshControlSockets output |> ignore
+                System.Threading.Thread.Sleep(500)
+                let retryArgs =
+                    let argsNoControl = [ privKeyArg; portArg; "-r"; "-o StrictHostKeyChecking=no" ]
+                                        |> List.filter (fun s -> not (String.IsNullOrWhiteSpace s))
+                                        |> String.concat " "
+                    $"{argsNoControl} \"{localPath}/*\" {target}:{remotePath}/"
+                execWithTimeout output "" "scp" retryArgs 600000
+            else result
+        
+        if result.Contains("fatal") || result.Contains("Error") || result.Contains("No such file") ||
+           result.Contains("Connection closed") || result.Contains("getsockname failed") ||
+           result.Contains("Unknown error") || result.Contains("connection unexpectedly") then
             $"❌ [{name}] scp fallback 也失败了: {result}" |> red |> output
         else
             $"✓ [{name}] scp 推送完成" |> green |> output
@@ -346,9 +396,9 @@ let parallelGitPull output credential (key__dir: Dictionary<string,string>) code
 STAMP_FILE={deployStampDir}/git-hash-{name}
 OLD_HASH=$(cat $STAMP_FILE 2>/dev/null || echo 'NO_STAMP')
 NEW_HASH=$(cd ~/{dir} && git ls-remote origin HEAD 2>/dev/null | cut -f1 | cut -c1-8 || echo 'FETCH_FAIL')
-if [ -z "$NEW_HASH" ] || [ "$NEW_HASH" = "FETCH_FAIL" ]; then
+if [[ -z "$NEW_HASH" ]] || [[ "$NEW_HASH" = "FETCH_FAIL" ]]; then
     echo 'FETCH_FAIL'
-elif [ "$NEW_HASH" = "$OLD_HASH" ]; then
+elif [[ "$NEW_HASH" = "$OLD_HASH" ]]; then
     echo "SKIP:$NEW_HASH"
 else
     echo "PULL:$NEW_HASH"

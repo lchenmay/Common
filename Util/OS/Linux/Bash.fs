@@ -52,10 +52,82 @@ let private ensureSshControlDir() =
 /// - ControlMaster=auto: 自动复用已有连接，没有则创建
 /// - ControlPath: 使用 %C 哈希作为 socket 名，兼容 Windows 文件名限制
 /// - ControlPersist=600: 连接保持 10 分钟，期间新连接可复用
+/// 注意：Windows 上 ControlMaster 基于 Unix Domain Socket，OpenSSH for Windows 实现不完整，
+/// 会反复产生 "getsockname failed: Not a socket" 错误，因此在 Windows 上直接禁用。
+let private isWindows =
+    RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+
 let getSshControlOpts() =
-    let controlDir = ensureSshControlDir()
-    let controlPath = (Path.Combine(controlDir, "ssh-%C")).Replace('\\', '/')
-    $"-o ControlMaster=auto -o ControlPath=\"{controlPath}\" -o ControlPersist=600"
+    if isWindows then
+        ""
+    else
+        let controlDir = ensureSshControlDir()
+        let controlPath = (Path.Combine(controlDir, "ssh-%C")).Replace('\\', '/')
+        $"-o ControlMaster=auto -o ControlPath=\"{controlPath}\" -o ControlPersist=600"
+
+/// 检测是否是 SSH ControlMaster socket 损坏错误
+let isSocketError (text: string) =
+    not (String.IsNullOrEmpty text) &&
+    (text.Contains("getsockname failed") || 
+     text.Contains("Not a socket") ||
+     text.Contains("Connection closed") ||
+     text.Contains("Unknown error"))
+
+/// 清理所有 ControlMaster socket 文件，返回清理数量
+/// Windows 上 SSH ControlMaster 可能使用命名管道或特殊文件，File.Delete 可能失败，
+/// 因此优先用 ssh -O exit 优雅关闭连接，再用 File.Delete + cmd del 兜底清理残留。
+let cleanSshControlSockets (output: string -> unit) =
+    try
+        let dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), 
+            ".ssh", "controlmasters")
+        if Directory.Exists dir then
+            // 不加文件名筛选，避免 Windows 上 glib pattern 匹配失败
+            let allFiles = Directory.GetFiles(dir)
+            let socketFiles = allFiles |> Array.filter (fun f ->
+                let name = Path.GetFileName(f)
+                name.StartsWith("ssh-"))
+
+            let mutable cleaned = 0
+
+            // 阶段 1：ssh -O exit 优雅关闭 master 连接（释放文件锁）
+            for f in socketFiles do
+                try
+                    let normalizedPath = f.Replace('\\', '/')
+                    let exitArgs = $"-O exit -o ControlPath=\"{normalizedPath}\" localhost"
+                    let psi = ProcessStartInfo("ssh", exitArgs,
+                        RedirectStandardError = true,
+                        RedirectStandardOutput = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true)
+                    use proc = Process.Start(psi)
+                    proc.WaitForExit(3000) |> ignore
+                with _ -> ()
+
+            System.Threading.Thread.Sleep(200)
+
+            // 阶段 2：File.Delete 删除残留文件
+            for f in socketFiles do
+                if File.Exists f then
+                    try File.Delete f; cleaned <- cleaned + 1
+                    with _ ->
+                        // 阶段 3：Windows 兜底 — cmd del /f 强制删除
+                        try
+                            let delPsi = ProcessStartInfo("cmd", $"/c del /q /f \"{f}\"",
+                                RedirectStandardError = true,
+                                RedirectStandardOutput = true,
+                                UseShellExecute = false,
+                                CreateNoWindow = true)
+                            use proc = Process.Start(delPsi)
+                            proc.WaitForExit(3000) |> ignore
+                            if not (File.Exists f) then cleaned <- cleaned + 1
+                        with _ -> ()
+
+            if cleaned > 0 then
+                $"[SSH] 已清理 {cleaned} 个损坏的 ControlMaster socket" |> yellow |> output
+            cleaned
+        else 0
+    with _ -> 0
 
 /// 懒加载：扫描系统查找 Git 安装目录（仅计算一次）
 let private gitPathCache = lazy (
@@ -152,7 +224,7 @@ let exec output setDir (fileName: string) (args: string) : string =
 let email__SshKey email = 
     $"ssh-keygen -t rsa -b 4096 -C {email}"
 
-/// SSH 远程执行（带自定义超时）- 自动清理命令
+/// SSH 远程执行（带自定义超时）- 自动清理命令，自动检测并修复 ControlMaster socket 损坏
 let bashWithTimeout output credential (cmd: string) (timeoutMs: int) : string =
     let porto, user, server = credential
     let effectiveCmd = 
@@ -164,12 +236,38 @@ let bashWithTimeout output credential (cmd: string) (timeoutMs: int) : string =
     let privateKeyArg = getSshPrivateKeyArg()
     let controlOpts = getSshControlOpts()
     let sshOpts = $"-o StrictHostKeyChecking=no -o ConnectTimeout=10 {controlOpts}"
-    let args = 
-        match porto with
-        | Some p -> $"{sshOpts} {privateKeyArg} -p {p} {user}@{server} \"{effectiveCmd}\""
-        | None -> $"{sshOpts} {privateKeyArg} {user}@{server} \"{effectiveCmd}\""
+    let sshOptsNoControl = $"-o StrictHostKeyChecking=no -o ConnectTimeout=10"
     
-    execWithTimeout output "" "ssh" args timeoutMs
+    let buildArgs (includeControl: bool) =
+        let opts = if includeControl then sshOpts else sshOptsNoControl
+        match porto with
+        | Some p -> $"{opts} {privateKeyArg} -p {p} {user}@{server} \"{effectiveCmd}\""
+        | None -> $"{opts} {privateKeyArg} {user}@{server} \"{effectiveCmd}\""
+    
+    let args = buildArgs true
+    let result = execWithTimeout output "" "ssh" args timeoutMs
+    
+    // ── 自动修复：检测 ControlMaster socket 损坏则清理并重试 ──
+    if isSocketError result then
+        $"[SSH] 检测到 ControlMaster socket 损坏，自动清理并重试..." |> yellow |> output
+        cleanSshControlSockets output |> ignore
+        System.Threading.Thread.Sleep(500)
+        // 不带 ControlMaster 重试，首次连接重建 socket
+        let retryArgs = buildArgs false
+        let retryResult = execWithTimeout output "" "ssh" retryArgs timeoutMs
+        // ── 重试成功后，后台尝试用 ControlMaster 再连一次建立健康 socket ──
+        // 注意：重建结果不影响返回值——即使重建失败，命令本身已经成功执行
+        if not (isSocketError retryResult) then
+            System.Threading.Thread.Sleep(300)
+            let rebuildArgs = buildArgs true
+            let rebuildResult = execWithTimeout output "" "ssh" rebuildArgs timeoutMs
+            if isSocketError rebuildResult then
+                $"[SSH] ControlMaster 重建失败（不影响命令结果），后续连接将使用新连接" |> yellow |> output
+            retryResult
+        else
+            retryResult
+    else
+        result
 
 /// SSH 远程执行 — 短超时+自动重试，适合轻量级命令（目录检查、mkdir、rm 等）
 /// timeoutMs: 单次超时（毫秒），maxRetries: 超时后最多重试次数

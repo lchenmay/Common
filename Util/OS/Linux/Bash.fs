@@ -290,6 +290,12 @@ let bashWithRetry output credential cmd (timeoutMs: int) (maxRetries: int) : str
         attempt <- attempt + 1
     result
 
+/// SSH 远程执行可能产生子进程的命令（bun/node 等），
+/// 通过 </dev/null 关闭 stdin 防止子进程阻塞 SSH PTY 导致超时
+let bashDetached output credential (cmd: string) (timeoutMs: int) : string =
+    let effectiveCmd = cleanCommand cmd
+    bashWithTimeout output credential $"( {effectiveCmd} ) </dev/null" timeoutMs
+
 /// SSH 远程执行（默认120秒超时，适应慢速 GitHub 连接和大文件操作）
 let bash output credential cmd : string =
     bashWithTimeout output credential cmd 120000

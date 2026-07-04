@@ -217,12 +217,12 @@ let buildFrontend output credential code =
             // ====== 正式构建 ======
             // 步骤0: 强制更新 @lchenmay/jcs-common（确保生产环境使用最新版）
             "[DEBUG] --- 步骤0: bun update @lchenmay/jcs-common ---" |> yellow |> output
-            let updateJcsCommonResult = bashWithTimeout output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun update @lchenmay/jcs-common 2>&1; echo '[DEBUG] bun update jcs-common exit code:' $?" 120000
+            let updateJcsCommonResult = bashDetached output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun update @lchenmay/jcs-common 2>&1; echo '[DEBUG] bun update jcs-common exit code:' $?" 30000
             updateJcsCommonResult |> output
 
-            // 步骤1: bun install（180s 超时，适应慢速网络和大依赖）
+            // 步骤1: bun install（60s 超时，</dev/null 防止 SSH hang）
             "[DEBUG] --- 步骤1: bun install ---" |> yellow |> output
-            let installResult = bashWithTimeout output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun install 2>&1; echo '[DEBUG] bun install exit code:' $?" 180000
+            let installResult = bashDetached output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun install 2>&1; echo '[DEBUG] bun install exit code:' $?" 60000
             installResult |> output
             
             // 步骤2: bun generateRoutes.cjs（生成路由）
@@ -233,7 +233,7 @@ let buildFrontend output credential code =
             // 步骤3: 用系统 node 运行 vite build（不用 bun bd，因 bun 内嵌 Node 版本可能不够 Vite 8 要求）
             // 参考：bun 1.2.15 内嵌 Node 22.6.0，Vite 8 要求 22.12+，导致构建静默失败
             "[DEBUG] --- 步骤3: node vite build ---" |> yellow |> output
-            let buildResult = bashWithTimeout output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 180000
+            let buildResult = bashDetached output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 90000
             buildResult |> output
             
             // 调试4: 构建后 dist 目录内容
@@ -273,7 +273,7 @@ let buildFrontend output credential code =
             
             // 步骤2: vite build（用 node 跑，不用 bun bd）
             "[DEBUG] --- npm: node vite build ---" |> yellow |> output
-            let buildResult = bashWithTimeout output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 180000
+            let buildResult = bashDetached output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 90000
             buildResult |> output
             
             let distCount = remoteDistFileCount output credential vscodeDir

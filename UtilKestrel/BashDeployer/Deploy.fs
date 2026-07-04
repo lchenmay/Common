@@ -98,16 +98,16 @@ fi
             else
                 "[前端] bun.lockb 已变化，重新安装..." |> output
             let installCmd = $"""if [[ -f /root/.bun/bin/bun ]]; then
-    cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 || echo '[DEPLOY-WARN] bun install 失败'
+    cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 < /dev/null || echo '[DEPLOY-WARN] bun install 失败'
 else
-    cd ~/{vscodeDir} && npm install 2>&1 || echo '[DEPLOY-WARN] npm install 失败'
+    cd ~/{vscodeDir} && npm install 2>&1 < /dev/null || echo '[DEPLOY-WARN] npm install 失败'
 fi
 NEW_HASH=$(cd ~/{vscodeDir} && md5sum bun.lockb 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
 echo "$NEW_HASH" > {deployStampDir}/bun-lock-hash
 echo '[前端] 依赖安装完成'
 """
             do! Async.SwitchToThreadPool()
-            bashWithTimeout output credential installCmd 180000 |> ignore
+            bashDetached output credential installCmd 60000 |> ignore
     }
     
     let backendJob = async {

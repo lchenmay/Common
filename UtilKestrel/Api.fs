@@ -217,6 +217,8 @@ type InternalEr =
 let saveApi 
     output
     rcd__existsg
+    onPreCreateo
+    onPreUpdateeo
     onSucCreateo
     onSucUpdateeo
     metadata 
@@ -233,6 +235,11 @@ let saveApi
             | Some rcd ->
 
                 if rcd__existsg rcd then
+
+                    match onPreUpdateeo with
+                    | Some h -> h usero rcd |> ignore
+                    | None -> ()
+
                     match 
                         rcd
                         |> metadata.rcd_update output with
@@ -245,6 +252,11 @@ let saveApi
                         |> InternalEr.Ok
                     | None -> InternalEr.Internal
                 else
+
+                    match onPreCreateo with
+                    | Some h -> h usero rcd |> ignore
+                    | None -> ()
+
                     match 
                         rcd.p
                         |> metadata.p_create output with
@@ -380,6 +392,8 @@ let apiBuilder
             saveApi 
                 output 
                 adx.rcd__existing
+                adx.onPreCreateo
+                adx.onPreUpdateo
                 adx.onSucCreateo
                 adx.onSucUpdateo
                 adx.metadata

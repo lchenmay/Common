@@ -267,6 +267,8 @@ listFilter: 'User option -> Json -> 'Data -> bool
 key__sortingo: ('User option -> int -> string -> ('Data[] -> 'Data[]) option) option
 searching: 'User option -> string -> 'Data -> bool
 rcd__existing: Rcd<'p> -> bool
+onPreCreateo: ('User option -> Rcd<'p> -> unit) option
+onPreUpdateo: ('User option -> Rcd<'p> -> unit) option
 onSucCreateo: ('User option -> Rcd<'p> -> Rcd<'p>) option
 onSucUpdateo: ('User option -> Rcd<'p> -> Rcd<'p>) option
 continueo: ('User option -> string -> Json -> InternalEr) option }
@@ -278,6 +280,8 @@ let empty__ApiDbCtx
     key__sortingo
     searching
     rcd_existing
+    onPreCreateo
+    onPreUpdateo
     onSucCreateo
     onSucUpdateo
     continueo = {
@@ -288,6 +292,8 @@ let empty__ApiDbCtx
         key__sortingo = key__sortingo
         searching = searching
         rcd__existing = rcd_existing
+        onPreCreateo = onPreCreateo
+        onPreUpdateo = onPreUpdateo
         onSucCreateo = onSucCreateo
         onSucUpdateo = onSucUpdateo
         continueo = continueo }

@@ -82,11 +82,12 @@ export const checkDomain = (domain:string) => {
 
 export const initHost = () => {
 	const hostname = window.location.hostname
+	const hostPort = window.location.host  // 含端口（如 192.168.5.2:9025），生产环境无端口
 
 	const host: any = {
 		hostname: hostname,
-		api: `${window.location.protocol}//${hostname}`,
-		wsurl: `wss://${hostname}/ws/`,
+		api: `${window.location.protocol}//${hostPort}`,
+		wsurl: `wss://${hostPort}/ws/`,
 		discordAPPID: "1254790111913181274",
 		discordRedirect: `${window.location.protocol}//${window.location.host}/redirect/DISCORD`,
 	}

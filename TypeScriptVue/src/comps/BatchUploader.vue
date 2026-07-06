@@ -7,10 +7,49 @@
       @drop.prevent="onDrop" @click="triggerSelect">
       <input type="file" ref="fileInput" multiple style="display:none"
         :accept="props.accept" @change="onFileSelect" />
-      <div class="bu-icon">📤</div>
-      <div class="bu-text">{{ props.dropText || key__text('dropText', props.lang) }}</div>
-      <div class="bu-hint" v-if="props.acceptHint">{{ props.acceptHint }}</div>
+      <div class="bu-icon">{{ isDetecting ? '🔍' : '📤' }}</div>
+      <div class="bu-text">
+        <template v-if="isDetecting">正在检测文件夹结构...</template>
+        <template v-else>{{ props.dropText || key__text('dropText', props.lang) }}</template>
+      </div>
+      <div class="bu-hint" v-if="isDetecting">
+        已扫描 {{ detectingFileCount }} 个文件 / {{ detectingDirCount }} 个目录
+      </div>
+      <div class="bu-hint" v-else-if="props.enableFolderDrop && props.acceptHint">{{ props.acceptHint }} · 支持文件夹拖放</div>
+      <div class="bu-hint" v-else-if="props.acceptHint">{{ props.acceptHint }}</div>
       <div class="bu-hint" v-else-if="props.accept">支持: {{ props.accept }}</div>
+    </div>
+
+    <!-- 检测覆盖层（阻断操作） -->
+    <div v-if="isDetecting" class="bu-detection-overlay">
+      <div class="bu-detection-box">
+        <div class="mega-spinner"></div>
+        <p class="bu-detection-title">正在检测文件夹结构…</p>
+        <p class="bu-detection-progress">{{ detectingProgress }}</p>
+        <p class="bu-detection-sub">已扫描 {{ detectingFileCount }} 个文件 / {{ detectingDirCount }} 个目录</p>
+      </div>
+    </div>
+
+    <!-- 检测失败警告横幅 -->
+    <div v-if="detectError" class="bu-detect-error">
+      <div class="bu-detect-error-header">
+        <span>⚠️ 文件夹结构超出限制，未加入上传列表</span>
+        <button class="bu-detect-error-close" @click="detectError = null">✕</button>
+      </div>
+      <div class="bu-detect-error-body">
+        <p>拖放内容未上传，原因：</p>
+        <ul>
+          <li v-if="detectError.depthExceeded">
+            文件夹深度 {{ detectError.maxDepthFound }} 层，超出最大 {{ detectError.limitDepth }} 层限制
+          </li>
+          <li v-if="detectError.fileCountExceeded">
+            文件总数 {{ detectError.fileCountFound }} 个，超出最大 {{ detectError.limitFiles }} 个限制
+          </li>
+        </ul>
+        <p class="bu-detect-error-hint">
+          建议：减少文件夹层级或分批拖放。
+        </p>
+      </div>
     </div>
 
     <!-- 文件任务列表 -->
@@ -23,7 +62,9 @@
       <div v-for="task in tasks" :key="task.id" class="bu-task-item">
         <div class="bu-task-icon">{{ fileIcon(task.file.name) }}</div>
         <div class="bu-task-info">
-          <div class="bu-task-name" :title="task.file.name">{{ task.file.name }}</div>
+          <div class="bu-task-name" :title="displayPath(task)">
+            <span v-if="task.relativePath" class="bu-task-folder-path">{{ task.relativePath }}</span>{{ task.file.name }}
+          </div>
           <div class="bu-task-size">{{ formatSize(task.file.size) }}</div>
           <!-- 进度条 -->
           <div class="bu-progress" v-if="task.status !== 'idle'">
@@ -71,6 +112,17 @@ export interface UploadTask {
   message?: string
   /** 服务端返回的文件记录 */
   rep?: any
+  /** 从拖放文件夹中解析出的相对路径，如 "subdir/nested/" */
+  relativePath?: string
+}
+
+export interface DetectError {
+  depthExceeded: boolean
+  fileCountExceeded: boolean
+  maxDepthFound: number
+  fileCountFound: number
+  limitDepth: number
+  limitFiles: number
 }
 
 export interface UploaderProps {
@@ -92,11 +144,20 @@ export interface UploaderProps {
   autoUpload?: boolean
   /** 语言 */
   lang?: string
+  /** 启用文件夹拖放（webkitGetAsEntry 递归遍历） */
+  enableFolderDrop?: boolean
+  /** 最大文件夹递归深度，默认 50 */
+  maxFolderDepth?: number
+  /** 最大文件夹内文件总数，默认 1000 */
+  maxFolderFiles?: number
 }
 
 const props = withDefaults(defineProps<UploaderProps>(), {
   uploadUrl: '/api/public/upload',
-  autoUpload: false
+  autoUpload: false,
+  enableFolderDrop: false,
+  maxFolderDepth: 50,
+  maxFolderFiles: 1000
 })
 
 // ========== 事件 ==========
@@ -107,6 +168,8 @@ const emit = defineEmits<{
   (e: 'fileError', task: UploadTask): void
   /** 全部上传完成 */
   (e: 'allDone', tasks: UploadTask[]): void
+  /** 文件夹检测被拒绝 */
+  (e: 'folderRejected', error: DetectError): void
 }>()
 
 // ========== 状态 ==========
@@ -118,8 +181,102 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const tasks = ref<UploadTask[]>([])
 const uploading = ref(false)
 
+// 文件夹检测状态
+const isDetecting = ref(false)
+const detectError = ref<DetectError | null>(null)
+const detectingFileCount = ref(0)
+const detectingDirCount = ref(0)
+const detectingProgress = ref('')
+
 const doneCount = computed(() => tasks.value.filter(t => t.status === 'success').length)
 const allDone = computed(() => tasks.value.length > 0 && tasks.value.every(t => t.status === 'success' || t.status === 'error'))
+
+// ========== 文件夹检测辅助 ==========
+function readAllEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  return new Promise((resolve) => {
+    const all: FileSystemEntry[] = []
+    const read = () => {
+      reader.readEntries((entries) => {
+        if (entries.length === 0) resolve(all)
+        else { all.push(...entries); read() }
+      })
+    }
+    read()
+  })
+}
+
+async function detectFolderItems(items: DataTransferItemList): Promise<{
+  ok: boolean
+  tasks?: UploadTask[]
+  error?: DetectError
+}> {
+  let fileCount = 0
+  let maxDepth = 0
+  const detectedTasks: UploadTask[] = []
+  let aborted = false
+
+  detectingFileCount.value = 0
+  detectingDirCount.value = 0
+  detectingProgress.value = ''
+
+  async function walk(entry: FileSystemEntry, path: string, depth: number) {
+    if (aborted) return
+    if (depth > props.maxFolderDepth!) {
+      if (depth > maxDepth) maxDepth = depth
+      aborted = true; return
+    }
+    if (fileCount >= props.maxFolderFiles!) {
+      aborted = true; return
+    }
+
+    if (entry.isFile) {
+      fileCount++
+      detectingFileCount.value = fileCount
+      const file = await new Promise<File>((resolve, reject) => {
+        (entry as FileSystemFileEntry).file(resolve, reject)
+      })
+      if (props.maxSize && file.size > props.maxSize) {
+        aborted = true; return
+      }
+      const task = makeTask(file)
+      task.relativePath = path
+      detectedTasks.push(task)
+    } else if (entry.isDirectory) {
+      maxDepth = Math.max(maxDepth, depth)
+      detectingDirCount.value++
+      detectingProgress.value = `正在扫描：${path}${entry.name}/`
+      const reader = (entry as FileSystemDirectoryEntry).createReader()
+      const entries = await readAllEntries(reader)
+      for (const child of entries) {
+        await walk(child, path + entry.name + '/', depth + 1)
+        if (aborted) return
+      }
+    }
+  }
+
+  for (const item of Array.from(items)) {
+    const entry = item.webkitGetAsEntry?.()
+    if (!entry) continue
+    await walk(entry, '', 0)
+    if (aborted) break
+  }
+
+  if (aborted) {
+    return {
+      ok: false,
+      error: {
+        depthExceeded: maxDepth > props.maxFolderDepth!,
+        fileCountExceeded: fileCount > props.maxFolderFiles!,
+        maxDepthFound: maxDepth,
+        fileCountFound: fileCount,
+        limitDepth: props.maxFolderDepth!,
+        limitFiles: props.maxFolderFiles!
+      }
+    }
+  }
+
+  return { ok: true, tasks: detectedTasks }
+}
 
 // ========== 文件选择 ==========
 const triggerSelect = () => fileInput.value?.click()
@@ -129,14 +286,38 @@ const onFileSelect = (e: Event) => {
   addFiles(files)
 }
 
-const onDrop = (e: DragEvent) => {
+const onDrop = async (e: DragEvent) => {
   isDragging.value = false
+  detectError.value = null
+
+  if (props.enableFolderDrop && e.dataTransfer?.items) {
+    const hasDirectory = Array.from(e.dataTransfer.items).some(
+      item => item.webkitGetAsEntry?.()?.isDirectory
+    )
+    if (hasDirectory) {
+      isDetecting.value = true
+      const result = await detectFolderItems(e.dataTransfer.items)
+      isDetecting.value = false
+      if (!result.ok) {
+        detectError.value = result.error!
+        emit('folderRejected', result.error!)
+        return
+      }
+      tasks.value.push(...result.tasks!)
+      if (props.autoUpload) uploadAll()
+      return
+    }
+  }
+
+  // 纯文件 / 旧模式 / 无 webkitGetAsEntry → 原逻辑
   addFiles(e.dataTransfer?.files || null)
 }
 
 const addFiles = (fileList: FileList | null) => {
   if (!fileList) return
   Array.from(fileList).forEach(file => {
+    // 如果文件有 webkitRelativePath（来自 input[webkitdirectory]），使用它
+    const relPath = (file as any).webkitRelativePath
     if (props.maxSize && file.size > props.maxSize) {
       const task = makeTask(file)
       task.status = 'error'
@@ -145,7 +326,13 @@ const addFiles = (fileList: FileList | null) => {
       emit('fileError', task)
       return
     }
-    tasks.value.push(makeTask(file))
+    const task = makeTask(file)
+    if (relPath && typeof relPath === 'string') {
+      // 剥离文件名，只保留目录路径，如 "dir/subdir/name.txt" → "dir/subdir/"
+      const lastSlash = relPath.lastIndexOf('/')
+      if (lastSlash > 0) task.relativePath = relPath.substring(0, lastSlash + 1)
+    }
+    tasks.value.push(task)
   })
   if (props.autoUpload && tasks.value.some(t => t.status === 'idle')) {
     uploadAll()
@@ -185,6 +372,11 @@ const executeUpload = (task: UploadTask): Promise<void> => {
   const formData = new FormData()
   formData.append('file', task.file)
 
+  // 附加 relativePath
+  if (task.relativePath) {
+    formData.append('relativePath', task.relativePath)
+  }
+
   // 附加额外字段
   if (props.extraFields) {
     for (const [k, v] of Object.entries(props.extraFields)) {
@@ -205,7 +397,21 @@ const executeUpload = (task: UploadTask): Promise<void> => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const rep = JSON.parse(xhr.responseText)
-          if (rep.Er === 'OK' || rep.Er === undefined) {
+          // 兼容多文件返回数组格式
+          if (Array.isArray(rep)) {
+            const myRep = rep.find((r: any) => r?.file?.p?.Caption === task.file.name)
+            if (myRep) {
+              task.status = 'success'
+              task.progress = 100
+              task.rep = myRep
+              emit('fileDone', task)
+            } else {
+              task.status = 'success'
+              task.progress = 100
+              task.rep = rep[0]
+              emit('fileDone', task)
+            }
+          } else if (rep.Er === 'OK' || rep.Er === undefined) {
             task.status = 'success'
             task.progress = 100
             task.rep = rep
@@ -262,6 +468,10 @@ const clearDone = () => {
 }
 
 // ========== 显示辅助 ==========
+const displayPath = (task: UploadTask) => {
+  return task.relativePath ? task.relativePath + task.file.name : task.file.name
+}
+
 const statusText = (task: UploadTask) => {
   switch (task.status) {
     case 'uploading': return key__text('uploadingAll', props.lang) + ` ${task.progress}%`
@@ -307,6 +517,138 @@ const fileIcon = (name: string) => {
   cursor: pointer;
   transition: all 0.2s;
   margin-bottom: 16px;
+  position: relative;
+}
+
+.bu-drop-zone:hover {
+  border-color: #3b82f6;
+  background: #1e293b;
+}
+
+.bu-drop-zone.bu-dragging {
+  border-color: #3b82f6;
+  background: #1e3a5f;
+}
+
+.bu-icon {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+}
+
+.bu-text {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.bu-hint {
+  color: #475569;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* ===== 检测覆盖层 ===== */
+.bu-detection-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(4px);
+  border-radius: 12px;
+}
+
+.bu-detection-box {
+  text-align: center;
+  padding: 32px;
+}
+
+.bu-detection-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 16px 0 8px 0;
+}
+
+.bu-detection-progress {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0 0 4px 0;
+  word-break: break-all;
+}
+
+.bu-detection-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ===== 检测失败警告横幅 ===== */
+.bu-detect-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.bu-detect-error-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fca5a5;
+  margin-bottom: 8px;
+}
+
+.bu-detect-error-close {
+  background: none;
+  border: none;
+  color: #fca5a5;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.bu-detect-error-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.bu-detect-error-body {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+
+.bu-detect-error-body p {
+  margin: 0 0 6px 0;
+}
+
+.bu-detect-error-body ul {
+  margin: 4px 0 8px 0;
+  padding-left: 20px;
+}
+
+.bu-detect-error-body li {
+  color: #fca5a5;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.bu-detect-error-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin: 8px 0 0 0;
+}
+
+/* 文件夹路径显示 */
+.bu-task-folder-path {
+  color: #64748b;
+  font-size: 11px;
+  margin-right: 2px;
 }
 
 .bu-drop-zone:hover {
@@ -580,5 +922,20 @@ const fileIcon = (name: string) => {
 [data-theme="dark"] .bu-btn-icon:hover {
   background: #334155;
   color: #e2e8f0;
+}
+
+/* ===== Spinner ===== */
+.mega-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid #334155;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: bu-spin 0.7s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes bu-spin {
+  to { transform: rotate(360deg); }
 }
 </style>

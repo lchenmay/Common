@@ -24,7 +24,7 @@ open UtilKestrel.Ctx
 
 let runServer 
     (runtime:RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData>)
-    (incomingFile,fileid__bin,id__thumbnail)
+    (incomingFile, incomingFileWithPath, fileid__bin, id__thumbnail)
     (apiEngine,wsEngineo)
     (port80, port443)
     output
@@ -207,20 +207,39 @@ let runServer
                     httpx.Request.Form.Files
                     |> Seq.toArray
 
-                if files.Length <> 1 then
+                if files.Length = 0 then
                     httpx.Response.StatusCode <- 400
                     return ()
 
-                let file = files.[0]
+                let form = httpx.Request.Form
+                let relativePath = 
+                    if form.ContainsKey "relativePath" then 
+                        form.["relativePath"].ToString().Replace("\"", "") 
+                    else ""
+                let parentFolderId =
+                    if form.ContainsKey "folderId" then
+                        try form.["folderId"].ToString().Replace("\"", "") |> int64
+                        with _ -> 0L
+                    else 0L
 
-                file.FileName + " " + file.Length.ToString() + " bytes"
-                |> green |> output
+                let! reps = 
+                    files 
+                    |> Array.map (fun file ->
+                        file.FileName + " " + file.Length.ToString() + " bytes"
+                        |> green |> output
+                        incomingFileWithPath httpx file relativePath parentFolderId)
+                    |> fun tasks -> Async.Parallel(tasks, maxDegreeOfParallelism = 3) 
+                    |> Async.StartImmediateAsTask
 
-                let! rep = incomingFile httpx file |> Async.StartImmediateAsTask
+                let ary =
+                    reps
+                    |> Array.map (fun rep ->
+                        rep |> Util.Json.json__strFinal)
+                    |> String.concat ","
+                    |> fun s -> "[" + s + "]"
 
                 let bin =
-                    rep
-                    |> Util.Json.json__strFinal
+                    ary
                     |> System.Text.Encoding.UTF8.GetBytes
 
                 httpx.Response.ContentType <- "application/json; charset=utf-8"

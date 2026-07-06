@@ -12,7 +12,7 @@ export { default as FileUploader } from './comps/FileUploader.vue'
 export { default as Thumbnail } from './comps/Thumbnail.vue'
 export { default as FileSysTree } from './comps/FileSysTree.vue'
 export { default as BatchUploader } from './comps/BatchUploader.vue'
-export type { UploadTask, UploaderProps } from './comps/BatchUploader.vue'
+export type { UploadTask, UploaderProps, DetectError } from './comps/BatchUploader.vue'
 
 // ============================================
 // 导出 Theme 类型

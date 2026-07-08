@@ -285,31 +285,6 @@ onSucCreateo: ('User option -> Rcd<'p> -> Rcd<'p>) option
 onSucUpdateo: ('User option -> Rcd<'p> -> Rcd<'p>) option
 continueo: ('User option -> string -> Json -> InternalEr) option }
 
-let empty__ApiDbCtx
-    (marshall,metadata)
-    __items
-    listFilter
-    key__sortingo
-    searching
-    rcd_existing
-    onPreCreateo
-    onPreUpdateo
-    onSucCreateo
-    onSucUpdateo
-    continueo = {
-        marshall = marshall
-        metadata = metadata
-        __items = __items
-        listFilter = listFilter
-        key__sortingo = key__sortingo
-        searching = searching
-        rcd__existing = rcd_existing
-        onPreCreateo = onPreCreateo
-        onPreUpdateo = onPreUpdateo
-        onSucCreateo = onSucCreateo
-        onSucUpdateo = onSucUpdateo
-        continueo = continueo }
-
 let sortBy__functoro direction sortBy = 
     if direction > 0 then
         sortBy 

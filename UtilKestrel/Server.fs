@@ -26,7 +26,7 @@ open UtilKestrel.Ctx
 
 let runServer 
     (runtime:RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData>)
-    (incomingFileWithPath, fileid__bin, id__thumbnail)
+    (incomingFile, fileid__bin)
     (apiEngine,wsEngineo)
     (port80, port443)
     output
@@ -145,22 +145,6 @@ let runServer
 
     // --- 路由与功能实现区 ---
     
-    app.MapGet("/thumbnail/{id}", 
-        Func<string, HttpContext, Task>(fun id httpx -> task {
-
-            let bin:byte[] = 
-              use cw = new CodeWrapper("id__thumbnail")
-              id__thumbnail id
-
-            "/thumbnail/" + id + " " + bin.Length.ToString() + " bytes" 
-            |> green |> output
-
-            //httpx.Response.Headers.["Cache-Control"] <- "public, max-age=86400"
-            httpx.Response.ContentType <- "image/jpeg"
-
-            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory bin)
-    })) |> ignore
-
     // 文件服务：/file/{id} 
     app.MapGet("/file/{id}", 
         Func<string, HttpContext, Task>(fun id httpx -> task {
@@ -223,7 +207,7 @@ let runServer
                     |> Array.map (fun file ->
                         file.FileName + " " + file.Length.ToString() + " bytes"
                         |> green |> output
-                        incomingFileWithPath httpx file relativePath parentFolderId)
+                        incomingFile httpx file relativePath parentFolderId)
                     |> fun tasks -> Async.Parallel(tasks, maxDegreeOfParallelism = 3) 
                     |> Async.StartImmediateAsTask
 

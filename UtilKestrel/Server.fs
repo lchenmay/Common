@@ -16,7 +16,9 @@ open Microsoft.Extensions.FileProviders
 open Microsoft.Extensions.Logging
 open System.Net.WebSockets
 
+open Util.Perf
 open Util.Linux.Bash
+
 open UtilOpen
 
 open UtilKestrel.Types
@@ -24,21 +26,11 @@ open UtilKestrel.Ctx
 
 let runServer 
     (runtime:RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData>)
-    (incomingFile, incomingFileWithPath, fileid__bin, id__thumbnail)
+    (incomingFileWithPath, fileid__bin, id__thumbnail)
     (apiEngine,wsEngineo)
     (port80, port443)
     output
     (args: string[]) =
-
-    let showHttpX (httpx:HttpContext) = 
-        //" <= " + httpx.Request.Method + " " + httpx.Request.Path.Value
-        //|> output
-
-        httpx.Request.Headers
-        |> Seq.iter(fun h ->
-            h.Value
-            |> Seq.iter(fun v ->
-                h.Key + ": " + v |> output))
 
     let builder = WebApplication.CreateBuilder(args)
 
@@ -156,7 +148,9 @@ let runServer
     app.MapGet("/thumbnail/{id}", 
         Func<string, HttpContext, Task>(fun id httpx -> task {
 
-            let bin:byte[] = id__thumbnail id
+            let bin:byte[] = 
+              use cw = new CodeWrapper("id__thumbnail")
+              id__thumbnail id
 
             "/thumbnail/" + id + " " + bin.Length.ToString() + " bytes" 
             |> green |> output
@@ -170,7 +164,9 @@ let runServer
     // 文件服务：/file/{id} 
     app.MapGet("/file/{id}", 
         Func<string, HttpContext, Task>(fun id httpx -> task {
-            let (bin:byte[]),mime = fileid__bin id
+            let (bin:byte[]),mime = 
+                use cw = new CodeWrapper("fileid__bin")
+                fileid__bin id
 
             "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" 
             |> green |> output
@@ -269,12 +265,16 @@ let runServer
 
     // 1.2 GET 型 API 分发
     app.MapGet("/api/{scheme}/{api}",
-        Func<string, string, HttpContext, Task>(fun scheme api httpx -> task {
+      Func<string, string, HttpContext, Task>(
+        fun scheme api httpx -> 
+          task {
             $"/api/{scheme}/{api}/" 
             |> green |> output
             let x = runApiEngine (runtime,httpx,scheme,api)
-            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(x.Struct.rep))
-    })) |> ignore
+            do! 
+              x.Struct.rep
+              |> ReadOnlyMemory
+              |> httpx.Response.Body.WriteAsync})) |> ignore
 
     // 1.2 POST 型 API 分发
     app.MapPost("/api/{scheme}/{api}",

@@ -78,10 +78,10 @@ type TextConsole(?log: string -> unit) as this =
         } |> ignore
 
     let initUI () =
-        buttonPanel.Orientation <- Orientation.Vertical
-        buttonPanel.Margin <- Thickness(5.0)
-        buttonPanel.Spacing <- 5.0
-        buttonPanel.VerticalAlignment <- VerticalAlignment.Top
+        buttonPanel.Orientation <- Orientation.Horizontal
+        buttonPanel.Margin <- Thickness(5.0, 5.0, 5.0, 2.0)
+        buttonPanel.Spacing <- 8.0
+        buttonPanel.HorizontalAlignment <- HorizontalAlignment.Left
         clearBtn.Click.Add(fun _ -> this.Clear())
         copyBtn.Click.Add(fun _ -> 
             String.Join(Environment.NewLine, buffer)
@@ -99,7 +99,7 @@ type TextConsole(?log: string -> unit) as this =
 
         let dockPanel = DockPanel()
         dockPanel.Children.Add buttonPanel |> ignore
-        DockPanel.SetDock(buttonPanel, Dock.Right)
+        DockPanel.SetDock(buttonPanel, Dock.Top)
         dockPanel.Children.Add scrollViewer |> ignore
         this.Content <- dockPanel |> control__withBorder
 

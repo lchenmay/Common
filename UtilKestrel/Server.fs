@@ -18,6 +18,7 @@ open System.Net.WebSockets
 
 open Util.Perf
 open Util.Linux.Bash
+open Util.Bin
 
 open UtilOpen
 
@@ -148,6 +149,8 @@ let runServer
     // 文件服务：/file/{id} 
     app.MapGet("/file/{id}", 
         Func<string, HttpContext, Task>(fun id httpx -> task {
+            $"[Server /file/{{id}}] REQUEST id={id}" |> output
+            
             let (bin:byte[]),mime = 
                 use cw = new CodeWrapper("fileid__bin")
                 fileid__bin id
@@ -155,10 +158,20 @@ let runServer
             "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" 
             |> green |> output
 
+            // 调试：打印将被写入响应体的前 16 字节十六进制
+            if bin.Length > 0 then
+                let hex16 = if bin.Length >= 16 then Util.Bin.bytes__hex bin[..15] else Util.Bin.bytes__hex bin
+                $"[Server /file/{{id}}] writing {bin.Length} bytes, ContentType={mime}, first16hex={hex16}" |> output
+            else
+                $"[Server /file/{{id}}] WARNING: bin is EMPTY (0 bytes), will return empty body!" |> red |> output
+
             //httpx.Response.Headers.["Cache-Control"] <- "public, max-age=86400"
             httpx.Response.ContentType <- mime
+            httpx.Response.ContentLength <- int64 bin.Length
 
             do! httpx.Response.Body.WriteAsync(ReadOnlyMemory bin)
+            
+            "[Server /file/{id}] write complete" |> output
     })) |> ignore
     
     app.MapPost("/api/{scheme}/upload", Func<string, HttpContext, Task>(fun scheme httpx -> task {

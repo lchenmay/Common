@@ -76,34 +76,71 @@ let getSystemAvailableMemoryMB () =
         | Some(_,avail) -> avail
         | None -> 0.0
 
-// 获取系统 CPU 使用率（跨平台，采样 100ms）
+type private CpuTickSample = {
+    At: DateTime
+    Total: int64
+    Idle: int64
+    Pct: float
+}
+
+type private ProcCpuSample = {
+    At: DateTime
+    Total: TimeSpan
+    Pct: float
+}
+
+let private cpuSampleLock = obj()
+let mutable private linuxCpuSample: CpuTickSample option = None
+let mutable private procCpuSample: ProcCpuSample option = None
+
+let private readLinuxCpuTicks () =
+    let lines = File.ReadAllLines("/proc/stat")
+    let cpuLine = lines |> Array.find (fun l -> l.StartsWith("cpu "))
+    let parts = cpuLine.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+    let nums = parts[1..] |> Array.map int64
+    let total = nums |> Array.sum
+    let idle = nums[3]
+    total, idle
+
+// 获取系统 CPU 使用率（跨平台，非阻塞差值采样）
 let getSystemCpuUsage () =
     if isLinux then
         try
-            let readCpu () =
-                let lines = File.ReadAllLines("/proc/stat")
-                let cpuLine = lines |> Array.find (fun l -> l.StartsWith("cpu "))
-                let parts = cpuLine.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                let nums = parts[1..] |> Array.map int64
-                let total = nums |> Array.sum
-                let idle = nums[3] // idle 是第4个字段
-                total, idle
-            let t1, i1 = readCpu ()
-            System.Threading.Thread.Sleep(100)
-            let t2, i2 = readCpu ()
-            let totalDiff = float(t2 - t1)
-            let idleDiff = float(i2 - i1)
-            if totalDiff > 0.0 then (totalDiff - idleDiff) / totalDiff * 100.0 else 0.0
+            let total, idle = readLinuxCpuTicks()
+            let now = DateTime.UtcNow
+            lock cpuSampleLock (fun () ->
+                match linuxCpuSample with
+                | Some prev when (now - prev.At).TotalMilliseconds < 250.0 -> prev.Pct
+                | Some prev ->
+                    let totalDiff = float(total - prev.Total)
+                    let idleDiff = float(idle - prev.Idle)
+                    let pct = if totalDiff > 0.0 then (totalDiff - idleDiff) / totalDiff * 100.0 else prev.Pct
+                    linuxCpuSample <- Some { At = now; Total = total; Idle = idle; Pct = pct }
+                    pct
+                | None ->
+                    linuxCpuSample <- Some { At = now; Total = total; Idle = idle; Pct = 0.0 }
+                    0.0)
         with _ -> 0.0
     else
         try
             let proc = Process.GetCurrentProcess()
-            let t1 = proc.TotalProcessorTime
-            System.Threading.Thread.Sleep(100)
-            let t2 = proc.TotalProcessorTime
-            let elapsed = (t2 - t1).TotalMilliseconds
-            let cores = Environment.ProcessorCount |> float
-            if elapsed > 0.0 then (elapsed / 1000.0 * 100.0 / cores) |> min 100.0 else 0.0
+            let total = proc.TotalProcessorTime
+            let now = DateTime.UtcNow
+            lock cpuSampleLock (fun () ->
+                match procCpuSample with
+                | Some prev when (now - prev.At).TotalMilliseconds < 250.0 -> prev.Pct
+                | Some prev ->
+                    let elapsed = (now - prev.At).TotalMilliseconds
+                    let cpuMs = (total - prev.Total).TotalMilliseconds
+                    let cores = Environment.ProcessorCount |> float
+                    let pct =
+                        if elapsed > 0.0 then (cpuMs / elapsed * 100.0 / cores) |> max 0.0 |> min 100.0
+                        else prev.Pct
+                    procCpuSample <- Some { At = now; Total = total; Pct = pct }
+                    pct
+                | None ->
+                    procCpuSample <- Some { At = now; Total = total; Pct = 0.0 }
+                    0.0)
         with _ -> 0.0
 
 // 进程性能快照（增强：含系统级 CPU 和内存）

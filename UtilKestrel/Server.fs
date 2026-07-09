@@ -78,11 +78,178 @@ let private jsonString (value:string) =
 let private jsonBytes (text:string) =
     Encoding.UTF8.GetBytes text
 
+// ========== 分片上传辅助模块 ==========
+
+let private maxChunkUploadSize = 10L * 1024L * 1024L * 1024L // 10GB
+let private defaultChunkSize = 4 * 1024 * 1024 // 4MB
+
+type private ChunkedUploadMeta = {
+    uploadId: string
+    session: string
+    fileName: string
+    fileSize: int64
+    contentType: string
+    totalChunks: int
+    chunkSize: int
+    receivedChunks: System.Collections.Generic.HashSet<int>
+    relativePath: string
+    parentFolderId: int64
+    createdAt: DateTime
+    tempDir: string
+}
+
+let private chunkedUploads = 
+    System.Collections.Concurrent.ConcurrentDictionary<string, ChunkedUploadMeta>()
+
+let private tryReadJsonInt64Property (body:string) (name:string) =
+    try
+        use doc = System.Text.Json.JsonDocument.Parse(body)
+        let mutable prop = Unchecked.defaultof<System.Text.Json.JsonElement>
+        if doc.RootElement.TryGetProperty(name, &prop) then prop.GetInt64()
+        else 0L
+    with _ -> 0L
+
+let private tryReadJsonIntProperty (body:string) (name:string) =
+    try
+        use doc = System.Text.Json.JsonDocument.Parse(body)
+        let mutable prop = Unchecked.defaultof<System.Text.Json.JsonElement>
+        if doc.RootElement.TryGetProperty(name, &prop) then prop.GetInt32()
+        else 0
+    with _ -> 0
+
+let private verifySession 
+    (runtime:RuntimeTemplate<_,_,_,_>) 
+    (scheme:string) 
+    (session:string) =
+    if scheme <> "eu" then Ok ""
+    elif activeSessionExists runtime session then Ok session
+    else Error 401
+
+let private chunksBaseDir (runtime:RuntimeTemplate<_,_,_,_>) =
+    runtime.host.disk + "FsRoot/" + runtime.projectCode + "/_chunks"
+
+let private writeChunkMeta (meta:ChunkedUploadMeta) =
+    let chunksJson = 
+        meta.receivedChunks 
+        |> Seq.map string |> String.concat ","
+        |> fun s -> "[" + s + "]"
+    let json = 
+        System.String.Format(
+            """{{"uploadId":"{0}","session":"{1}","fileName":"{2}","fileSize":{3},"contentType":"{4}","totalChunks":{5},"chunkSize":{6},"receivedChunks":{7},"relativePath":"{8}","parentFolderId":{9},"createdAt":"{10}"}}""",
+            meta.uploadId, meta.session, meta.fileName, meta.fileSize, meta.contentType,
+            meta.totalChunks, meta.chunkSize, chunksJson,
+            meta.relativePath, meta.parentFolderId,
+            meta.createdAt.ToString("o"))
+    File.WriteAllText(meta.tempDir + "/meta.json", json)
+
+let private readChunkMeta (dir:string) =
+    let metaPath = dir + "/meta.json"
+    if File.Exists metaPath then
+        try
+            let json = File.ReadAllText(metaPath)
+            use doc = System.Text.Json.JsonDocument.Parse(json)
+            let root = doc.RootElement
+            let mutable prop = Unchecked.defaultof<System.Text.Json.JsonElement>
+            Some {
+                uploadId = if root.TryGetProperty("uploadId", &prop) then prop.GetString() else ""
+                session = if root.TryGetProperty("session", &prop) then prop.GetString() else ""
+                fileName = if root.TryGetProperty("fileName", &prop) then prop.GetString() else ""
+                fileSize = if root.TryGetProperty("fileSize", &prop) then prop.GetInt64() else 0L
+                contentType = if root.TryGetProperty("contentType", &prop) then prop.GetString() else ""
+                totalChunks = if root.TryGetProperty("totalChunks", &prop) then prop.GetInt32() else 0
+                chunkSize = if root.TryGetProperty("chunkSize", &prop) then prop.GetInt32() else 0
+                receivedChunks = 
+                    if root.TryGetProperty("receivedChunks", &prop) then
+                        let chunks = System.Collections.Generic.HashSet<int>()
+                        for item in prop.EnumerateArray() do chunks.Add(item.GetInt32()) |> ignore
+                        chunks
+                    else System.Collections.Generic.HashSet<int>()
+                relativePath = if root.TryGetProperty("relativePath", &prop) then prop.GetString() else ""
+                parentFolderId = if root.TryGetProperty("parentFolderId", &prop) then prop.GetInt64() else 0L
+                createdAt = if root.TryGetProperty("createdAt", &prop) then prop.GetDateTime() else DateTime.UtcNow
+                tempDir = dir
+            }
+        with _ -> None
+    else None
+
+let private cleanupStaleChunks (runtime:RuntimeTemplate<_,_,_,_>) =
+    let baseDir = chunksBaseDir runtime
+    if Directory.Exists baseDir then
+        let threshold = DateTime.UtcNow.AddHours(-2.0)
+        try
+            for dir in Directory.GetDirectories(baseDir) do
+                try
+                    let dirInfo = DirectoryInfo(dir)
+                    if dirInfo.LastWriteTimeUtc < threshold then
+                        Directory.Delete(dir, true)
+                        ("[ChunkGC] removed stale: " + Path.GetFileName(dir)) 
+                        |> yellow 
+                        |> runtime.output
+                with _ -> ()
+        with _ -> ()
+
+let private ensureChunksDir (runtime:RuntimeTemplate<_,_,_,_>) uploadId =
+    let dir = chunksBaseDir runtime + "/" + uploadId
+    if not (Directory.Exists dir) then
+        Directory.CreateDirectory dir |> ignore
+    dir
+
+let private writeChunkFileHelper (dir:string) (chunkIndex:int) (stream:Stream) =
+    let chunkPath = dir + "/chunk_" + chunkIndex.ToString("D5")
+    use fs = new FileStream(chunkPath, FileMode.Create)
+    stream.CopyTo(fs)
+    fs.Flush()
+    FileInfo(chunkPath).Length
+
+let private mergeChunks (meta:ChunkedUploadMeta) =
+    let mergedPath = meta.tempDir + "/merged.dat"
+    use merged = new FileStream(mergedPath, FileMode.Create)
+    let buffer = Array.zeroCreate<byte> (64 * 1024)
+    for i in 0 .. meta.totalChunks - 1 do
+        let chunkPath = meta.tempDir + "/chunk_" + i.ToString("D5")
+        if not (File.Exists chunkPath) then
+            failwithf "Missing chunk %d" i
+        use chunk = new FileStream(chunkPath, FileMode.Open, FileAccess.Read)
+        let mutable bytesRead = chunk.Read(buffer, 0, buffer.Length)
+        while bytesRead > 0 do
+            merged.Write(buffer, 0, bytesRead)
+            bytesRead <- chunk.Read(buffer, 0, buffer.Length)
+    merged.Flush()
+    let totalSize = FileInfo(mergedPath).Length
+    if totalSize <> meta.fileSize then
+        failwithf "Size mismatch: expected %d, got %d" meta.fileSize totalSize
+    mergedPath
+
+let private resolveAndVerifyMeta
+    (runtime:RuntimeTemplate<_,_,_,_>)
+    (uploadId:string)
+    (session:string)
+    (scheme:string) =
+    match chunkedUploads.TryGetValue uploadId with
+    | true, meta ->
+        if scheme = "eu" && meta.session <> session then
+            None
+        else Some meta
+    | false, _ ->
+        let dir = chunksBaseDir runtime + "/" + uploadId
+        match readChunkMeta dir with
+        | Some meta ->
+            if scheme = "eu" && meta.session <> session then
+                None
+            else
+                chunkedUploads.[uploadId] <- meta
+                ("[ChunkRecover] restored " + uploadId) 
+                |> yellow 
+                |> runtime.output
+                Some meta
+        | None -> None
+
 type FileHandler = 
   { fileid__bin: string -> byte[] * string
     fileid__binSecret: string -> byte[] * string * Numerics.BigInteger
     fileid__url: string -> string
-    formfile__relativePath__parentFolderId__AsyncJson: IFormFile -> string -> int64 -> Async<Util.Json.Json> }
+    formfile__relativePath__parentFolderId__AsyncJson: IFormFile -> string -> int64 -> Async<Util.Json.Json>
+    chunkfile__parentFolderId__AsyncJson: (string -> string -> string -> int64 -> int64 -> string -> Async<Util.Json.Json>) option }
 
 let runServer 
     (runtime:RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData>)
@@ -384,6 +551,320 @@ let runServer
 
             httpx.Response.StatusCode <- 500
             do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message; Size = 0L |})
+    })) |> ignore
+
+    // ========== 分片上传端点 ==========
+
+    // --- uploadChunk/init ---
+    app.MapPost("/api/{scheme}/uploadChunk/init", 
+        Func<string, HttpContext, Task>(fun scheme httpx -> task {
+        try
+            if fileHandler.chunkfile__parentFolderId__AsyncJson.IsNone then
+                httpx.Response.StatusCode <- 501
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Chunked upload not supported" |})
+                return ()
+
+            let! body =
+                use reader = new StreamReader(httpx.Request.Body, Encoding.UTF8)
+                reader.ReadToEndAsync()
+
+            let session = tryReadJsonStringProperty "session" body |> fun s -> s.Replace("\"", "")
+            match verifySession runtime scheme session with
+            | Error code ->
+                httpx.Response.StatusCode <- code
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Unauthorized" |})
+                return ()
+            | Ok sessionVerified ->
+
+            let fileName = tryReadJsonStringProperty "fileName" body |> fun s -> s.Replace("\"", "")
+            let fileSize = tryReadJsonInt64Property body "fileSize"
+            let contentType = tryReadJsonStringProperty "contentType" body |> fun s -> s.Replace("\"", "")
+            let chunkSize = 
+                let cs = tryReadJsonIntProperty body "chunkSize"
+                if cs > 0 then cs else defaultChunkSize
+
+            if String.IsNullOrWhiteSpace fileName || fileSize <= 0L then
+                httpx.Response.StatusCode <- 400
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Missing fileName or invalid fileSize" |})
+                return ()
+            if fileSize > maxChunkUploadSize then
+                httpx.Response.StatusCode <- 413
+                do! httpx.Response.WriteAsJsonAsync({| Er = sprintf "File too large: %d bytes (max %d)" fileSize maxChunkUploadSize |})
+                return ()
+
+            cleanupStaleChunks runtime
+
+            let uploadId = Guid.NewGuid().ToString("N")
+            let totalChunks = int (Math.Ceiling(float fileSize / float chunkSize))
+            let dir = ensureChunksDir runtime uploadId
+
+            let meta = {
+                uploadId = uploadId
+                session = sessionVerified
+                fileName = fileName
+                fileSize = fileSize
+                contentType = contentType
+                totalChunks = totalChunks
+                chunkSize = chunkSize
+                receivedChunks = System.Collections.Generic.HashSet<int>()
+                relativePath = ""
+                parentFolderId = 0L
+                createdAt = DateTime.UtcNow
+                tempDir = dir
+            }
+            chunkedUploads.[uploadId] <- meta
+            writeChunkMeta meta
+
+            ("[ChunkInit] " + uploadId + " " + fileName + " " + 
+             fileSize.ToString() + " bytes, " + totalChunks.ToString() + " chunks")
+            |> green |> output
+
+            httpx.Response.ContentType <- "application/json; charset=utf-8"
+            do! httpx.Response.WriteAsJsonAsync({| Er = "OK"; uploadId = uploadId; totalChunks = totalChunks; chunkSize = chunkSize |})
+
+        with ex ->
+            ("[ChunkInit Error] " + ex.Message) |> red |> output
+            httpx.Response.StatusCode <- 500
+            do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message |})
+    })) |> ignore
+
+    // --- uploadChunk (multipart) ---
+    app.MapPost("/api/{scheme}/uploadChunk", 
+        Func<string, HttpContext, Task>(fun scheme httpx -> task {
+        try
+            if fileHandler.chunkfile__parentFolderId__AsyncJson.IsNone then
+                httpx.Response.StatusCode <- 501
+                return ()
+
+            if not httpx.Request.HasFormContentType then
+                httpx.Response.StatusCode <- 415
+                return ()
+            else
+                let form = httpx.Request.Form
+
+                let uploadId = 
+                    if form.ContainsKey "uploadId" then form.["uploadId"].ToString().Replace("\"", "")
+                    else ""
+                let session = 
+                    if form.ContainsKey "session" then form.["session"].ToString().Replace("\"", "")
+                    else ""
+
+                match verifySession runtime scheme session with
+                | Error code ->
+                    httpx.Response.StatusCode <- code
+                    do! httpx.Response.WriteAsJsonAsync({| Er = "Unauthorized" |})
+                    return ()
+                | Ok sessionVerified ->
+
+                let chunkIndex =
+                    if form.ContainsKey "chunkIndex" then
+                        try int (form.["chunkIndex"].ToString().Replace("\"", ""))
+                        with _ -> -1
+                    else -1
+
+                if String.IsNullOrWhiteSpace uploadId || chunkIndex < 0 then
+                    httpx.Response.StatusCode <- 400
+                    do! httpx.Response.WriteAsJsonAsync({| Er = "Missing uploadId or chunkIndex" |})
+                    return ()
+
+                match resolveAndVerifyMeta runtime uploadId sessionVerified scheme with
+                | None ->
+                    httpx.Response.StatusCode <- 404
+                    do! httpx.Response.WriteAsJsonAsync({| Er = "Upload not found" |})
+                    return ()
+                | Some meta ->
+                    if chunkIndex >= meta.totalChunks then
+                        httpx.Response.StatusCode <- 400
+                        do! httpx.Response.WriteAsJsonAsync({| Er = "chunkIndex out of range" |})
+                        return ()
+
+                    let files = form.Files |> Seq.toArray
+                    if files.Length = 0 then
+                        httpx.Response.StatusCode <- 400
+                        do! httpx.Response.WriteAsJsonAsync({| Er = "No file in form" |})
+                        return ()
+
+                    let chunkFile = files.[0]
+                    let chunkActualSize = writeChunkFileHelper meta.tempDir chunkIndex (chunkFile.OpenReadStream())
+
+                    meta.receivedChunks.Add(chunkIndex) |> ignore
+                    chunkedUploads.[uploadId] <- meta
+                    writeChunkMeta meta
+
+                    ("[Chunk] " + uploadId + " #" + chunkIndex.ToString() + 
+                     " " + chunkActualSize.ToString() + " bytes (" + 
+                     meta.receivedChunks.Count.ToString() + "/" + meta.totalChunks.ToString() + ")")
+                    |> green |> output
+
+                    httpx.Response.ContentType <- "application/json; charset=utf-8"
+                    do! httpx.Response.WriteAsJsonAsync({| Er = "OK"; chunkIndex = chunkIndex; received = true |})
+
+        with ex ->
+            ("[Chunk Error] " + ex.Message) |> red |> output
+            httpx.Response.StatusCode <- 500
+            do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message |})
+    })) |> ignore
+
+    // --- uploadChunk/complete ---
+    app.MapPost("/api/{scheme}/uploadChunk/complete", 
+        Func<string, HttpContext, Task>(fun scheme httpx -> task {
+        try
+            if fileHandler.chunkfile__parentFolderId__AsyncJson.IsNone then
+                httpx.Response.StatusCode <- 501
+                return ()
+
+            let! body =
+                use reader = new StreamReader(httpx.Request.Body, Encoding.UTF8)
+                reader.ReadToEndAsync()
+
+            let session = tryReadJsonStringProperty "session" body |> fun s -> s.Replace("\"", "")
+            match verifySession runtime scheme session with
+            | Error code ->
+                httpx.Response.StatusCode <- code
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Unauthorized" |})
+                return ()
+            | Ok sessionVerified ->
+
+            let uploadId = tryReadJsonStringProperty "uploadId" body |> fun s -> s.Replace("\"", "")
+            let relativePath = tryReadJsonStringProperty "relativePath" body |> fun s -> s.Replace("\"", "")
+            let parentFolderId = tryReadJsonInt64Property body "parentFolderId"
+
+            if String.IsNullOrWhiteSpace uploadId then
+                httpx.Response.StatusCode <- 400
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Missing uploadId" |})
+                return ()
+
+            match resolveAndVerifyMeta runtime uploadId sessionVerified scheme with
+            | None ->
+                httpx.Response.StatusCode <- 404
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Upload not found" |})
+                return ()
+            | Some meta ->
+                if meta.receivedChunks.Count <> meta.totalChunks then
+                    let missing = 
+                        [0 .. meta.totalChunks - 1] 
+                        |> List.filter (fun i -> not (meta.receivedChunks.Contains i))
+                    httpx.Response.StatusCode <- 409
+                    do! httpx.Response.WriteAsJsonAsync(
+                        {| Er = "Incomplete"
+                           received = meta.receivedChunks.Count
+                           total = meta.totalChunks
+                           missing = missing |})
+                    return ()
+
+                ("[ChunkComplete] merging " + uploadId + " (" + meta.fileName + ")")
+                |> green |> output
+
+                let mergedPath = mergeChunks meta
+                let completeFn = fileHandler.chunkfile__parentFolderId__AsyncJson.Value
+                let! rep = completeFn mergedPath meta.fileName meta.contentType meta.fileSize parentFolderId relativePath
+
+                try Directory.Delete(meta.tempDir, true)
+                with _ -> ()
+                chunkedUploads.TryRemove(uploadId) |> ignore
+
+                ("[ChunkComplete] done " + uploadId) |> green |> output
+
+                let ary = rep |> Util.Json.json__strFinal
+                httpx.Response.ContentType <- "application/json; charset=utf-8"
+                do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(jsonBytes ary))
+
+        with ex ->
+            ("[ChunkComplete Error] " + ex.Message) |> red |> output
+            httpx.Response.StatusCode <- 500
+            do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message |})
+    })) |> ignore
+
+    // --- uploadChunk/status ---
+    app.MapGet("/api/{scheme}/uploadChunk/status", 
+        Func<string, HttpContext, Task>(fun scheme httpx -> task {
+        try
+            let uploadId = 
+                if httpx.Request.Query.ContainsKey "uploadId" then
+                    httpx.Request.Query.["uploadId"].ToString()
+                else ""
+            let session = 
+                if httpx.Request.Query.ContainsKey "session" then
+                    httpx.Request.Query.["session"].ToString()
+                else ""
+
+            match verifySession runtime scheme session with
+            | Error code ->
+                httpx.Response.StatusCode <- code
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Unauthorized" |})
+                return ()
+            | Ok sessionVerified ->
+
+            if String.IsNullOrWhiteSpace uploadId then
+                httpx.Response.StatusCode <- 400
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Missing uploadId" |})
+                return ()
+
+            match resolveAndVerifyMeta runtime uploadId sessionVerified scheme with
+            | None ->
+                httpx.Response.StatusCode <- 404
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Upload not found" |})
+                return ()
+            | Some meta ->
+                let received = meta.receivedChunks |> Seq.toArray |> Array.sort
+                let missing = 
+                    [0 .. meta.totalChunks - 1] 
+                    |> List.filter (fun i -> not (meta.receivedChunks.Contains i))
+                httpx.Response.ContentType <- "application/json; charset=utf-8"
+                do! httpx.Response.WriteAsJsonAsync(
+                    {| Er = "OK"
+                       uploadId = uploadId
+                       fileName = meta.fileName
+                       totalChunks = meta.totalChunks
+                       receivedChunks = received
+                       missingChunks = missing
+                       chunkSize = meta.chunkSize |})
+
+        with ex ->
+            ("[ChunkStatus Error] " + ex.Message) |> red |> output
+            httpx.Response.StatusCode <- 500
+            do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message |})
+    })) |> ignore
+
+    // --- uploadChunk/abort ---
+    app.MapPost("/api/{scheme}/uploadChunk/abort", 
+        Func<string, HttpContext, Task>(fun scheme httpx -> task {
+        try
+            let! body =
+                use reader = new StreamReader(httpx.Request.Body, Encoding.UTF8)
+                reader.ReadToEndAsync()
+
+            let session = tryReadJsonStringProperty "session" body |> fun s -> s.Replace("\"", "")
+            match verifySession runtime scheme session with
+            | Error code ->
+                httpx.Response.StatusCode <- code
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Unauthorized" |})
+                return ()
+            | Ok sessionVerified ->
+
+            let uploadId = tryReadJsonStringProperty "uploadId" body |> fun s -> s.Replace("\"", "")
+            if String.IsNullOrWhiteSpace uploadId then
+                httpx.Response.StatusCode <- 400
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Missing uploadId" |})
+                return ()
+
+            match resolveAndVerifyMeta runtime uploadId sessionVerified scheme with
+            | None ->
+                httpx.Response.StatusCode <- 404
+                do! httpx.Response.WriteAsJsonAsync({| Er = "Upload not found" |})
+                return ()
+            | Some meta ->
+                try Directory.Delete(meta.tempDir, true)
+                with _ -> ()
+                chunkedUploads.TryRemove(uploadId) |> ignore
+                ("[ChunkAbort] " + uploadId) |> yellow |> output
+                httpx.Response.ContentType <- "application/json; charset=utf-8"
+                do! httpx.Response.WriteAsJsonAsync({| Er = "OK" |})
+
+        with ex ->
+            ("[ChunkAbort Error] " + ex.Message) |> red |> output
+            httpx.Response.StatusCode <- 500
+            do! httpx.Response.WriteAsJsonAsync({| Er = ex.Message |})
     })) |> ignore
 
     let runApiEngine (runtime,httpx,scheme,api) = 

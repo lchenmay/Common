@@ -52,16 +52,21 @@ and EchoCtx<'Runtime,'Session,'Error>
     let read () = task {
         use cw = new CodeWrapper("branch.exe")
 
-        if httpx.Request.ContentLength.HasValue then
-            let length = int httpx.Request.ContentLength.Value
-            let buffer = Array.zeroCreate<byte> length
-            // 确保填满 buffer
-            do! httpx.Request.Body.ReadExactlyAsync(Memory<byte>(buffer))
-            return buffer
-        else
-            use ms = new MemoryStream()
-            do! httpx.Request.Body.CopyToAsync(ms)
-            return ms.ToArray()
+        try
+            if httpx.Request.ContentLength.HasValue then
+                let length = int httpx.Request.ContentLength.Value
+                if length = 0 then return [||] else
+                let buffer = Array.zeroCreate<byte> length
+                do! httpx.Request.Body.ReadExactlyAsync(Memory<byte>(buffer))
+                return buffer
+            else
+                use ms = new MemoryStream()
+                do! httpx.Request.Body.CopyToAsync(ms)
+                return ms.ToArray()
+        with
+        | :? BadHttpRequestException as ex ->
+            System.Console.Error.WriteLine $"Ctx.ReqBodyBin: body already consumed ({ex.Message})"
+            return [||]
     }
     
     let bodyRead =

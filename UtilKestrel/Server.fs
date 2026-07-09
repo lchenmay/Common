@@ -14,6 +14,7 @@ open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.FileProviders
 open Microsoft.Extensions.Logging
+open Microsoft.AspNetCore.WebUtilities
 open System.Net.WebSockets
 
 open Util.Perf
@@ -93,6 +94,14 @@ let runServer
     ) |> ignore
 
 
+    // 请求 body 可回退缓冲（防止被多处读取后抛 BadHttpRequestException）
+    app.Use(fun (context: HttpContext) (next: Func<Task>) ->
+        task {
+            context.Request.EnableBuffering()
+            do! next.Invoke()
+        } :> Task
+    ) |> ignore
+
     // 扫描拦截器
     app.Use(fun (context: HttpContext) (next: Func<Task>) ->
         if context.Request.Path.StartsWithSegments("/.git") || 
@@ -151,9 +160,9 @@ let runServer
       Func<string, string, HttpContext, Task>(
         fun id secret httpx -> task {
           
-          let (bin:byte[]),mime,bint = fileid__binSecret id
+          let (bin:byte[]),mime,s = fileid__binSecret id
 
-          if bint.ToString() = secret then
+          if s.ToString() = secret then
 
             "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" 
             |> green |> output

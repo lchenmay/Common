@@ -78,16 +78,21 @@ let private jsonString (value:string) =
 let private jsonBytes (text:string) =
     Encoding.UTF8.GetBytes text
 
+type FileHandler = 
+  { fileid__bin: string -> byte[] * string
+    fileid__binSecret: string -> byte[] * string * Numerics.BigInteger
+    fileid__url: string -> string
+    formfile__relativePath__parentFolderId__AsyncJson: IFormFile -> string -> int64 -> Async<Util.Json.Json> }
+
 let runServer 
     (runtime:RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData>)
-    (incomingFileWithPath, fileid__bin, fileid__binSecret, fileid__url)
+    fileHandler
     (apiEngine,wsEngineo)
     (port80, port443)
     output
     (args: string[]) =
 
     let builder = WebApplication.CreateBuilder(args)
-
 
     builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning) |> ignore
     builder.Logging.AddFilter("Microsoft.AspNetCore.Routing.EndpointMiddleware", LogLevel.Warning) |> ignore
@@ -240,7 +245,7 @@ let runServer
             else
                 let (bin:byte[]),(mime:string) =
                   use cw = new CodeWrapper("id__thumbnail")
-                  fileid__bin id
+                  fileHandler.fileid__bin id
 
                 "/thumbnail/" + id + " " + bin.Length.ToString() + " bytes" 
                 |> green |> output
@@ -255,7 +260,7 @@ let runServer
     // 文件服务：/file/{id} 
     app.MapGet("/file/{id}/{secret}", 
         Func<string, string, HttpContext, Task>(fun id secret httpx -> task {
-            let expectedUrl = fileid__url id
+            let expectedUrl = fileHandler.fileid__url id
             let validSecret =
                 not (String.IsNullOrWhiteSpace expectedUrl) &&
                 expectedUrl.EndsWith("/" + secret, StringComparison.Ordinal)
@@ -267,50 +272,13 @@ let runServer
             else
                 let (bin:byte[]),(mime:string) =
                     use cw = new CodeWrapper("fileid__bin.encryptedUrl")
-                    fileid__bin id
+                    fileHandler.fileid__bin id
 
                 "/file/" + id + "/*** " + mime + " " + bin.Length.ToString() + " bytes" 
                 |> green |> output
 
                 if bin.Length > 0 && not (String.IsNullOrWhiteSpace mime) then
                     httpx.Response.ContentType <- mime
-                    do! httpx.Response.Body.WriteAsync(ReadOnlyMemory bin)
-                else
-                    httpx.Response.StatusCode <- StatusCodes.Status404NotFound
-    })) |> ignore
-
-    app.MapGet("/file/{id}", 
-        Func<string, HttpContext, Task>(fun id httpx -> task {
-            let withSecret = wantsFileSecret httpx
-            if not withSecret && setPrivateBinaryCache httpx ("file-" + id) then
-                httpx.Response.StatusCode <- StatusCodes.Status304NotModified
-            else
-                let mutable bin: byte[] = [||]
-                let mutable mime = ""
-                let mutable secreto = None
-                if withSecret then
-                    let b,m,s =
-                        use cw = new CodeWrapper("fileid__binSecret")
-                        fileid__binSecret id
-                    bin <- b
-                    mime <- m
-                    secreto <- Some s
-                else
-                    let b,m =
-                        use cw = new CodeWrapper("fileid__bin")
-                        fileid__bin id
-                    bin <- b
-                    mime <- m
-
-                "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" 
-                |> green |> output
-
-                if bin.Length > 0 && not (String.IsNullOrWhiteSpace mime) then
-                    httpx.Response.ContentType <- mime
-                    match secreto with
-                    | Some secret -> httpx.Response.Headers["X-Aiarwa-File-Secret"] <- secret.ToString()
-                    | None -> ()
-
                     do! httpx.Response.Body.WriteAsync(ReadOnlyMemory bin)
                 else
                     httpx.Response.StatusCode <- StatusCodes.Status404NotFound
@@ -329,7 +297,7 @@ let runServer
                 do! httpx.Response.Body.WriteAsync(ReadOnlyMemory(jsonBytes """{"Er":"Unauthorized"}"""))
             else
                 let fileId = tryReadJsonStringProperty "fileId" body
-                let url = fileid__url fileId
+                let url = fileHandler.fileid__url fileId
                 httpx.Response.ContentType <- "application/json; charset=utf-8"
                 if String.IsNullOrWhiteSpace url then
                     httpx.Response.StatusCode <- StatusCodes.Status404NotFound
@@ -392,7 +360,7 @@ let runServer
                     |> Array.map (fun file ->
                         file.FileName + " " + file.Length.ToString() + " bytes"
                         |> green |> output
-                        incomingFileWithPath httpx file relativePath parentFolderId)
+                        fileHandler.formfile__relativePath__parentFolderId__AsyncJson file relativePath parentFolderId)
                     |> fun tasks -> Async.Parallel(tasks, maxDegreeOfParallelism = 3) 
                     |> Async.StartImmediateAsTask
 

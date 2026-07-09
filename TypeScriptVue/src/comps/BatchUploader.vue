@@ -150,6 +150,12 @@ export interface UploaderProps {
   maxFolderDepth?: number
   /** 最大文件夹内文件总数，默认 1000 */
   maxFolderFiles?: number
+  /** 分片上传基础 URL（如 /api/public/uploadChunk），不传则不启用分片 */
+  chunkUploadUrl?: string
+  /** 文件 ≥ 此字节数触发分片上传 */
+  chunkThresholdBytes?: number
+  /** 每个分片的字节数，默认 512KB */
+  chunkBytes?: number
 }
 
 const props = withDefaults(defineProps<UploaderProps>(), {
@@ -157,7 +163,8 @@ const props = withDefaults(defineProps<UploaderProps>(), {
   autoUpload: false,
   enableFolderDrop: false,
   maxFolderDepth: 50,
-  maxFolderFiles: 1000
+  maxFolderFiles: 1000,
+  chunkBytes: 512 * 1024
 })
 
 // ========== 事件 ==========
@@ -365,7 +372,16 @@ const uploadAll = async () => {
   }
 }
 
+// ========== 上传分发 ==========
 const executeUpload = (task: UploadTask): Promise<void> => {
+  if (shouldUseChunked(task)) return executeChunkedUpload(task)
+  return executeDirectUpload(task)
+}
+
+const shouldUseChunked = (task: UploadTask) =>
+  !!(props.chunkUploadUrl && props.chunkThresholdBytes && task.file.size >= props.chunkThresholdBytes)
+
+const executeDirectUpload = (task: UploadTask): Promise<void> => {
   task.status = 'uploading'
   task.progress = 0
 
@@ -449,6 +465,97 @@ const executeUpload = (task: UploadTask): Promise<void> => {
 
     xhr.send(formData)
   })
+}
+
+const executeChunkedUpload = async (task: UploadTask): Promise<void> => {
+  task.status = 'uploading'
+  task.progress = 0
+  task.message = undefined
+
+  try {
+    const chunkBytes = props.chunkBytes || 512 * 1024
+    const totalChunks = Math.ceil(task.file.size / chunkBytes)
+    const baseUrl = props.chunkUploadUrl!
+    const session = props.extraFields?.session || ''
+
+    // Stage 1: Init
+    const initResp = await fetch(`${baseUrl}/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session,
+        fileName: task.file.name,
+        fileSize: String(task.file.size),
+        contentType: task.file.type || 'application/octet-stream',
+        chunkSize: String(chunkBytes)
+      })
+    })
+    const initData = await initResp.json()
+    if (!initResp.ok || initData.Er !== 'OK') {
+      task.status = 'error'
+      task.message = initData.Er || `Init failed (HTTP ${initResp.status})`
+      emit('fileError', task)
+      return
+    }
+    const uploadId = initData.uploadId
+
+    // Stage 2: Upload chunks
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkBytes
+      const end = Math.min(start + chunkBytes, task.file.size)
+      const blob = task.file.slice(start, end)
+
+      const form = new FormData()
+      form.append('file', blob, `chunk_${i}`)
+      form.append('uploadId', uploadId)
+      form.append('session', session)
+      form.append('chunkIndex', String(i))
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', baseUrl)
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve()
+          else reject(new Error(`Chunk ${i}: HTTP ${xhr.status}`))
+        }
+        xhr.onerror = () => reject(new Error(`Chunk ${i}: network error`))
+        xhr.send(form)
+      })
+
+      task.progress = Math.round(((i + 1) / totalChunks) * 95)
+    }
+
+    // Stage 3: Complete
+    const folderId = props.extraFields?.folderId || '0'
+    const completeResp = await fetch(`${baseUrl}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session,
+        uploadId,
+        relativePath: task.relativePath || '',
+        parentFolderId: folderId
+      })
+    })
+
+    if (completeResp.ok) {
+      const rep = await completeResp.json()
+      task.status = 'success'
+      task.progress = 100
+      task.rep = rep
+      emit('fileDone', task)
+    } else {
+      let errMsg = `Complete failed (HTTP ${completeResp.status})`
+      try { const er = await completeResp.json(); errMsg = er.Er || errMsg } catch {}
+      task.status = 'error'
+      task.message = errMsg
+      emit('fileError', task)
+    }
+  } catch (err: any) {
+    task.status = 'error'
+    task.message = err?.message || 'Chunked upload failed'
+    emit('fileError', task)
+  }
 }
 
 const retryTask = (task: UploadTask) => {

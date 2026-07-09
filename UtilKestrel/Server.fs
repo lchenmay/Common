@@ -27,7 +27,7 @@ open UtilKestrel.Ctx
 
 let runServer 
     (runtime:RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData>)
-    (incomingFile, fileid__bin)
+    (incomingFile, fileid__binSecret)
     (apiEngine,wsEngineo)
     (port80, port443)
     output
@@ -145,34 +145,39 @@ let runServer
     ) |> ignore
 
     // --- 路由与功能实现区 ---
-    
-    // 文件服务：/file/{id} 
-    app.MapGet("/file/{id}", 
-        Func<string, HttpContext, Task>(fun id httpx -> task {
-            $"[Server /file/{{id}}] REQUEST id={id}" |> output
-            
-            let (bin:byte[]),mime = 
-                use cw = new CodeWrapper("fileid__bin")
-                fileid__bin id
+
+    // 加密文件服务：/file/{id}/{secret}
+    app.MapGet("/file/{id}/{secret}",
+      Func<string, string, HttpContext, Task>(
+        fun id secret httpx -> task {
+          
+          let (bin:byte[]),mime,bint = fileid__binSecret id
+
+          if bint.ToString() = secret then
 
             "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" 
             |> green |> output
-
-            // 调试：打印将被写入响应体的前 16 字节十六进制
-            if bin.Length > 0 then
-                let hex16 = if bin.Length >= 16 then Util.Bin.bytes__hex bin[..15] else Util.Bin.bytes__hex bin
-                $"[Server /file/{{id}}] writing {bin.Length} bytes, ContentType={mime}, first16hex={hex16}" |> output
-            else
-                $"[Server /file/{{id}}] WARNING: bin is EMPTY (0 bytes), will return empty body!" |> red |> output
 
             //httpx.Response.Headers.["Cache-Control"] <- "public, max-age=86400"
             httpx.Response.ContentType <- mime
             httpx.Response.ContentLength <- int64 bin.Length
 
-            do! httpx.Response.Body.WriteAsync(ReadOnlyMemory bin)
+            do! 
+              bin
+              |> ReadOnlyMemory
+              |> httpx.Response.Body.WriteAsync
+
+          else
+
+            "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" 
+            |> red |> output
+
+            do! 
+              [||]
+              |> ReadOnlyMemory
+              |> httpx.Response.Body.WriteAsync
             
-            "[Server /file/{id}] write complete" |> output
-    })) |> ignore
+          "[Server /file/{id}] write complete" |> output })) |> ignore
     
     app.MapPost("/api/{scheme}/upload", Func<string, HttpContext, Task>(fun scheme httpx -> task {
         try

@@ -50,10 +50,6 @@ let private setPrivateBinaryCache (httpx:HttpContext) (tag:string) =
     httpx.Response.Headers["ETag"] <- etag
     httpx.Request.Headers["If-None-Match"].ToString() = etag
 
-let private wantsFileSecret (httpx:HttpContext) =
-    let q = httpx.Request.Query
-    q.ContainsKey("secret") && q["secret"].ToString() = "1"
-
 let private activeSessionExists (runtime:RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData>) session =
     if String.IsNullOrWhiteSpace session then false
     else
@@ -80,7 +76,7 @@ let private jsonBytes (text:string) =
 
 let runServer 
     (runtime:RuntimeTemplate<'User,'SessionData,'RuntimeData,'HostData>)
-    (incomingFileWithPath, fileid__bin, fileid__binSecret, fileid__url)
+    (incomingFileWithPath, fileid__bin, _fileid__binSecret, fileid__url)
     (apiEngine,wsEngineo)
     (port80, port443)
     output
@@ -160,7 +156,7 @@ let runServer
     app.Use(fun (context: HttpContext) (next: Func<Task>) ->
         task {
             context.Response.Headers["Access-Control-Allow-Origin"] <- "*"
-            context.Response.Headers["Access-Control-Expose-Headers"] <- "ETag, X-Aiarwa-File-Secret"
+            context.Response.Headers["Access-Control-Expose-Headers"] <- "ETag"
             if HttpMethods.IsOptions(context.Request.Method) then
                 context.Response.Headers["Access-Control-Allow-Methods"] <- "GET, POST, PUT, DELETE, OPTIONS"
                 context.Response.Headers["Access-Control-Allow-Headers"] <- "*"
@@ -281,39 +277,8 @@ let runServer
 
     app.MapGet("/file/{id}", 
         Func<string, HttpContext, Task>(fun id httpx -> task {
-            let withSecret = wantsFileSecret httpx
-            if not withSecret && setPrivateBinaryCache httpx ("file-" + id) then
-                httpx.Response.StatusCode <- StatusCodes.Status304NotModified
-            else
-                let mutable bin: byte[] = [||]
-                let mutable mime = ""
-                let mutable secreto = None
-                if withSecret then
-                    let b,m,s =
-                        use cw = new CodeWrapper("fileid__binSecret")
-                        fileid__binSecret id
-                    bin <- b
-                    mime <- m
-                    secreto <- Some s
-                else
-                    let b,m =
-                        use cw = new CodeWrapper("fileid__bin")
-                        fileid__bin id
-                    bin <- b
-                    mime <- m
-
-                "/file/" + id + " " + mime + " " + bin.Length.ToString() + " bytes" 
-                |> green |> output
-
-                if bin.Length > 0 && not (String.IsNullOrWhiteSpace mime) then
-                    httpx.Response.ContentType <- mime
-                    match secreto with
-                    | Some secret -> httpx.Response.Headers["X-Aiarwa-File-Secret"] <- secret.ToString()
-                    | None -> ()
-
-                    do! httpx.Response.Body.WriteAsync(ReadOnlyMemory bin)
-                else
-                    httpx.Response.StatusCode <- StatusCodes.Status404NotFound
+            "/file/" + id + " rejected: missing secret" |> red |> output
+            httpx.Response.StatusCode <- StatusCodes.Status404NotFound
     })) |> ignore
 
     app.MapPost("/api/{scheme}/fileUrl", Func<string, HttpContext, Task>(fun scheme httpx -> task {

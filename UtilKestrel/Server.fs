@@ -78,6 +78,16 @@ let private jsonString (value:string) =
 let private jsonBytes (text:string) =
     Encoding.UTF8.GetBytes text
 
+let private readRequestBodySafe (httpx:HttpContext) = task {
+    try
+        if httpx.Request.Body.CanSeek then
+            httpx.Request.Body.Position <- 0L
+        use reader = new StreamReader(httpx.Request.Body, Encoding.UTF8, false, 1024, true)
+        return! reader.ReadToEndAsync()
+    with
+    | :? ObjectDisposedException -> return ""
+}
+
 // ========== 分片上传辅助模块 ==========
 
 let private maxChunkUploadSize = 10L * 1024L * 1024L * 1024L // 10GB
@@ -105,7 +115,14 @@ let private tryReadJsonInt64Property (body:string) (name:string) =
     try
         use doc = System.Text.Json.JsonDocument.Parse(body)
         let mutable prop = Unchecked.defaultof<System.Text.Json.JsonElement>
-        if doc.RootElement.TryGetProperty(name, &prop) then prop.GetInt64()
+        if doc.RootElement.TryGetProperty(name, &prop) then
+            match prop.ValueKind with
+            | System.Text.Json.JsonValueKind.Number -> prop.GetInt64()
+            | System.Text.Json.JsonValueKind.String ->
+                match Int64.TryParse(prop.GetString()) with
+                | true, value -> value
+                | false, _ -> 0L
+            | _ -> 0L
         else 0L
     with _ -> 0L
 
@@ -113,7 +130,14 @@ let private tryReadJsonIntProperty (body:string) (name:string) =
     try
         use doc = System.Text.Json.JsonDocument.Parse(body)
         let mutable prop = Unchecked.defaultof<System.Text.Json.JsonElement>
-        if doc.RootElement.TryGetProperty(name, &prop) then prop.GetInt32()
+        if doc.RootElement.TryGetProperty(name, &prop) then
+            match prop.ValueKind with
+            | System.Text.Json.JsonValueKind.Number -> prop.GetInt32()
+            | System.Text.Json.JsonValueKind.String ->
+                match Int32.TryParse(prop.GetString()) with
+                | true, value -> value
+                | false, _ -> 0
+            | _ -> 0
         else 0
     with _ -> 0
 
@@ -194,12 +218,13 @@ let private ensureChunksDir (runtime:RuntimeTemplate<_,_,_,_>) uploadId =
         Directory.CreateDirectory dir |> ignore
     dir
 
-let private writeChunkFileHelper (dir:string) (chunkIndex:int) (stream:Stream) =
+let private writeChunkFileHelperAsync (dir:string) (chunkIndex:int) (formFile:IFormFile) = task {
     let chunkPath = dir + "/chunk_" + chunkIndex.ToString("D5")
-    use fs = new FileStream(chunkPath, FileMode.Create)
-    stream.CopyTo(fs)
-    fs.Flush()
-    FileInfo(chunkPath).Length
+    use fs = new FileStream(chunkPath, FileMode.Create, FileAccess.Write, FileShare.None, 64 * 1024, true)
+    do! formFile.CopyToAsync(fs)
+    do! fs.FlushAsync()
+    return FileInfo(chunkPath).Length
+}
 
 let private mergeChunks (meta:ChunkedUploadMeta) =
     let mergedPath = meta.tempDir + "/merged.dat"
@@ -453,9 +478,7 @@ let runServer
 
     app.MapPost("/api/{scheme}/fileUrl", Func<string, HttpContext, Task>(fun scheme httpx -> task {
         try
-            let! body =
-                use reader = new StreamReader(httpx.Request.Body, Encoding.UTF8)
-                reader.ReadToEndAsync()
+            let! body = readRequestBodySafe httpx
 
             let session = tryReadJsonStringProperty "session" body
             if not (activeSessionExists runtime session) then
@@ -564,9 +587,7 @@ let runServer
                 do! httpx.Response.WriteAsJsonAsync({| Er = "Chunked upload not supported" |})
                 return ()
 
-            let! body =
-                use reader = new StreamReader(httpx.Request.Body, Encoding.UTF8)
-                reader.ReadToEndAsync()
+            let! body = readRequestBodySafe httpx
 
             let session = tryReadJsonStringProperty "session" body |> fun s -> s.Replace("\"", "")
             match verifySession runtime scheme session with
@@ -640,7 +661,7 @@ let runServer
                 httpx.Response.StatusCode <- 415
                 return ()
             else
-                let form = httpx.Request.Form
+                let! form = httpx.Request.ReadFormAsync()
 
                 let uploadId = 
                     if form.ContainsKey "uploadId" then form.["uploadId"].ToString().Replace("\"", "")
@@ -685,7 +706,7 @@ let runServer
                         return ()
 
                     let chunkFile = files.[0]
-                    let chunkActualSize = writeChunkFileHelper meta.tempDir chunkIndex (chunkFile.OpenReadStream())
+                    let! chunkActualSize = writeChunkFileHelperAsync meta.tempDir chunkIndex chunkFile
 
                     meta.receivedChunks.Add(chunkIndex) |> ignore
                     chunkedUploads.[uploadId] <- meta
@@ -713,9 +734,7 @@ let runServer
                 httpx.Response.StatusCode <- 501
                 return ()
 
-            let! body =
-                use reader = new StreamReader(httpx.Request.Body, Encoding.UTF8)
-                reader.ReadToEndAsync()
+            let! body = readRequestBodySafe httpx
 
             let session = tryReadJsonStringProperty "session" body |> fun s -> s.Replace("\"", "")
             match verifySession runtime scheme session with
@@ -830,9 +849,7 @@ let runServer
     app.MapPost("/api/{scheme}/uploadChunk/abort", 
         Func<string, HttpContext, Task>(fun scheme httpx -> task {
         try
-            let! body =
-                use reader = new StreamReader(httpx.Request.Body, Encoding.UTF8)
-                reader.ReadToEndAsync()
+            let! body = readRequestBodySafe httpx
 
             let session = tryReadJsonStringProperty "session" body |> fun s -> s.Replace("\"", "")
             match verifySession runtime scheme session with

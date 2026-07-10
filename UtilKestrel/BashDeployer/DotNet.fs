@@ -81,9 +81,10 @@ let buildBackend output credential code =
                     false
                 else
                     // 有正常输出 或 输出为空（实时回调已消费）→ 都做文件级验证
+                    // bashWithRetry: 15s 超时 + 3 次重试（指数退避），避免并行构建时 SSH 竞争超时导致误判构建失败
                     let verifyCmd = $"if [ -d /root/publish/{code} ] && [ -f /root/publish/{code}/Server.dll ]; then echo 'PUBLISH_OK'; else echo 'PUBLISH_MISSING'; fi"
-                    let verify = bash output credential verifyCmd
-                    if verify.Trim() = "PUBLISH_OK" then
+                    let verify = bashWithRetry output credential verifyCmd 15000 3
+                    if verify = "PUBLISH_OK" then
                         "✓ 后端构建完成" |> green |> output
                         true
                     else
@@ -131,9 +132,10 @@ let buildBackend output credential code =
                 false
             else
                 // 有正常输出 或 输出为空（实时回调已消费）→ 都做文件级验证
+                // bashWithRetry: 15s 超时 + 3 次重试（指数退避），避免并行构建时 SSH 竞争超时导致误判构建失败
                 let verifyCmd = $"if [ -d /root/publish/{code} ] && [ -f /root/publish/{code}/Server.dll ]; then echo 'PUBLISH_OK'; else echo 'PUBLISH_MISSING'; fi"
-                let verify = bash output credential verifyCmd
-                if verify.Trim() = "PUBLISH_OK" then
+                let verify = bashWithRetry output credential verifyCmd 15000 3
+                if verify = "PUBLISH_OK" then
                     "✓ 后端构建完成" |> green |> output
                     true
                 else

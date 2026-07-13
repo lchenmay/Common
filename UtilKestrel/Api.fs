@@ -329,7 +329,7 @@ let apiBuilder
         | "ls-all" ->  
             adx.__items usero
             |> sorting
-            |> paging adx.marshall.data__json json 
+            |> allItems adx.marshall.data__json
             |> InternalEr.Ok
 
         | "ls" ->  

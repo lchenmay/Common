@@ -96,3 +96,5 @@ let updateDbStructure runtime conn =
             e.exno with
         | Some exn -> exn.ToString() |> runtime.output
         | None -> ()
+
+        invalidOp "Database structure update failed; server startup was stopped"

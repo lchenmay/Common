@@ -289,6 +289,15 @@ let create_incremental(conn,output,table,sp_loader)(id:Ref<int64>,p) =
 let update_sql (table,fieldassigns,m__ps) (id:int64,ctime:DateTime,p) =
     let sps = m__ps p
 
+    let assignments =
+        match rdbms with
+        | Rdbms.SqlServer ->
+            if String.IsNullOrWhiteSpace fieldassigns then "[Updatedat]=@Updatedat"
+            else "[Updatedat]=@Updatedat," + fieldassigns
+        | Rdbms.PostgreSql ->
+            if String.IsNullOrWhiteSpace fieldassigns then "updatedat=@updatedat"
+            else "updatedat=@updatedat," + fieldassigns
+
     let ps = 
         match rdbms with
         | Rdbms.SqlServer ->
@@ -302,8 +311,8 @@ let update_sql (table,fieldassigns,m__ps) (id:int64,ctime:DateTime,p) =
     {
         text = 
             match rdbms with
-            | Rdbms.SqlServer -> "UPDATE [" + table + "] SET " + fieldassigns + " WHERE ID=@ID";
-            | Rdbms.PostgreSql -> "UPDATE " + table.ToLower() + " SET " + fieldassigns + " WHERE id=@id";
+            | Rdbms.SqlServer -> "UPDATE [" + table + "] SET " + assignments + " WHERE ID=@ID";
+            | Rdbms.PostgreSql -> "UPDATE " + table.ToLower() + " SET " + assignments + " WHERE id=@id";
         ps = [|sps;ps|] |> Array.concat }
 
 let update

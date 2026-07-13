@@ -76,7 +76,7 @@ let private parallelDepInstall output credential (key__dir: Dictionary<string,st
         // ── 第一步：快速检查 hash（5秒超时）──
         let checkCmd = $"""mkdir -p {deployStampDir}
 FE_STAMP={deployStampDir}/bun-lock-hash
-NEW_HASH=$(cd ~/{vscodeDir} && md5sum bun.lockb 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
+NEW_HASH=$(cd ~/{vscodeDir} && md5sum bun.lock 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
 OLD_HASH=$(cat $FE_STAMP 2>/dev/null || echo 'NO_STAMP')
 if [[ "$NEW_HASH" = "NO_LOCK" ]]; then
     echo 'NO_LOCK'
@@ -91,18 +91,18 @@ fi
 
         // ── 第二步：按需安装（长超时，bun install 可能耗时较长）──
         if action = "SKIP" then
-            "[前端] bun.lockb 未变化，跳过安装" |> output
+            "[前端] bun.lock 未变化，跳过安装" |> output
         else
             if action = "NO_LOCK" then
-                "[前端] 未找到 bun.lockb，强制安装" |> output
+                "[前端] 未找到 bun.lock，强制安装" |> output
             else
-                "[前端] bun.lockb 已变化，重新安装..." |> output
+                "[前端] bun.lock 已变化，重新安装..." |> output
             let installCmd = $"""if [[ -f /root/.bun/bin/bun ]]; then
-    cd ~/{vscodeDir} && /root/.bun/bin/bun install 2>&1 < /dev/null || echo '[DEPLOY-WARN] bun install 失败'
+    cd ~/{vscodeDir} && /root/.bun/bin/bun install --frozen-lockfile 2>&1 < /dev/null || echo '[DEPLOY-WARN] bun install 失败'
 else
     cd ~/{vscodeDir} && npm install 2>&1 < /dev/null || echo '[DEPLOY-WARN] npm install 失败'
 fi
-NEW_HASH=$(cd ~/{vscodeDir} && md5sum bun.lockb 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
+NEW_HASH=$(cd ~/{vscodeDir} && md5sum bun.lock 2>/dev/null | cut -d' ' -f1 || echo 'NO_LOCK')
 echo "$NEW_HASH" > {deployStampDir}/bun-lock-hash
 echo '[前端] 依赖安装完成'
 """

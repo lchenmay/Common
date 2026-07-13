@@ -50,6 +50,18 @@ let Paging__jsonTbw (w:TextBlockWriter) (v:Paging) =
 let Paging__jsonStr (v:Paging) =
     (Paging__json v) |> json__strFinal
 
+/// Serialize a complete collection for explicit `ls-all` requests.
+/// This path is intentionally separate from `paging`, whose per-page safety cap remains 200.
+let allItems item__json (ary:'a[]) =
+    let info = {
+        npp = Math.Max(ary.Length, 1)
+        page = 0
+        total = ary.Length
+        pages = if ary.Length = 0 then 0 else 1 }
+
+    [|  ("data", ary |> Array.map item__json |> Json.Ary)
+        ("paging", info |> Paging__json) |]
+
 
 let json__Pagingo (json:Json):Paging option =
     let fields = json |> json__items
@@ -125,24 +137,24 @@ let paging item__json json (ary:'a[]) =
 
     if paging.npp <= 0 then
         paging.npp <- 30
+    elif paging.npp > 200 then
+        paging.npp <- 200
 
     paging.total <- ary.Length
        
     paging.pages <- float(paging.total) / float(paging.npp) |> Math.Ceiling |> int
     if paging.page < 0 then
         paging.page <- 0
-    elif paging.page > paging.pages then
-        paging.page <- paging.pages
+    elif paging.pages = 0 then
+        paging.page <- 0
+    elif paging.page >= paging.pages then
+        paging.page <- paging.pages - 1
 
     let json = 
         let index = paging.page * paging.npp
-        if paging.pages <= paging.npp then
-            ary
-        elif index + paging.npp < ary.Length then
-            Array.sub ary index paging.npp
-        else
-            // 最后一页：从 index 取到数组末尾
-            Array.sub ary index (ary.Length - index)
+        let count = Math.Min(paging.npp, ary.Length - index)
+        if count <= 0 then [||]
+        else Array.sub ary index count
         |> Array.map item__json
         |> Json.Ary
 

@@ -215,14 +215,9 @@ let buildFrontend output credential code =
             debugDistBefore |> output
             
             // ====== 正式构建 ======
-            // 步骤0: 强制更新 @lchenmay/jcs-common（确保生产环境使用最新版）
-            "[DEBUG] --- 步骤0: bun update @lchenmay/jcs-common ---" |> yellow |> output
-            let updateJcsCommonResult = bashDetached output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun update @lchenmay/jcs-common 2>&1; echo '[DEBUG] bun update jcs-common exit code:' $?" 30000
-            updateJcsCommonResult |> output
-
-            // 步骤1: bun install（60s 超时，</dev/null 防止 SSH hang）
-            "[DEBUG] --- 步骤1: bun install ---" |> yellow |> output
-            let installResult = bashDetached output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun install 2>&1; echo '[DEBUG] bun install exit code:' $?" 60000
+            // 依赖和本地补丁由 bun.lock 固定，部署时不得自动升级。
+            "[DEBUG] --- 步骤1: bun install --frozen-lockfile ---" |> yellow |> output
+            let installResult = bashDetached output credential $"cd $HOME/{vscodeDir} && /root/.bun/bin/bun install --frozen-lockfile 2>&1; echo '[DEBUG] bun install exit code:' $?" 60000
             installResult |> output
             
             // 步骤2: bun generateRoutes.cjs（生成路由）

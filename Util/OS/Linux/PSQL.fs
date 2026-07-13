@@ -423,10 +423,10 @@ let exeSetupPSQLTunnel output credential postgresPwd =
         $"  Tunnel: localhost:{tunnelPort} -> {server}:5432" |> green |> output
         $"  Port: {tunnelPort}" |> green |> output
         $"  Username: postgres" |> green |> output
-        $"  Password: {postgresPwd}" |> green |> output
+        "  Password: <redacted>" |> green |> output
         $"  Database: postgres" |> green |> output
         $"  Connection String:" |> cyan |> output
-        $"  {conn}" |> yellow |> output
+        "  <redacted; available only to the deployment process>" |> yellow |> output
         "========================================" |> cyan |> output
         "💡 隧道在本次部署会话期间保持活跃" |> cyan |> output
         "   也可手动建立: ssh -L 55432:localhost:5432 -N {user}@{server}" |> cyan |> output
@@ -561,7 +561,7 @@ let private resolvePortAndConnection output credential postgresPwd =
         $"  Host: {server}" |> green |> output
         $"  Port: 5432" |> green |> output
         $"  Username: postgres" |> green |> output
-        $"  Password: {postgresPwd}" |> green |> output
+        "  Password: <redacted>" |> green |> output
         $"  Database: postgres" |> green |> output
         $"  SSL Mode: Disable" |> green |> output
         "========================================" |> cyan |> output
@@ -588,7 +588,7 @@ let private resolvePortAndConnection output credential postgresPwd =
                 $"  Host: {server}" |> yellow |> output
                 $"  Port: 5432" |> yellow |> output
                 $"  Username: postgres" |> yellow |> output
-                $"  Password: {postgresPwd}" |> yellow |> output
+                "  Password: <redacted>" |> yellow |> output
                 $"  Database: postgres" |> yellow |> output
                 $"  SSL Mode: Disable" |> yellow |> output
                 "========================================" |> yellow |> output
@@ -611,7 +611,7 @@ let private resolvePortAndConnection output credential postgresPwd =
             $"  Host: {server}" |> yellow |> output
             $"  Port: 5432" |> yellow |> output
             $"  Username: postgres" |> yellow |> output
-            $"  Password: {postgresPwd}" |> yellow |> output
+            "  Password: <redacted>" |> yellow |> output
             $"  Database: postgres" |> yellow |> output
             $"  SSL Mode: Disable" |> yellow |> output
             "========================================" |> yellow |> output

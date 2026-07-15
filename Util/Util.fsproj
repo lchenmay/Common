@@ -33,6 +33,7 @@
 	  <Compile Include="Collection\Collection.fs" />
 	  <Compile Include="Collection\LinearCache.fs" />
 	  <Compile Include="Math\Combinatorics.fs" />
+	  <Compile Include="Math\Measure.fs" />
 	  <Compile Include="SD\Base64.fs" />
 	  <Compile Include="SD\Text.fs" />
 	  <Compile Include="SD\Time.fs" />

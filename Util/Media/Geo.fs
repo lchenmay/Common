@@ -173,11 +173,12 @@ let compensatedRange (pinf: float) (psup: float) (nMaj: float) : float * float *
 
 /// 为 Scale 计算三档步进（小刻度 / 大刻度 / 数字标注）。
 /// major 由范围补偿得出；minor = major / 5（细分，仍为有限位小数）；
-/// text = major（大刻度处标注数字）。三者均保证迭代出有限有效数字。
+/// text = 2 × major（数字标注只落在大刻度的每 2 个上）。
+/// 三者比例恒为 1 : 5 : 10（小刻度 : 大刻度 : 数字标注），且均保证迭代出有限有效数字。
 let scaleIncrements (pinf: float) (psup: float) (nMaj: float) : float * float * float =
   let maj = niceStep (psup - pinf) nMaj
   if maj <= 0.0 then 0.0, 0.0, 0.0
-  else maj / 5.0, maj, maj
+  else maj / 5.0, maj, 2.0 * maj
 
 
 

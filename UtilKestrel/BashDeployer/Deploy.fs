@@ -19,22 +19,22 @@ open UtilKestrel.BashDeployer.File
 
 // ==================== 服务健康探活 ====================
 
-/// HTTP 探活：重试 curl 直到服务真正就绪或超时（超时 15s，间隔 2s）
-/// 返回 (isReady, httpStatusCode)
+/// HTTP 探活：公共 Ping 必须返回业务层 Er=OK，避免 200 + Unauthorized 假阳性。
+/// 返回 (isReady, probeResult)
 let private waitForHttpReady output credential port maxSeconds =
     let rec loop remaining =
         if remaining <= 0 then
             $"  ⚠ HTTP 探活超时（{maxSeconds}s），服务可能尚未完全就绪" |> yellow |> output
             (false, "timeout")
         else
-            let healthCmd = 
-                "curl -sf -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 http://localhost:" + port + "/api/admin/monitorVersion 2>/dev/null || echo '000'"
-            let code = (bash output credential healthCmd).Trim()
-            if code = "200" then
-                $"  ✓ HTTP 探活通过，服务已就绪 (localhost:{port}/api/admin/monitorVersion → {code})" |> green |> output
-                (true, code)
+            let healthCmd =
+                "curl -sf --connect-timeout 3 --max-time 5 http://localhost:" + port + "/api/public/ping 2>/dev/null | grep -q 'Er.*OK' && echo 'READY' || echo 'NOT_READY'"
+            let probeResult = (bash output credential healthCmd).Trim()
+            if probeResult = "READY" then
+                $"  ✓ HTTP 探活通过，服务已就绪 (localhost:{port}/api/public/ping → Er=OK)" |> green |> output
+                (true, probeResult)
             else
-                $"  ⏳ 等待服务就绪... HTTP {code}（{remaining}s 后超时）" |> cyan |> output
+                $"  ⏳ 等待服务就绪... {probeResult}（{remaining}s 后超时）" |> cyan |> output
                 System.Threading.Thread.Sleep(2000)
                 loop (remaining - 2)
     loop maxSeconds
@@ -273,30 +273,24 @@ let private exeDeployCodeV2
             "❌ 后端构建失败，请检查构建日志" |> red |> output
         if not frontOk then
             "❌ 前端构建失败，dist 产物缺失" |> red |> output
+        if not frontOk || not backOk then
+            failwith $"构建失败，已中止部署（frontend={frontOk}, backend={backOk}）"
         writeDeployProgress output credential code "phase3_built" "" "编译完成，准备重启服务..." preGitHash "" ""
         
         // === Phase 7: 启动服务 ===
         writeDeployProgress output credential code "phase4_restarting" "" "重启远程服务..." "" "" ""
         "7. 启动服务..." |> cyan |> output
         let port = servicePort code
-        let serviceRunning = checkDotNetServiceRunning output credential code
-        if serviceRunning then
-            $"✓ {code} systemd 服务已在运行，自动重启加载新代码..." |> green |> output
-            let restartCmd = $"systemctl restart {code.ToLower()}"
-            let restartResult = bash output credential restartCmd
-            $"  重启结果: {restartResult.Trim()}" |> output
-            // HTTP 探活确认服务真正就绪（最多 15 秒）
-            let healthy, _ = waitForHttpReady output credential port 15
-            if healthy then
-                $"✓ {code} 服务已成功重启并就绪" |> green |> output
-            else
-                let status = (bash output credential $"systemctl is-active {code.ToLower()}").Trim()
-                $"⚠ 服务状态: {status}，HTTP 探活未通过" |> yellow |> output
-                checkCrashLoop output credential code
+        // 每次部署都刷新 systemd unit，确保它指向当前 publish 目录；函数内部会按状态启动或重启。
+        let serviceStarted = startServiceVerbose output credential code
+        let healthy, _ = waitForHttpReady output credential port 15
+        if serviceStarted && healthy then
+            $"✓ {code} 服务已成功启动并就绪" |> green |> output
         else
-            startServiceVerbose output credential code |> ignore
-            // 首次启动也探活
-            waitForHttpReady output credential port 15 |> ignore
+            let status = (bash output credential $"systemctl is-active {code.ToLower()}").Trim()
+            $"❌ 服务启动验证失败: systemd={status}, httpHealthy={healthy}" |> red |> output
+            checkCrashLoop output credential code
+            failwith $"{code} 服务启动验证失败"
         
         // === Phase 8: 部署后验证 ===
         "\n========================================" |> cyan |> output
@@ -363,6 +357,9 @@ echo "[版本快照] 已保存" """
         with ex2 ->
             $"❌ 服务恢复也失败了: {ex2.Message}" |> red |> output
 
+        // 把失败传递给主流程，禁止继续记录 verified/done 或保存错误版本快照。
+        raise ex
+
 
 // ==================== 主流程（重构版） ====================
 
@@ -423,9 +420,13 @@ let routine
         "Phase 1/4: 本地准备..." |> cyan |> output
         writeDeployProgress output credential code "phase1_pushing" startedAt "推送源码到远程..." localGitHash "" ""
         
-        // 1.1 检查本地 GitHub SSH 密钥
-        "1.1 检查本地 GitHub SSH 密钥..." |> cyan |> output
-        checkLocalGitSshKey output host.disk
+        // 1.1 内网 scp 不依赖 GitHub 密钥；外网中转才检查并部署 GitHub 密钥。
+        let isPrivate = isPrivateNetwork server
+        if isPrivate then
+            $"1.1 检测到内网目标 ({server})，跳过 GitHub SSH 密钥检查" |> cyan |> output
+        else
+            "1.1 检查本地 GitHub SSH 密钥..." |> cyan |> output
+            checkLocalGitSshKey output host.disk
 
         "1.2 切换到项目目录: " + devDir |> cyan |> output
         let exeLocal args = exec output devDir "powershell" args |> ignore
@@ -434,12 +435,12 @@ let routine
         $"1.3 检查 SSH -> [{server}] 免密登录..." |> cyan |> output
         checkSSHAuth output credential (host.disk + "Dev/" + runtime.projectCode, host.deploy.gitEmail)
         
-        // 1.4 部署 GitHub SSH 密钥到远程
-        "1.4 部署 GitHub SSH 密钥到远程..." |> cyan |> output
-        setupRemoteGitSshKey output credential host.disk
+        // 1.4 仅外网 GitHub 中转需要把 GitHub 密钥部署到远端
+        if not isPrivate then
+            "1.4 部署 GitHub SSH 密钥到远程..." |> cyan |> output
+            setupRemoteGitSshKey output credential host.disk
 
         // 1.5 判断目标服务器是否在内网，选择最优推送路径
-        let isPrivate = isPrivateNetwork server
         if isPrivate then
             $"1.5 检测到内网目标 ({server})，优先使用 scp 直推源码..." |> cyan |> output
         else

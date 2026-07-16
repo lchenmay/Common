@@ -19,7 +19,7 @@ let sshKeyFile = "id_git"
 
 /// 检查本地 GitHub SSH 密钥是否存在
 /// disk: "C:/" — 将在 {disk}Dev/ 下查找 {sshKeyFile} 和 {sshKeyFile}.pub
-/// 不存在时提示用户生成并上传 GitHub，等待确认后继续
+/// 不存在时直接失败，避免后台部署线程永久阻塞在控制台输入上
 let checkLocalGitSshKey output disk =
     let keyPath = disk + "Dev/" + sshKeyFile
     let privKey = keyPath
@@ -31,9 +31,7 @@ let checkLocalGitSshKey output disk =
         "⚠ 本地 GitHub SSH 密钥不存在" |> yellow |> output
         $"  生成方式: ssh-keygen -t ed25519 -f {keyPath} -C git -N ''" |> orange |> output
         $"  然后将 {pubKey} 添加到 https://github.com/settings/keys" |> yellow |> output
-        "  完成后按任意键继续..." |> yellow |> output
-        Console.ReadKey() |> ignore
-        "\n" |> output
+        failwith $"GitHub SSH 密钥不存在: {keyPath}"
 
 /// 把本地 GitHub SSH 密钥部署到远程服务器
 /// disk: "C:/" — 从 {disk}Dev/ 读取 {sshKeyFile} / {sshKeyFile}.pub
@@ -174,13 +172,7 @@ let private pushLocalRepoWithRetry output repoPath gitName gitEmail (maxRetries:
         $"❌ 推送失败，已重试 {maxRetries} 次" |> red |> output
         $"仓库: {repoPath}" |> red |> output
         "请手动执行 git push 后再重新部署，或检查网络连接" |> yellow |> output
-        "是否继续部署？(y/n): " |> yellow |> output
-        let response = Console.ReadLine()
-        if response <> "y" && response <> "Y" then
-            "用户取消部署" |> red |> output
-            failwith "Git push 失败，用户取消部署"
-        else
-            "⚠ 跳过 push 验证，继续部署（远程仓库可能不是最新）" |> yellow |> output
+        failwith "Git push 失败，已中止后台部署"
     
     success
 

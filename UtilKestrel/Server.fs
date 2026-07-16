@@ -396,7 +396,10 @@ let runServer
     ) |> ignore
 
     // Vue 静态文件托管
-    let vueDistPath = runtime.host.disk + "Dev/" + runtime.projectCode + "/vscode/dist"
+    let vueDistPath =
+        match Environment.GetEnvironmentVariable("UTILKESTREL_VUE_DIST_PATH") with
+        | path when not (String.IsNullOrWhiteSpace path) -> path
+        | _ -> runtime.host.disk + "Dev/" + runtime.projectCode + "/vscode/dist"
     if Directory.Exists vueDistPath then
         let fileServerOptions = StaticFileOptions()
         fileServerOptions.FileProvider <- new PhysicalFileProvider(vueDistPath)

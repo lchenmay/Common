@@ -114,3 +114,70 @@ type HorAlign =
 | BottomCenter
 | BottomRight
 
+
+type ScaleAttach = 
+| Top
+| Bottom
+| Left
+| Right
+
+type Scale = {
+  coord: Coord
+  pincrementScaleMin: float // 小刻度的物理量步进
+  pincrementScaleMaj: float // 大刻度的物理量步进
+  pincrementText: float // 数字标记的物理量步进
+  attach: ScaleAttach }
+
+// ============================================================================
+// 刻度步进补偿算法
+// ----------------------------------------------------------------------------
+// 目标：给定物理量范围 [pinf, psup] 与期望刻度数，把"步进"补偿为
+//   1 / 2 / 5 × 10ᵏ  这类有限位十进制小数，
+// 并把刻度起点/终点 snap 到步进的整数倍。
+// 这样沿轴迭代出来的物理量恒为有限有效数字（如 3.14, 3.15, 3.16），
+// 绝不出现无限循环/不循环小数的刻度值。
+// 该算法与"线性 or 对数"无关：对数轴在构造 Scale 时把 coord 换成 log 映射、步进给在
+// log 空间即可，补偿算法本身一视同仁。
+// ============================================================================
+
+/// 核心补偿：把任意物理量跨度补偿为"漂亮"步进。
+/// 步进恒为 1/2/5 × 10ᵏ（有限位十进制小数）。
+/// range 为物理量跨度（自动取绝对值），nTick 为期望刻度数量。
+let niceStep (range: float) (nTick: float) : float =
+  if range <= 0.0 || nTick <= 0.0 then 0.0
+  else
+    let raw = abs range / nTick
+    let mag = Math.Pow(10.0, floor (log10 raw))
+    let k = raw / mag
+    let f =
+      if   k < 1.5 then 1.0
+      elif k < 3.5 then 2.0
+      elif k < 7.5 then 5.0
+      else 10.0
+    f * mag
+
+/// 把物理量 p 向下补偿对齐到 step 的整数倍（刻度起点 snap）。
+let alignDown (p: float) (step: float) : float =
+  if step = 0.0 then p else floor (p / step) * step
+
+/// 把物理量 p 向上补偿对齐到 step 的整数倍（刻度终点 snap）。
+let alignUp (p: float) (step: float) : float =
+  if step = 0.0 then p else ceil (p / step) * step
+
+/// 由 [pinf, psup] 与目标大刻度数，求补偿后的 (对齐起点, 对齐终点, 大刻度步进)。
+/// 起点/终点都被 snap 到 step 整数倍，保证刻度落点整齐且为有限有效数字。
+let compensatedRange (pinf: float) (psup: float) (nMaj: float) : float * float * float =
+  let step = niceStep (psup - pinf) nMaj
+  if step <= 0.0 then pinf, psup, step
+  else alignDown pinf step, alignUp psup step, step
+
+/// 为 Scale 计算三档步进（小刻度 / 大刻度 / 数字标注）。
+/// major 由范围补偿得出；minor = major / 5（细分，仍为有限位小数）；
+/// text = major（大刻度处标注数字）。三者均保证迭代出有限有效数字。
+let scaleIncrements (pinf: float) (psup: float) (nMaj: float) : float * float * float =
+  let maj = niceStep (psup - pinf) nMaj
+  if maj <= 0.0 then 0.0, 0.0, 0.0
+  else maj / 5.0, maj, maj
+
+
+

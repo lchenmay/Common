@@ -10,39 +10,39 @@ mutable dsup: float32
 mutable formatter: string }
 
 let coord__str coord = 
-    [|  "d = ["
-        coord.dinf.ToString coord.formatter
-        " : "
-        coord.dsup.ToString coord.formatter
-        "], p = ["
-        coord.pinf.ToString coord.formatter
-        " : "
-        coord.psup.ToString coord.formatter
-        "]" |]
-    |> String.Concat
+  [|  "d = ["
+      coord.dinf.ToString coord.formatter
+      " : "
+      coord.dsup.ToString coord.formatter
+      "], p = ["
+      coord.pinf.ToString coord.formatter
+      " : "
+      coord.psup.ToString coord.formatter
+      "]" |]
+  |> String.Concat
 
 let p__d coord p = 
-    coord.dinf + (coord.dsup - coord.dinf) * float32(p - coord.pinf) / float32(coord.psup - coord.pinf)
+  coord.dinf + (coord.dsup - coord.dinf) * float32(p - coord.pinf) / float32(coord.psup - coord.pinf)
 
 let d__p coord d = 
-    coord.pinf + (coord.psup - coord.pinf) * float(d - coord.dinf) / float(coord.dsup - coord.dinf)
+  coord.pinf + (coord.psup - coord.pinf) * float(d - coord.dinf) / float(coord.dsup - coord.dinf)
 
 let checkP coord p = 
-    if coord.pinf > p then
-        coord.pinf <- p
-    if coord.psup < p then
-        coord.psup <- p
+  if coord.pinf > p then
+    coord.pinf <- p
+  if coord.psup < p then
+    coord.psup <- p
 
 let stretch coord rate = 
-    if coord.pinf > 0.0 then
-        coord.pinf <- coord.pinf * (1.0 - rate)
-    else
-        coord.pinf <- coord.pinf * (1.0 + rate)
+  if coord.pinf > 0.0 then
+      coord.pinf <- coord.pinf * (1.0 - rate)
+  else
+      coord.pinf <- coord.pinf * (1.0 + rate)
 
-    if coord.psup > 0.0 then
-        coord.psup <- coord.pinf * (1.0 + rate)
-    else
-        coord.psup <- coord.psup * (1.0 - rate)
+  if coord.psup > 0.0 then
+      coord.psup <- coord.pinf * (1.0 + rate)
+  else
+      coord.psup <- coord.psup * (1.0 - rate)
 
 type CoordXY = {
 mutable x: Coord
@@ -65,26 +65,32 @@ l: float32
 t: float32
 w: float32
 h: float32
-mutable cxy: CoordXY }
+mutable cxy: CoordXY
+mutable visible: bool }
 
-let rect__chart (l,t,w,h) formatter = {
+let rect__chart (l,t,w,h) formatter = 
+  {
     l = l
     t = t
     w = w
     h = h 
-    cxy = {
-        x = {
+    cxy = 
+      {
+        x = 
+          {
             pinf = 0.0
             psup = 0.0
             dinf = l
             dsup = l + w
             formatter = "" }
-        y = {
+        y = 
+          {
             pinf = 0.0
             psup = 0.0
             dinf = t + h
             dsup = t
-            formatter = formatter }}}
+            formatter = formatter }}
+    visible = true }
 
 type ChartCorner = 
 | LeftTop

@@ -462,9 +462,9 @@ let startServiceVerbose output credential (code: string) =
     "    - 当前 systemd 服务状态:" |> cyan |> output
     bash output credential $"systemctl status {svcName} 2>/dev/null || echo '(服务尚未注册)'" |> output
     
-    // 1. 停止现有进程（兼容旧版 nohup 方式）
-    "  1. 清理旧版 nohup 进程..." |> cyan |> output
-    bash output credential "sudo killall -9 dotnet 2>/dev/null; echo 'cleanup done'" |> output
+    // 1. 不再使用 killall -9 dotnet，避免误杀同机其他 .NET 服务。
+    // 旧版 nohup 残留应由一次性运维清理；常规部署只管理当前 systemd unit。
+    "  1. 跳过全局 dotnet 进程清理，仅管理当前 systemd 服务" |> cyan |> output
     
     // 2. 创建/更新 systemd unit
     "  2. 创建 systemd 服务单元..." |> cyan |> output

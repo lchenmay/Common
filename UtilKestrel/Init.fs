@@ -74,8 +74,11 @@ let updateDbStructure runtime conn =
             | Rdbms.SqlServer -> "sqlSQLServer.sql"
             | Rdbms.PostgreSql -> "sqlPostgreSQL.sql"
             
-        // C:\Dev\XXX\XXX.Server\bin\Debug\net8.0
-        runtime.host.disk + "Dev/" + runtime.projectCode + "/" + runtime.projectCode + ".Shared/" + file
+        match Environment.GetEnvironmentVariable("UTILKESTREL_SCHEMA_SQL_PATH") with
+        | path when not (String.IsNullOrWhiteSpace path) -> path
+        | _ ->
+            // C:\Dev\XXX\XXX.Server\bin\Debug\net8.0
+            runtime.host.disk + "Dev/" + runtime.projectCode + "/" + runtime.projectCode + ".Shared/" + file
 
 
     match

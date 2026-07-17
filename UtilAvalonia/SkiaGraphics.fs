@@ -252,6 +252,92 @@ let dashedPaint (color: SKColor) (strokeWidth: float32) (dashes: float32[]) =
         p.PathEffect <- SKPathEffect.CreateDash(dashes, 0f)
     p
 
+// ============================================================================
+// 坐标轴刻度绘制（像素驱动 + 横轴自适应防重叠 + 最少有效数字）
+// ============================================================================
+
+/// 在图表矩形 (l,t,r,b) 上绘制 scale 对应的坐标轴刻度线 + 文字标注。
+/// scale.attach 决定轴在哪条边（Left/Right/Top/Bottom），
+/// 横轴(Top/Bottom)会按实测文字宽度自适应倍增文字步进以防重叠。
+let drawScale
+    (canvas: SKCanvas)
+    (l: float32) (t: float32) (r: float32) (b: float32)
+    (scale: Scale)
+    (fontSize: float32)
+    (tickColor: SKColor)
+    (textBack: SKColor)
+    (textFore: SKColor) =
+
+    let ticks = genTicks scale
+    let small = scale.pincrementScaleMin
+    let maj   = scale.pincrementScaleMaj
+    let txt   = scale.pincrementText
+    let c     = scale.coord
+
+    if small <= 0.0 || ticks.minors.IsEmpty then () else
+
+    let isX = scale.attach = Top || scale.attach = Bottom
+
+    // ---- 横轴自适应文字步进 ----
+    let textStep =
+        let defaultEvery = int (txt / small)
+        if isX && List.length ticks.texts > 1 then
+            use font = calibriFont fontSize
+            let measure (s: string) = font.MeasureText(s)
+            let maxW = ticks.texts |> List.map (fun (_,s) -> measure s) |> List.max
+            let axisPixels =
+                match scale.attach with
+                | Left | Right -> abs(c.dinf - c.dsup)
+                | Top  | Bottom -> abs(c.dsup - c.dinf)
+            let pixPerSmall = float axisPixels / ((c.psup - c.pinf) / small)
+            let mutable te = defaultEvery
+            while float32(float te) * float32(pixPerSmall) < maxW * 1.2f do
+                te <- te * 2
+            te
+        else defaultEvery
+
+    let drawnTextStep = small * float textStep
+
+    // ---- 绘制刻度线 ----
+    use linePaint = new SKPaint(
+        Color = tickColor,
+        StrokeWidth = 1f,
+        IsAntialias = true,
+        Style = SKPaintStyle.Stroke)
+
+    for v in ticks.minors do
+        let pix = p__d c v
+        let isDrawnText = isMultipleOf v drawnTextStep && isMultipleOf v txt
+        let tickLen =
+            if isDrawnText then 10.0f
+            elif isMultipleOf v maj then 7.0f
+            else 4.0f
+        match scale.attach with
+        | Left   -> canvas.DrawLine(l - tickLen, pix, l, pix, linePaint)
+        | Right  -> canvas.DrawLine(r, pix, r + tickLen, pix, linePaint)
+        | Top    -> canvas.DrawLine(pix, t - tickLen, pix, t, linePaint)
+        | Bottom -> canvas.DrawLine(pix, b, pix, b + tickLen, linePaint)
+
+    // ---- 绘制文字标注 ----
+    use font = calibriFont fontSize
+
+    for v, s in ticks.texts do
+        if isMultipleOf v drawnTextStep then
+            let pix = p__d c v
+            let tw = font.MeasureText(s)
+            let th = fontSize
+            let pad = 3.0f
+            let rect =
+                match scale.attach with
+                | Left   -> SKRect(l - tw - pad * 2f - 12f, pix - th * 0.5f - pad, l - 2f, pix + th * 0.5f + pad)
+                | Right  -> SKRect(r + 2f, pix - th * 0.5f - pad, r + tw + pad * 2f + 12f, pix + th * 0.5f + pad)
+                | Top    -> SKRect(pix - tw * 0.5f - pad, t - th - pad * 2f - 10f, pix + tw * 0.5f + pad, t - 2f)
+                | Bottom -> SKRect(pix - tw * 0.5f - pad, b + 2f, pix + tw * 0.5f + pad, b + th + pad * 2f + 10f)
+            use bgPaint = new SKPaint(Color = textBack, Style = SKPaintStyle.Fill, IsAntialias = true)
+            canvas.DrawRect(rect, bgPaint)
+            use fgPaint = new SKPaint(Color = textFore, IsAntialias = true)
+            canvas.DrawText(s, rect.Left + pad, rect.Top + pad + th * 0.8f, SKTextAlign.Left, font, fgPaint)
+
 /// SKPoint 数组 → (float32*float32*float32*float32) 线段数组（用于 drawLines）
 let pts__lines (pts: SKPoint[]) =
     [| for i in 1 .. pts.Length - 1 ->

@@ -180,5 +180,82 @@ let scaleIncrements (pinf: float) (psup: float) (nMaj: float) : float * float * 
   if maj <= 0.0 then 0.0, 0.0, 0.0
   else maj / 5.0, maj, 2.0 * maj
 
+// ============================================================================
+// 可配步进比 + 像素驱动刻度生成
+// ----------------------------------------------------------------------------
+// 从像素空间出发：给定轴像素长 L 与小刻度最小像素间距 minPix，
+// 反算期望小刻度数 → niceStep 补偿 → 1:minorPerMaj:textPerMaj 三级刻度。
+// 格式化为尽量少有效数字，横轴按实测文字宽度自适应防止重叠。
+// ============================================================================
+
+/// 可配步进比版本：给定范围与期望小刻度数(像素驱动)，返回三档步进。
+/// small = 小刻度步进, maj = small × minorPerMaj, txt = small × textPerMaj
+let scaleIncrementsCfg (pinf: float) (psup: float) (nMinor: float) (minorPerMaj: float) (textPerMaj: float) : float * float * float =
+  let small = niceStep (psup - pinf) nMinor
+  if small <= 0.0 then 0.0, 0.0, 0.0
+  else small, small * minorPerMaj, small * textPerMaj
+
+/// 最少有效数字格式化：给定步进 step，把 v 格式化为整齐且无多余尾零的字符串。
+/// step=0.05 时 0.30→"0.3"、1.25→"1.25"；大数量级(≥1e6)或极小(非零且<1e-3)用科学计数。
+let formatTick (step: float) (v: float) : string =
+  let aStep = abs step
+  let decimals =
+    if aStep >= 1.0 then 0
+    else max 0 (int (ceil (-log10 aStep - 1e-9)))
+  let v = Math.Round(v, decimals)
+  let s = v.ToString("F" + decimals.ToString())
+  let s = if s.Contains(".") then s.TrimEnd('0').TrimEnd('.') else s
+  if abs v >= 1e6 || (abs v > 0.0 && abs v < 1e-3) then
+    v.ToString("0.###e+0")
+  else
+    s
+
+/// 刻度集合：小刻度/大刻度/文字标注的物理量列表
+type TickSet = {
+  minors: float list
+  majors: float list
+  texts : (float * string) list
+}
+
+/// 从 Coord + 配置构建 Scale（像素驱动）。
+/// minPix = 小刻度最小像素间距，minorPerMaj = 小:大比例(默认 5)，textPerMaj = 小:文字比例(默认 10)
+let buildScale (coord: Coord) (attach: ScaleAttach) (minPix: float32) (minorPerMaj: float) (textPerMaj: float) : Scale =
+  let L =
+    match attach with
+    | Left | Right -> abs(coord.dinf - coord.dsup) |> float
+    | Top  | Bottom -> abs(coord.dsup - coord.dinf) |> float
+  let nMinor = L / float minPix
+  let small, maj, txt = scaleIncrementsCfg coord.pinf coord.psup nMinor minorPerMaj textPerMaj
+  { coord = coord; pincrementScaleMin = small; pincrementScaleMaj = maj; pincrementText = txt; attach = attach }
+
+/// 判断 v 是否接近 step 的整数倍（浮点容差）
+let isMultipleOf (v: float) (step: float) : bool =
+  if step <= 0.0 then false
+  else
+    let r = abs(v % step)
+    r < step * 1e-9 || abs(r - abs step) < abs step * 1e-9
+
+/// 从 Scale 生成全部刻度位置（minor/major/text 三级，起点 snap 到 small 的整数倍）
+let genTicks (scale: Scale) : TickSet =
+  let c = scale.coord
+  let small = scale.pincrementScaleMin
+  let maj   = scale.pincrementScaleMaj
+  let txt   = scale.pincrementText
+  if small <= 0.0 || maj <= 0.0 || txt <= 0.0 then
+    { minors = []; majors = []; texts = [] }
+  else
+    let first = alignDown c.pinf small
+    let last  = alignUp c.psup small
+    let allTicks =
+      [ let mutable v = first
+        while v <= last + small * 0.001 do
+          yield v
+          v <- v + small ]
+    { minors = allTicks
+      majors = allTicks |> List.filter (fun v -> isMultipleOf v maj)
+      texts  = allTicks |> List.filter (fun v -> isMultipleOf v txt)
+                        |> List.map (fun v -> v, formatTick small v) }
+
+
 
 

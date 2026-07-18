@@ -59,7 +59,13 @@ type TabContainer() as this =
         headerPanel.Children.Add(closeBtn) |> ignore
         tabItem.Header <- headerPanel
         tabItem.Tag <- header  // 用于 OpenOrActivateTab 查找
-        
+
+        // 关键：让 TabItem 的内容区（ContentPresenter）把子控件（如 ChartControl）
+        // 横向/纵向撑满，否则 UserControl 默认按“期望尺寸”左对齐，
+        // 表现为图表不铺满、右侧/下方留白。这是“全屏铺满”的必要一环。
+        tabItem.HorizontalContentAlignment <- HorizontalAlignment.Stretch
+        tabItem.VerticalContentAlignment <- VerticalAlignment.Stretch
+
         this.DetachFromParent(content)
         tabItem.Content <- content
         tabControl.Items.Add tabItem |> ignore

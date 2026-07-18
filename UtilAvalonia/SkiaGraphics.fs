@@ -283,7 +283,7 @@ let drawScale
         let defaultEvery = int (txt / small)
         if isX && List.length ticks.texts > 1 then
             use font = calibriFont fontSize
-            let measure (s: string) = font.MeasureText(s)
+            let measure (s: string) = (font.MeasureText : string -> float32) s
             let maxW = ticks.texts |> List.map (fun (_,s) -> measure s) |> List.max
             let axisPixels =
                 match scale.attach with

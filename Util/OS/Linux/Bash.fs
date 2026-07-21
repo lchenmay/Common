@@ -321,8 +321,10 @@ let execute output credential cmd =
         result |> output
     result
 
-/// 检查 SSH 免密登录是否已配置成功（带超时）
-let checkSshKeyConfiguredWithTimeout output credential (timeoutMs: int) : bool =
+/// 单次 SSH 免密登录探测。
+/// 返回 (是否成功, 是否鉴权失败[Permission denied], 诊断信息)
+/// 进程未在超时内退出(超时分支)与握手/回显卡住都归为"瞬断"，由调用方决定是否重试。
+let private trySshAuthOnce output credential (timeoutMs: int) : bool * bool * string =
     let porto, user, server = credential
     let portArg = 
         match porto with
@@ -360,21 +362,52 @@ let checkSshKeyConfiguredWithTimeout output credential (timeoutMs: int) : bool =
     let exited = proc.WaitForExit(timeoutMs)
     
     if not exited then
-        proc.Kill()
-        $"SSH 连接超时 ({user}@{server})" |> yellow |> output
-        false
+        // 进程未在超时内退出：sshd 握手/回显卡住（多为服务器瞬时负载/sshd 节流），属可重试的瞬断
+        try proc.Kill() with _ -> ()
+        (false, false, $"SSH 连接超时 ({user}@{server})")
     else
         let exitCode = proc.ExitCode
         if exitCode = 0 then
-            $"SSH 免密登录已配置 ({user}@{server})" |> green |> output
-            true
+            (true, false, $"SSH 免密登录已配置 ({user}@{server})")
         else
             let error = errorBuilder.ToString()
             if error.Contains("Permission denied") then
-                $"SSH 免密登录未配置 ({user}@{server})，需要先配置密钥" |> yellow |> output
+                // 真正的鉴权失败：公钥没配/不匹配，不应重试
+                (false, true, $"SSH 免密登录未配置 ({user}@{server})，需要先配置密钥")
             else
-                $"SSH 连接失败 ({user}@{server}): {error.Trim()}" |> yellow |> output
-            false
+                (false, false, $"SSH 连接失败 ({user}@{server}): {error.Trim()}")
+
+/// 检查 SSH 免密登录是否已配置成功（带超时，自动重试以吸收 sshd 瞬时卡顿）
+/// sshd 在服务器高负载（如 2GB 小机 dotnet 构建期内存尖峰、无 swap 抖动）时会偶发握手卡住，
+/// 单次探测超时会被误判为"公钥未配置"并掉入手动复制公钥的死循环。此处对瞬断重试，
+/// 仅当确为 Permission denied（真没配公钥）或连续多次失败才判定未配置。
+let checkSshKeyConfiguredWithTimeout output credential (timeoutMs: int) : bool =
+    let _, _, server = credential
+    let maxAttempts = 3
+    let mutable attempt = 0
+    let mutable result = false
+    let mutable done' = false
+    while not done' && attempt < maxAttempts do
+        attempt <- attempt + 1
+        let succeeded, isAuthFail, diag = trySshAuthOnce output credential timeoutMs
+        if succeeded then
+            diag |> green |> output
+            result <- true
+            done' <- true
+        elif isAuthFail then
+            diag |> yellow |> output
+            result <- false
+            done' <- true   // 鉴权失败不重试
+        else
+            diag |> yellow |> output
+            if attempt < maxAttempts then
+                $"  SSH 探测瞬断，{attempt}/{maxAttempts} 次重试（等待 2s）..." |> yellow |> output
+                System.Threading.Thread.Sleep(2000)
+            else
+                $"SSH 免密登录检查连续 {maxAttempts} 次失败（非鉴权问题，可能是服务器/网络不可达）" |> yellow |> output
+                result <- false
+                done' <- true
+    result
 
 /// 检查 SSH 免密登录是否已配置成功（默认30秒超时）
 let checkSshKeyConfigured output credential : bool =

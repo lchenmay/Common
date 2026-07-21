@@ -72,13 +72,14 @@ let recolorInk (bmp: SKBitmap) (color: SKColor) =
     src
 
 /// 整体等比放大（scale > 1 才放大，否则原样返回），用于预览截图放大。
-let scaleBitmap (src: SKBitmap) (scale: float) =
+let scaleBitmap (src: SKBitmap) (scale: float) (bg: SKColor option) =
     if scale <= 1.0 then src
     else
         let w2 = max 1 (int (float src.Width * scale))
         let h2 = max 1 (int (float src.Height * scale))
         let dst = new SKBitmap(w2, h2, SKColorType.Bgra8888, SKAlphaType.Premul)
-        dst.Erase(SKColors.White)
+        let bgColor = defaultArg bg SKColors.White
+        dst.Erase(bgColor)
         use canvas = new SKCanvas(dst)
         use paint = new SKPaint(IsAntialias = false)
         canvas.Save() |> ignore

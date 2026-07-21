@@ -4,10 +4,36 @@ open System
 open System.IO
 open System.Runtime.InteropServices
 
-open jCQT.AI.ImgProc
-
 open SkiaSharp
 
+open jCQT.AI.ImgProc
+
+open jCQT.Music.Types
+
+/// 一段大谱表（切片 + 分行后的最终结果载体）。
+/// 同时携带：裁剪位图(bmp) + 段内几何(firstLineY/lineYs) + 元数据(timeSignature/key)，
+/// 以便后继直接拿来做垂直对齐 alignVertical 与水平拼接 stitchHorizontally，无需再回查 StaffRegion。
+type GrandStaffSegment = {
+    /// 段在原始 PDF 中的页码（1-based），拼接/回溯来源用
+    pageIndex: int
+    /// 段在页内的行序号（1-based），拼接/回溯来源用
+    rowIndex: int
+    /// 拍号，由谱号/调号/拍号区检测后回填（默认 4/4 占位）
+    mutable timeSignature: TimeSignature
+    /// 调号（大调 + 关系小调），由谱号/调号/拍号区检测后回填（默认 C 大调 / a 小调占位）
+    mutable key: Key
+    /// 上五线谱（高音谱号）第一条线在 bmp 内的 Y（px），用于 alignVertical 垂直对齐
+    firstLineY: int
+    /// 该段检测到的全部五线谱横线 Y（相对 bmp，px），用于谱线预览/后续解析对齐
+    lineYs: int list
+    /// 该段大谱表裁剪位图（已二值化 + 去边，透明背景）
+    bmp: SKBitmap
+    /// 已识别谱号/调号区右界（段内位图局部 x，px）。
+    /// 第一个切片为 None（保留谱号调号），其余为 Some xR（拼接前从红框右边框起切除左侧谱号调号区）。
+    clefRightX: int option
+    /// 该切片最右小节线位置（段内位图局部 x，px），用于收口右界。
+    /// 第一个切片为 None；其余为 Some bx（与 clefRightX 配合：从红框右边裁到最右小节线）。
+    rightBarX: int option }
 
 
 /// 单个双行谱（Grand Staff）区域，页面坐标系
@@ -165,8 +191,8 @@ let private detectStaffLineYs arr w h =
 
 /// 按 region 配对检测大括号：每个 Grand Staff（region）左侧最左几列的"高墨量列群"即 brace。
 /// 谱号在 brace 右侧不会被误中；brace 中腰凹进也不会被竖向 gap 切碎（直接用 region 边界）。
-/// 返回与 regions 一一对应的 (xCenter, yTop, yBot)，y 范围 = region 顶到底（横跨 10 线），
-/// 与红框完全对齐，不会再被误切成多段错位假 brace。
+/// 返回与 regions 一一对应的 (xStart, xEnd, yTop, yBot)，x 范围 = brace 真实左缘到右缘，
+/// y 范围 = region 顶到底（横跨 10 线），红框可直接用 (xStart, yTop) 作左/上锚点。
 let private detectBracesForRegions (arr: byte[]) (w: int) (h: int) (regions: StaffRegion list) =
     if List.isEmpty regions then [] else
     let leftCols = max 1 (int (0.18 * float w))
@@ -190,16 +216,15 @@ let private detectBracesForRegions (arr: byte[]) (w: int) (h: int) (regions: Sta
         if xStart < 0 then
             // 兜底：取墨量最大的列（即便只有谱号也能凑合标出大致位置）
             let xPeak = colInk |> Array.mapi (fun i v -> (i, v)) |> Array.maxBy snd |> fst
-            (xPeak, reg.topY, reg.bottomY)
+            (xPeak, xPeak, reg.topY, reg.bottomY)
         else
-            // 3) 从 xStart 向右扩展到墨量下降到阈值以下，作为 brace 宽度
+            // 3) 从 xStart 向右扩展到墨量下降到阈值以下，作为 brace 真实右缘
             let mutable xEnd = xStart
             let mutable xx = xStart + 1
             while xx < leftCols && colInk.[xx] >= inkThresh do
                 xEnd <- xx
                 xx <- xx + 1
-            let xCenter = (xStart + xEnd) / 2
-            (xCenter, reg.topY, reg.bottomY)
+            (xStart, xEnd, reg.topY, reg.bottomY)
     )
 
 /// 从位图检测大括号（用于可视化标注）。必须传入 regions 配对，
@@ -232,7 +257,7 @@ let lineWidthStrict (colInk: int64[]) (x: int) (startX: int) (w: int) =
 /// ±2px 带内有墨的线数 → colAlignedInk[x]。谱号/调号/拍号牢牢趴在谱线上 → 左侧连续高密度列；
 /// 音符区仅在个别列有墨 → 稀疏。扫描找到高密度持续区的右边界即为 xR。
 /// 返回与 regions 一一对应的矩形 (xLeft=0, xRight, yTop, yBottom)。
-let detectClefKeyTimeRegions (bmp: SKBitmap) (regions: StaffRegion list) =
+let private legacyClefKeyTimeRegions (bmp: SKBitmap) (regions: StaffRegion list) =
     if List.isEmpty regions then [] else
     let (src, arr) = copyPixels bmp
     use _src = src
@@ -318,6 +343,311 @@ let detectClefKeyTimeRegions (bmp: SKBitmap) (regions: StaffRegion list) =
                     yield (0, min w (xEnd + 2), y0, y1)
                 else
                     yield (0, w, y0, y1) ]
+
+// ===================== 谱号/调号右边界共识精修 =====================
+
+/// 可分离高斯模糊（二项式 5 抽头核 [1,4,6,4,1]/16，σ≈1.0），在 luma 浮点行主序数组上原地完成。
+/// 横向 + 纵向各一遍；用于吸收各切片间微小坐标差：常数信号（谱号/调号/拍号）保留，随机音符被抹弱。
+let private gaussianBlurLuma (buf: float32[]) (width: int) (height: int) =
+    let k = [| 1.0f; 4.0f; 6.0f; 4.0f; 1.0f |]
+    let ksum = 16.0f
+    let tmp = Array.zeroCreate<float32> (width * height)
+    for y in 0 .. height - 1 do
+        for x in 0 .. width - 1 do
+            let mutable acc = 0.0f
+            for i in -2 .. 2 do
+                let xx = min (width - 1) (max 0 (x + i))
+                acc <- acc + buf.[y * width + xx] * k.[i + 2]
+            tmp.[y * width + x] <- acc / ksum
+    for y in 0 .. height - 1 do
+        for x in 0 .. width - 1 do
+            let mutable acc = 0.0f
+            for i in -2 .. 2 do
+                let yy = min (height - 1) (max 0 (y + i))
+                acc <- acc + tmp.[yy * width + x] * k.[i + 2]
+            buf.[y * width + x] <- acc / ksum
+
+/// 高斯模糊 + 堆叠共识，精修谱号/调号/拍号区右边界（相对各带左缘 xL 的像素偏移）。
+///
+/// 思路（stack & consensus，天文学/文档分析常用）：同页 K 个系统的谱表带里，
+/// 谱号/调号/拍号为"常数信号"（逐带几乎相同），音符/小节线为"随机信号"（各带位置不同）。
+/// 把 K 个带对齐后逐像素叠加，常数保留、随机被平均掉，于是谱号调号区从噪声中"浮现"。
+///
+/// 对齐：垂直按 yTop 对齐（相对参考带偏移，预期≈0，因各带"垂直完全相同"）；
+///       水平以 xL（=bx0 大括号左缘）为锚，吸收"略有偏移"，无需像素级互相关。
+/// 每个带裁成 luma 数组 → 可分离高斯模糊(σ≈1) → 逐像素"全带一致墨"投票
+/// （排除谱线行 ±1px，避免横贯全宽的谱线污染逐列统计）。
+/// 谱号/调号/拍号为常数 → 全带一致有墨；音符/小节线为随机 → 仅个别带有墨。
+/// 逐列取"全带一致墨"比例 ≥ 高阈值(0.5) 的、从 xL 起最左连续块（低阈值 0.3 桥接 ≤10px 间隙），
+/// 其右缘 +2px 余量 = 相对 xL 的 xR（px）。
+/// 返回 Some xR；样本不足(K<3)或无一致块时返回 None（由确定性宽度兜底）。
+let private detectClefKeyRightByConsensus
+        (bmp: SKBitmap) (bands: (int * int * int * int list) list) : int option =
+    if bands.Length < 3 then None else
+    let (src, arr) = copyPixels bmp
+    use _src = src
+    let w = src.Width
+    let h = src.Height
+    let (_, refYT, _, refStaffYs) = bands.Head
+    // 缓冲高度取所有带的最小高度：每个带都是"按自身几何裁出的局部子图"，用局部行对齐，
+    // 因此取最小高度可保证任意带都不会溢出缓冲（避免绝对页面对齐把高低音/多系统带错位）。
+    let bufH = bands |> List.map (fun (_, yT, yB, _) -> yB - yT) |> List.min |> max 1
+    // 裁剪宽度：取各带可裁最小宽（w - xL 的最小值），并以 ≈2×大谱表高 + 余量封顶，避免引入过多随机音符
+    let cropW =
+        bands
+        |> List.map (fun (xl, _, _, _) -> w - xl)
+        |> List.min
+        |> fun m -> min m (bufH * 2 + 80)
+        |> max 1
+    // 局部谱线行掩膜：缓冲行 r = 各带局部行（所有带几何相同，仅用参考带的谱线局部位置即可；±1px）。
+    // 用"全部带的 ly - refYT"会混入其他带的绝对偏移，导致掩膜错位，故只取参考带。
+    let staffRows = System.Collections.Generic.HashSet<int>()
+    for ly in refStaffYs do
+        let r = ly - refYT
+        for dy in -1 .. 1 do
+            let rr = r + dy
+            if rr >= 0 && rr < bufH then staffRows.Add rr |> ignore
+    // 共识累加：inkVote[r,c] = 该(行,列)有墨的带数；bandCnt[r,c] = 参与累加的带数
+    let inkVote = Array.zeroCreate<int> (bufH * cropW)
+    let bandCnt = Array.zeroCreate<int> (bufH * cropW)
+    let lumaTh = 150.0f
+    // 每个带都是"按自身几何裁出的局部子图"（谱号恒在局部左、谱线位置恒定），故用局部行 r 直接对齐
+    // （不加绝对页偏移），高低音/多系统带才能正确叠加；谱线行掩膜同样按参考带局部行构建。
+    for (xl, yT, _, _) in bands do
+        let bandBuf = Array.zeroCreate<float32> (bufH * cropW)
+        for r in 0 .. bufH - 1 do
+            let py = yT + r
+            if py >= 0 && py < h then
+                let baseIdx = py * w * 4
+                for c in 0 .. cropW - 1 do
+                    let px = xl + c
+                    if px < 0 || px >= w then bandBuf.[r * cropW + c] <- 255.0f
+                    else
+                        let idx = baseIdx + px * 4
+                        bandBuf.[r * cropW + c] <-
+                            float32 ((int arr.[idx] + int arr.[idx + 1] + int arr.[idx + 2]) / 3)
+        gaussianBlurLuma bandBuf cropW bufH
+        for r in 0 .. bufH - 1 do
+            if not (staffRows.Contains r) then
+                for c in 0 .. cropW - 1 do
+                    let bi = r * cropW + c
+                    bandCnt.[bi] <- bandCnt.[bi] + 1
+                    if bandBuf.[r * cropW + c] < lumaTh then
+                        inkVote.[bi] <- inkVote.[bi] + 1
+    // 逐列"全带一致墨"比例
+    let ratio = Array.zeroCreate<float32> cropW
+    for c in 0 .. cropW - 1 do
+        let mutable cnt = 0
+        let mutable valid = 0
+        for r in 0 .. bufH - 1 do
+            let i = r * cropW + c
+            if bandCnt.[i] > 0 then
+                valid <- valid + 1
+                if inkVote.[i] >= bandCnt.[i] then cnt <- cnt + 1
+        if valid > 0 then ratio.[c] <- float32 cnt / float32 valid
+    // 取从列 0 起最左连续一致块（高阈值起始，低阈值桥接 ≤10px 间隙）
+    let hi = 0.5f
+    let lo = 0.3f
+    let gapMerge = 10
+    let mutable bestEnd = -1
+    let mutable i = 0
+    while i < cropW do
+        if ratio.[i] >= hi then
+            let runStart = i
+            let mutable end_ = i
+            let mutable gap = 0
+            let mutable j = i + 1
+            let mutable stop = false
+            while j < cropW && not stop do
+                if ratio.[j] >= lo then
+                    end_ <- j
+                    gap <- 0
+                else
+                    gap <- gap + 1
+                    if gap >= gapMerge then stop <- true
+                j <- j + 1
+            if runStart <= 6 then bestEnd <- end_
+            i <- j
+        else
+            i <- i + 1
+    if bestEnd < 0 then None else Some (bestEnd + 2)
+
+// ===================== 谱号检测（按 5 线定位切上下谱表） =====================
+
+/// 检测每段（大谱表 / 单行谱）的谱号（clef）区域，用红框指示。
+/// 每个 region 出"上下两个谱号框"（高音谱号 + 低音谱号）；单行谱（5 线）出 1 个；<5 线跳过。
+///
+/// 【左/上/下 = 确定性，右 = 共识精修】
+/// 用户硬性规定（多次强调）保持不变的部分：
+///   左缘 xLeft = bx0（大括号左缘）；上/下 = 按 5 线纵向切分（每段 s0-L .. s4+L）。
+/// 右缘 xRight 原固定为 bx0 + 0.5×braceH（确定性估计）；现由**高斯模糊 + 堆叠共识**精修：
+///   在保持左/上/下不变的前提下，用同页 K 个谱表带的共识把"谱号/调号/拍号"与"后继小节/音符"
+///   切开（详见 detectClefKeyRightByConsensus 与 music.md）。K<3 或共识可疑（过窄）时回退到
+///   确定性宽度 0.5×braceH，保证铁律不退化、上下谱号红框仍等宽。
+let detectClefRegions (bmp: SKBitmap) (regions: StaffRegion list)
+                       (braces: (int * int * int * int) list) =
+    if List.isEmpty regions then [] else
+    let w = bmp.Width
+    let h = bmp.Height
+    // 把 braces 与 regions 一一配对；长度不齐时用空 brace (0,0,0,0) 兜底
+    let pairs =
+        List.zip regions (braces @ List.init (max 0 (regions.Length - braces.Length)) (fun _ -> (0, 0, 0, 0)))
+    // 1) 构造每谱表带（高音/低音各一条），记录确定性左/上/下与兜底右
+    let bands =
+        [ for (reg, (bx0, _bx1, byT, byB)) in pairs do
+            let lineYs = reg.lineYs |> List.sort
+            if List.length lineYs >= 5 then
+                let braceH = if byB > byT then byB - byT else (reg.bottomY - reg.topY)
+                let braceH = max 1 braceH
+                let xL = max 0 bx0
+                let xR_det = min w (bx0 + int (float braceH * 0.5))
+                // 把 lineYs 按每 5 线切成"谱表"组（大谱表=2 组：高音/低音），每组只纵向不同
+                for staff in List.chunkBySize 5 lineYs do
+                    let n = List.length staff
+                    if n >= 5 then
+                        let s0 = staff.[0]
+                        let s4 = staff.[4]
+                        let L = max 1 ((s4 - s0) / 4)
+                        let yTop = max 0 (s0 - L)
+                        let yBot = min h (s4 + L)
+                        yield (xL, yTop, yBot, staff, xR_det, braceH) ]
+    if bands.IsEmpty then [] else
+    // 2) 共识精修右边界（左/上/下保持确定性不变）
+    let consOpt = detectClefKeyRightByConsensus bmp [ for (xl, yt, yb, sy, _, _) in bands -> (xl, yt, yb, sy) ]
+    [ for (xL, yTop, yBot, _staff, xR_det, braceH) in bands do
+        let xR =
+            match consOpt with
+            | Some xrRel when xrRel >= max 24 (int (0.12 * float braceH)) ->
+                min w (xL + xrRel)
+            | _ -> xR_det
+        yield (xL, xR, yTop, yBot) ]
+
+/// 检测每段（region）的头部块（谱号 + 调号 + 拍号）右边界，供 `markBarLines` 排除头部用。
+/// 签名较历史版本新增 `braces`：用于以 `bx0`（大括号左缘）为水平锚做共识对齐。
+///
+/// 右边界优先用**高斯模糊 + 堆叠共识**精修（详见 `detectClefKeyRightByConsensus` 与 music.md）：
+/// 同页 K 个系统的谱表带里，谱号/调号/拍号为常数信号、音符/小节线为随机信号，叠加后常数保留、
+/// 随机被平均掉，于是头部块从噪声中"浮现"，其右缘即谱号调号与后继小节的切分点。
+/// 共识不可用时（K<3 或无一致块）回退到原单图列投影 `legacyClefKeyTimeRegions`。
+/// 返回与 regions 一一对应的矩形 (xLeft=0, xRight, yTop, yBottom)。
+let detectClefKeyTimeRegions (bmp: SKBitmap) (regions: StaffRegion list)
+                             (braces: (int * int * int * int) list) =
+    if List.isEmpty regions then [] else
+    let w = bmp.Width
+    let h = bmp.Height
+    let pairs =
+        List.zip regions (braces @ List.init (max 0 (regions.Length - braces.Length)) (fun _ -> (0, 0, 0, 0)))
+    let bands =
+        [ for (reg, (bx0, _bx1, _byT, _byB)) in pairs do
+            let lineYs = reg.lineYs |> List.sort
+            if List.length lineYs >= 5 then
+                let xL = max 0 bx0
+                let yT = max 0 reg.topY
+                let yB = min h (reg.bottomY + 1)
+                yield (xL, yT, yB, lineYs) ]
+    match detectClefKeyRightByConsensus bmp bands with
+    | Some xrRel ->
+        // 共识成功：右边界 = bx0 + 共识右缘；左缘记为 0（与历史返回语义一致，markBarLines 只用 xRight）
+        [ for (xL, yT, yB, _) in bands do
+            let xR = min w (xL + xrRel)
+            yield (0, xR, yT, yB) ]
+    | None -> legacyClefKeyTimeRegions bmp regions
+
+/// 检测每个 region（大谱表 / 单行谱）的谱号/调号区右界，返回与 regions 一一对应的页面级 x（px）。
+/// 复用 detectClefRegions 的"左/上/下确定性 + 右共识精修"逻辑：以各 region 的 bx0（大括号左缘）为水平锚，
+/// 把同页 K 个谱表带喂给 detectClefKeyRightByConsensus 得到相对 xL 的偏移 xrRel，
+/// 再按各 region 各自 bx0 落回页面 x = bx0 + xrRel。共识不可用或过窄时回退确定性 0.5×braceH。
+/// 与 detectClefRegions 的区别：本函数返回"每 region 一个"页面坐标右界（而非按 5 线拆出的上下两个红框），
+/// 供 segmentPage 把页面级右界映射为段内坐标、在拼接前切除左侧谱号调号区。
+let detectClefRightPerRegion (bmp: SKBitmap) (regions: StaffRegion list)
+                             (braces: (int * int * int * int) list) =
+    if List.isEmpty regions then [] else
+    let w = bmp.Width
+    let h = bmp.Height
+    let pairs =
+        List.zip regions (braces @ List.init (max 0 (regions.Length - braces.Length)) (fun _ -> (0, 0, 0, 0)))
+    // 构造与 detectClefRegions 完全一致的谱表带（高音/低音各一条），供共识对齐
+    let bands =
+        [ for (reg, (bx0, _bx1, byT, byB)) in pairs do
+            let lineYs = reg.lineYs |> List.sort
+            if List.length lineYs >= 5 then
+                let braceH = if byB > byT then byB - byT else (reg.bottomY - reg.topY)
+                let braceH = max 1 braceH
+                let xL = max 0 bx0
+                for staff in List.chunkBySize 5 lineYs do
+                    let n = List.length staff
+                    if n >= 5 then
+                        let s0 = staff.[0]
+                        let s4 = staff.[4]
+                        let L = max 1 ((s4 - s0) / 4)
+                        let yTop = max 0 (s0 - L)
+                        let yBot = min h (s4 + L)
+                        yield (xL, yTop, yBot, staff) ]
+    let consOpt =
+        if bands.IsEmpty then None
+        else detectClefKeyRightByConsensus bmp bands
+    // 每 region 出一个页面级右界；与 regions 顺序一一对应
+    [ for (reg, (bx0, _bx1, byT, byB)) in pairs do
+        let lineYs = reg.lineYs |> List.sort
+        if List.length lineYs >= 5 then
+            let braceH = if byB > byT then byB - byT else (reg.bottomY - reg.topY)
+            let braceH = max 1 braceH
+            let bx0' = max 0 bx0
+            let xR =
+                match consOpt with
+                | Some xrRel when xrRel >= max 24 (int (0.12 * float braceH)) ->
+                    min w (bx0' + xrRel)
+                | _ -> min w (bx0' + int (float braceH * 0.5))
+            yield xR
+        else
+            yield w ]   // 无谱线信息 → 全宽（不切除）
+
+/// 取每个 region（大谱表 / 单行谱）的红框右界（页面坐标 px）。
+/// 单一事实来源：直接复用 detectClefRegions（用户已确认正确的红框）的右缘，
+/// 按 region 分组取该 region 各谱表带（高音/低音）的最大 xR。
+/// 这样左裁界恒等于"红框右边"，不再依赖任何会退化的并行共识实现。
+/// 返回与 regions 一一对应的页面坐标右界（工作分辨率；调用方按需乘以 ratio 升到导出分辨率）。
+let detectClefRightByRegion (bmp: SKBitmap) (regions: StaffRegion list)
+                            (braces: (int * int * int * int) list) : int list =
+    if List.isEmpty regions then List.empty<int> else
+    let w = bmp.Width
+    let h = bmp.Height
+    let pad = List.init (max 0 (regions.Length - braces.Length)) (fun _ -> (0, 0, 0, 0))
+    let pairs = List.zip regions (braces @ pad)
+    // 构造与 detectClefRegions 完全同序的谱表带（高音/低音各一条），并携带 region 序号，
+    // 以便把红框右缘按 region 对齐分组（大谱表=上下两个红框，取 max）。
+    let ridxBands =
+        [ for (ridx, (reg, (bx0, _bx1, byT, byB))) in List.indexed pairs do
+            let lineYs = reg.lineYs |> List.sort
+            if List.length lineYs >= 5 then
+                let braceH = if byB > byT then byB - byT else (reg.bottomY - reg.topY)
+                let braceH = max 1 braceH
+                let xL = max 0 bx0
+                let xR_det = min w (bx0 + int (float braceH * 0.5))
+                for staff in List.chunkBySize 5 lineYs do
+                    if List.length staff >= 5 then
+                        let s0 = staff.[0]
+                        let s4 = staff.[4]
+                        let L = max 1 ((s4 - s0) / 4)
+                        let yTop = max 0 (s0 - L)
+                        let yBot = min h (s4 + L)
+                        yield (ridx, xL, yTop, yBot, xR_det, braceH, staff) ]
+    if ridxBands.IsEmpty then
+        [ for _ in regions -> w ]   // 无谱线信息 → 全宽（不切除）
+    else
+        // 单一事实来源：红框右缘与上面 ridxBands 同序（同 pairs、同 chunkBySize 5）
+        let boxes = detectClefRegions bmp regions braces
+        let xrByRegion =
+            List.zip ridxBands boxes
+            |> List.map (fun ((ridx, _, _, _, _, _, _), (_xL, xR, _, _)) -> (ridx, xR))
+            |> List.groupBy fst
+            |> List.map (fun (ridx, xs) -> (ridx, xs |> List.map snd |> List.max))
+            |> Map.ofList
+        // 每个 region 一个值：有红框取 max xR，无（<5 线）取全宽兜底
+        [ for ridx in 0 .. regions.Length - 1 ->
+            match xrByRegion.TryFind ridx with
+            | Some xR -> xR
+            | None -> w ]
 
 // ===================== 五线谱检测 =====================
 
@@ -569,22 +899,71 @@ let trimMargins (bmp: SKBitmap) =
         src.ExtractSubset(dst, rect) |> ignore
         dst
 
+/// 返回位图 alpha 通道中首个有墨列的 x（即最左墨迹列）；全透明返回 0。
+/// 用于把页面级右界（cropRegion 全宽、列 0 = 页面 x=0）映射为段内局部坐标。
+let leftInkColumn (bmp: SKBitmap) =
+    let (src, arr) = copyPixels bmp
+    use _src = src
+    let w = src.Width
+    let h = src.Height
+    let mutable left = w
+    let mutable y = 0
+    while y < h && left = w do
+        let baseIdx = y * w * 4
+        let mutable x = 0
+        while x < w do
+            if arr.[baseIdx + x * 4 + 3] > 0uy then
+                if x < left then left <- x
+                x <- w   // 找到即跳出内层
+            else x <- x + 1
+        y <- y + 1
+    left
+
+/// 列裁剪：保留从 x 到最右列的子图（高度不变），用于拼接前切除谱号/调号区。
+/// x 会被夹到 [0, width-1]；返回的新位图宽度 = width - left。
+let cropLeft (bmp: SKBitmap) (x: int) =
+    let (src, _) = copyPixels bmp
+    use _src = src
+    let left = max 0 (min (src.Width - 1) x)
+    let rect = SKRectI(left, 0, src.Width, src.Height)
+    let dst = new SKBitmap(src.Width - left, src.Height, SKColorType.Bgra8888, SKAlphaType.Premul)
+    src.ExtractSubset(dst, rect) |> ignore
+    dst
+
+/// 列裁切：保留 [x0, x1] 子图（高度不变），用于"从红框右边裁到最右小节线"。
+/// x0/x1 会被夹到 [0, width-1] 且 x1 >= x0；返回新位图宽度 = x1 - x0 + 1。
+let cropRange (bmp: SKBitmap) (x0: int) (x1: int) =
+    let (src, _) = copyPixels bmp
+    use _src = src
+    let left = max 0 (min (src.Width - 1) x0)
+    let right = max left (min (src.Width - 1) x1)
+    let rect = SKRectI(left, 0, right + 1, src.Height)
+    let dst = new SKBitmap(right - left + 1, src.Height, SKColorType.Bgra8888, SKAlphaType.Premul)
+    src.ExtractSubset(dst, rect) |> ignore
+    dst
+
 // ===================== 垂直对齐 =====================
 
-/// 以每个片段上五线谱首线为基准，统一向上补透明像素使拼接时谱线齐平
-/// 输入 (bitmap, baseline)，baseline = 首线在片段内的 Y
-let alignVertical (segs: (SKBitmap * int) list) =
-    if List.isEmpty segs then []
+/// 以每个分段上五线谱首线为基准，统一向上补透明像素使拼接时谱线齐平。
+/// 入参/返回均为 GrandStaffSegment 列表：返回的新 segment 的 bmp 已重画、首线统一在 maxBase，
+/// lineYs 同步向下平移，旧 bmp 已释放（防止显存泄漏）。
+let alignVertical (segs: GrandStaffSegment list) : GrandStaffSegment list =
+    if List.isEmpty segs then segs
     else
-        let maxBase = segs |> List.map snd |> List.max
-        let maxBelow = segs |> List.map (fun (b, bl) -> b.Height - bl) |> List.max
+        let maxBase = segs |> List.map (fun s -> s.firstLineY) |> List.max
+        let maxBelow = segs |> List.map (fun s -> s.bmp.Height - s.firstLineY) |> List.max
         let commonH = maxBase + maxBelow
-        segs |> List.map (fun (b, bl) ->
-            let out = new SKBitmap(b.Width, commonH, SKColorType.Bgra8888, SKAlphaType.Premul)
+        [ for s in segs do
+            let bmp = s.bmp
+            let pad = maxBase - s.firstLineY
+            let out = new SKBitmap(bmp.Width, commonH, SKColorType.Bgra8888, SKAlphaType.Premul)
             out.Erase(SKColors.Transparent)
             use canvas = new SKCanvas(out)
-            canvas.DrawBitmap(b, 0.0f, float32 (maxBase - bl))
-            out)
+            canvas.DrawBitmap(bmp, 0.0f, float32 pad)
+            bmp.Dispose()
+            { s with bmp = out
+                     firstLineY = maxBase
+                     lineYs = s.lineYs |> List.map (fun y -> y + pad) } ]
 
 // ===================== 横向拼接 =====================
 
@@ -607,13 +986,63 @@ let stitchHorizontally (bitmaps: SKBitmap list) (separator: int) =
 
 // ===================== 保存片段 =====================
 
-/// 按顺序保存片段为 PNG 到 {pdfDir}/segments/page{页码}_{行号}.png
-/// 返回保存的文件路径列表
-let saveSegments (items: (SKBitmap * (int * int)) list) (pdfPath: string) =
+/// 把一页检测到的双行谱区域 (StaffRegion list) 切成 GrandStaffSegment 列表。
+/// pageBmp 须为已二值化位图（空白透明、墨迹黑+alpha），分辨率 = 导出分辨率；
+/// regions 坐标为工作分辨率，ratio = 导出DPI/工作DPI 用于把区域坐标换算到 pageBmp。
+/// clefRightHi 为与 regions 一一对应的"谱号/调号区右界（导出分辨率页面坐标 px）"，
+///   由 detectClefRightByRegion 算得（与红框同源），段内映射后存入 clefRightX。
+/// rightBarHi 为与 regions 一一对应的"该段最右小节线（导出分辨率页面坐标 px）"，
+///   由 markBarLines 算得，段内映射后存入 rightBarX，用于收口右界。
+/// 每个 segment 含：裁剪+去边后的位图(bmp)，以及换算到段内的首线Y / 全部谱线Y。
+let segmentPage (pageIndex: int) (pageBmp: SKBitmap) (ratio: float)
+                (regions: StaffRegion list)
+                (clefRightHi: int list) (rightBarHi: int list) : GrandStaffSegment list =
+    [ for (idx, reg) in List.indexed regions do
+        let hTop = int (float reg.topY * ratio)
+        let hBot = int (float reg.bottomY * ratio)
+        let cropped = cropRegion pageBmp hTop hBot
+        let trimmed = trimMargins cropped
+        // 左/右界映射需要"全宽 cropped 的最左墨列 left"：
+        // cropRegion 全宽起步（列 0 = 页面 x=0），故段内 x = 页面坐标 - left。
+        // 必须在 cropped.Dispose() 之前求 left（否则 leftInkColumn 会读已释放的 native 像素 → 崩溃）。
+        let left = leftInkColumn cropped
+        cropped.Dispose()
+        let regionTop = max 0 hTop
+        let firstLineY = int (float reg.firstLineY * ratio) - regionTop
+        let lineYs = reg.lineYs |> List.map (fun y -> int (float y * ratio) - regionTop)
+        // clefRightHi[idx] 为导出分辨率页面级右界；段内局部 x = 页面右界 - left
+        let clefRightX =
+            if idx < clefRightHi.Length then
+                let crx = clefRightHi.[idx] - left
+                if crx > 0 && crx < trimmed.Width then Some crx else None
+            else None
+        // rightBarHi[idx] 为导出分辨率页面级最右小节线；段内局部 x = 页面坐标 - left
+        let rightBarX =
+            if idx < rightBarHi.Length then
+                let brx = rightBarHi.[idx] - left
+                if brx > 0 && brx <= trimmed.Width then Some (min brx (trimmed.Width - 1)) else None
+            else None
+        { pageIndex = pageIndex
+          rowIndex = idx + 1
+          timeSignature = { beats = 4; note = Quart }   // 占位，检测阶段回填
+          key = Maj_C___Min_A                            // 占位，检测阶段回填
+          firstLineY = firstLineY
+          lineYs = lineYs
+          bmp = trimmed
+          clefRightX = clefRightX
+          rightBarX = rightBarX } ]
+
+/// 保存分段为 PNG 到 {pdfDir}/segments/{prefix}-{n}.png，n 为连续序号（从 startIndex 起）。
+/// 采用单一连续计数器：无论 seg 还是 layer，序号都不重置、依次递增。
+/// items 为 (segment, bitmap) 对：bitmap 即要持久化的位图（通常已按墨色重染）。
+/// 命名约定：切片（基础分段）用 prefix="seg"，成品输出的透明图层用 prefix="layer"。
+/// 调用方负责编排（如先存 seg 占 1..N，再存 layer 占 N+1..2N）。返回保存的文件路径列表。
+let saveSegments (namePrefix: string) (startIndex: int) (items: (GrandStaffSegment * SKBitmap) list) (pdfPath: string) : string list =
     let dir = Path.Combine(Path.GetDirectoryName(pdfPath), "segments")
     Directory.CreateDirectory(dir) |> ignore
-    [ for (bmp, (p, r)) in items ->
-        let filePath = Path.Combine(dir, sprintf "page%d_%d.png" p r)
+    [ for i, (seg, bmp) in List.indexed items do
+        let n = startIndex + i
+        let filePath = Path.Combine(dir, sprintf "%s-%d.png" namePrefix n)
         use img = SKImage.FromBitmap(bmp)
         use data = img.Encode(SKEncodedImageFormat.Png, 100)
         use fs = new FileStream(filePath, FileMode.Create, FileAccess.Write)
@@ -624,9 +1053,9 @@ let saveSegments (items: (SKBitmap * (int * int)) list) (pdfPath: string) =
 
 /// 在页面位图上为每个检测到的区域画红色线框（整页宽度）。
 /// regions 来自 detectGrandStaffs，框的上/下边界 = topY / bottomY。
-/// clefRegions 来自 detectClefKeyTimeRegions，框出每段的谱号/调号/拍号区。
+/// clefRegions 来自 detectClefRegions，按 5 线定位框出每段上下两个谱号（高音谱号 + 低音谱号），用红框指示。
 let drawRegionBoxes (bmp: SKBitmap) (regions: StaffRegion list)
-                    (braces: (int * int * int) list)
+                    (braces: (int * int * int * int) list)
                     (clefRegions: (int * int * int * int) list) =
     let out = bmp.Copy(SKColorType.Bgra8888)
     use canvas = new SKCanvas(out)
@@ -647,17 +1076,16 @@ let drawRegionBoxes (bmp: SKBitmap) (regions: StaffRegion list)
         let braceStroke = max 1.5f (float32 out.Height / 400.0f)
         use bracePaint = new SKPaint(Color = SKColors.Blue, Style = SKPaintStyle.Stroke,
                                      StrokeWidth = braceStroke, IsAntialias = true)
-        let braceHalfW = max 12 (out.Width / 60)   // 框宽自适应
-        for (xc, yT, yB) in braces do
+        for (xStart, xEnd, yT, yB) in braces do
             let top = max 0 yT
             let bot = min out.Height (yB + 1)
-            let xL = max 0 (xc - braceHalfW)
-            let xR = min out.Width (xc + braceHalfW)
+            let xL = max 0 xStart
+            let xR = min out.Width (max (xStart + 12) xEnd)   // 保证最小可见宽度
             if bot > top && xR > xL then
                 canvas.DrawRect(float32 xL, float32 top,
                                 float32 (xR - xL), float32 (bot - top), bracePaint)
 
-    // ── 红框：谱号/调号/拍号区域 ──
+    // ── 红框：谱号区（按 5 线定位的上下两个谱号框，左边=大括号右缘，右边=谱号末笔，上下=谱表带）──
     if not (List.isEmpty clefRegions) then
         let cStroke = max 2.0f (float32 out.Height / 280.0f)
         use cPaint = new SKPaint(Color = SKColors.Red, Style = SKPaintStyle.Stroke,
@@ -758,9 +1186,13 @@ let markBarLines (output: string -> unit)
                                      StrokeWidth = stroke, IsAntialias = true)
         // 每段检测到的小节线 x 坐标（按 regions 顺序对齐），供 detectStaffGapByInkComponents 复用
         let barLinesPerRegion = ResizeArray<int list>()
-        // 只排除最左侧 brace 区（约左侧 4% 页宽），避免红框偏宽连累小节线
+        // 头部块（谱号/调号/拍号）右边界来自 detectClefKeyTimeRegions（共识精修）：
+        // 用其作为小节线检测的起始排除区，使小节线不再从头部块内部冒出；
+        // braceZone 作为下限兜底（无头部块或异常页时退化为左侧 4% 页宽）。
         let braceZone = max 20 (int (0.04 * float w))
-        let startX = min w braceZone
+        let headRights =
+            if List.isEmpty _clefRegions then [||]
+            else _clefRegions |> List.map (fun (_, xr, _, _) -> xr) |> List.toArray
         // 判据4: 相邻距离下限
         let minDist = max 8 (int (0.012 * float w))
         // 局部函数：列 x 在 [y0,y1) 内最长连续暗像素段 (长度, 起始y, 结束y)
@@ -793,6 +1225,9 @@ let markBarLines (output: string -> unit)
             let yT = max 0 reg.topY
             let yB = min h (reg.bottomY + 1)
             if yB > yT then
+                // 起始列 = 头部块右缘 + 8px（共识精修），与 braceZone 取较大者兜底
+                let hr = if ri < headRights.Length then headRights.[ri] else 0
+                let startX = min w (max braceZone (hr + 8))
                 let bandH = float (yB - yT)
                 // 竖直中点把 band 一分为二；midY 归入下支
                 let midY = (yT + yB) / 2
@@ -890,8 +1325,8 @@ let markBarLines (output: string -> unit)
 // scaleBitmap 实现已迁移至 jCQT.AI.ImgProc，这里仅做转发以保持 SheetMusic 公开 API 稳定。
 /// scale <= 1.0 直接返回原图（不复制，避免无谓开销）。
 /// 用于将带直方图/框的预览位图整体放大，使 Image 控件以更大尺寸渲染时仍保持清晰。
-let scaleBitmap (src: SKBitmap) (scale: float) =
-    jCQT.AI.ImgProc.scaleBitmap src scale
+let scaleBitmap (src: SKBitmap) (scale: float) (bg: SKColor option) =
+    jCQT.AI.ImgProc.scaleBitmap src scale bg
 
 // ===================== 背景连通分量：高低声部间隙检测（实验性） =====================
 // 通用 4-连通 Union-Find（ufFind/ufUnion）已迁移至 jCQT.AI.ImgProc，detectStaffGapBy* 通过 open 复用。

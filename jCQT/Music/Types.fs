@@ -13,18 +13,18 @@ beats: int
 note: NoteTime }
 
 type Key =
-| C
-| G
-| D
-| A
-| E
-| B
-| F_sharp
-| D_flat
-| A_flat
-| E_flat
-| B_flat
-| F
+| Maj_C___Min_A
+| Maj_G___Min_E
+| Maj_D___Min_B
+| Maj_A___Min_F_Sharp
+| Maj_E___Min_D_Flat
+| Maj_B___Min_A_Flat
+| Maj_F_Sharp___Min_E_Flat
+| Maj_D_Flat___Min_B_Flat
+| Maj__A_Flat___Min_F
+| Maj_E_Flat___Min_C
+| Maj_B_Flat___Min_G
+| Maj_F___Min_D
 
 type Clef =
 | Treble

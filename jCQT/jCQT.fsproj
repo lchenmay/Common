@@ -11,9 +11,12 @@
     <Compile Include="AI/Model.fs" />
     <Compile Include="AI/LLM.fs" />
     <Compile Include="ai\ImgProc.fs" />
+    <None Include="Music\music.md" />
     <Compile Include="music\Types.fs" />
     <Compile Include="Music\SheetMusic.fs" />
   </ItemGroup>
+
+  <ItemGroup />
 
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="4.150.1" />

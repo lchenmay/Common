@@ -50,6 +50,15 @@ type StaffRegion = {
 // ===================== 底层像素工具 =====================
 // 像素拷贝 copyPixels 已迁移至 jCQT.AI.ImgProc（见该模块）。
 
+/// 把任意 SKBitmap 复制到一张独立的 BGRA8888 位图。
+/// 用显式分配 + CopyTo 取代 SKBitmap.Copy(SKColorType) 重载：
+/// 后者在部分颜色类型/Alpha 组合下会在原生层触发
+/// System.ExecutionEngineException（堆损坏/访问越界），导致进程直接崩溃。
+let private copyToBgra (src: SKBitmap) : SKBitmap =
+    let dst = new SKBitmap(src.Width, src.Height, SKColorType.Bgra8888, SKAlphaType.Premul)
+    src.CopyTo(dst)
+    dst
+
 /// 受限霍夫变换检测近水平谱线（剥离符干/符头/连音线等干扰）。
 /// 只扫描 θ∈[87°,93°]（近水平带），对每枚暗像素按 (θ,ρ) 共线性投票；
 /// 取足够强的峰值即为一根五线谱横线，返回其中心 Y 坐标（升序）。
@@ -847,7 +856,7 @@ let cropRegion (bmp: SKBitmap) (topY: int) (bottomY: int) =
 /// 因此会被保留为不透明而非背景；trimMargins 也因 alpha=255 不会裁掉。
 /// 坐标 (xL, xR, yT, yB) 均相对 bmp 本身。
 let drawClefOverlay (bmp: SKBitmap) (xL: int) (xR: int) (yT: int) (yB: int) =
-    let out = bmp.Copy(SKColorType.Bgra8888)
+    let out = copyToBgra bmp
     use canvas = new SKCanvas(out)
     let cStroke = max 2.0f (float32 out.Height / 280.0f)
     use cPaint = new SKPaint(Color = SKColors.Red, Style = SKPaintStyle.Stroke,
@@ -1057,7 +1066,7 @@ let saveSegments (namePrefix: string) (startIndex: int) (items: (GrandStaffSegme
 let drawRegionBoxes (bmp: SKBitmap) (regions: StaffRegion list)
                     (braces: (int * int * int * int) list)
                     (clefRegions: (int * int * int * int) list) =
-    let out = bmp.Copy(SKColorType.Bgra8888)
+    let out = copyToBgra bmp
     use canvas = new SKCanvas(out)
 
     // ── 绿框：大谱表行区域（用于分行核对） ──
@@ -1107,7 +1116,7 @@ let drawRegionBoxes (bmp: SKBitmap) (regions: StaffRegion list)
 /// regions 来自 detectGrandStaffs（lineYs 已在该函数内填充）。
 /// 返回新的位图（原 bmp 不被修改）。
 let drawStaffLines (bmp: SKBitmap) (regions: StaffRegion list) =
-    let out = bmp.Copy(SKColorType.Bgra8888)
+    let out = copyToBgra bmp
     use canvas = new SKCanvas(out)
     use paint = new SKPaint(
         Color = SKColor(180uy, 130uy, 230uy, 255uy),
@@ -1179,7 +1188,7 @@ let markBarLines (output: string -> unit)
         let w = page.Width
         let h = page.Height
         let (_, arr) = copyPixels page
-        let out = content.Copy(SKColorType.Bgra8888)
+        let out = copyToBgra content
         use canvas = new SKCanvas(out)
         let stroke = max 3.0f (float32 h / 400.0f)
         use bluePaint = new SKPaint(Color = SKColors.Blue, Style = SKPaintStyle.Stroke,
@@ -1443,7 +1452,7 @@ let detectStaffGapByBgComponents (page: SKBitmap) (regions: StaffRegion list) =
 /// gaps 来自 detectStaffGapByInkComponents（每元素为 (gapTopY, gapBotY) option）。
 /// 返回新位图（原 bmp 不被修改）。
 let drawStaffGaps (bmp: SKBitmap) (gaps: (int * int) option list) =
-    let out = bmp.Copy(SKColorType.Bgra8888)
+    let out = copyToBgra bmp
     use canvas = new SKCanvas(out)
     // 50% 不透明度的青色填充 + 顶部/底部各画一条更深的青色边线，便于识别边界
     use fillPaint = new SKPaint(

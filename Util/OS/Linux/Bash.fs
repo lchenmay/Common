@@ -25,14 +25,22 @@ let cleanCommand (cmd: string) =
     cmd.Replace("\r\n", "\n").Replace("\r", "").Trim()
 
 /// 获取 SSH 私钥路径
+/// 解析优先级（一劳永逸，避免配置阶段 sshPrivateKeyPath 尚未设置时误判"未配置"）：
+///   1) 全局可变 sshPrivateKeyPath（由 Deploy.fs 按 env > 项目密钥 > 用户密钥 设置）
+///   2) 环境变量 SSH_PRIVATE_KEY_PATH（便于临时覆盖 / 调试）
+///   3) 用户 profile 下已可用且 ACL 正确的 ~/.ssh/id_rsa_wyi（兜底，确保始终能免密）
+///   4) 当前工作目录下的 id_rsa（历史兜底）
 let getSshPrivateKeyPath() =
     if not (String.IsNullOrEmpty sshPrivateKeyPath) then
         sshPrivateKeyPath
     else
         match Environment.GetEnvironmentVariable("SSH_PRIVATE_KEY_PATH") with
-        | null | "" -> 
-            let defaultPath = Path.Combine(Directory.GetCurrentDirectory(), "id_rsa")
-            if File.Exists(defaultPath) then defaultPath else ""
+        | null | "" ->
+            let userKey = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh", "id_rsa_wyi")
+            if File.Exists(userKey) then userKey
+            else
+                let defaultPath = Path.Combine(Directory.GetCurrentDirectory(), "id_rsa")
+                if File.Exists(defaultPath) then defaultPath else ""
         | path -> path
 
 /// 获取 SSH 私钥参数
@@ -322,7 +330,8 @@ let checkSshKeyConfiguredWithTimeout output credential (timeoutMs: int) : bool =
         | None -> ""
     
     let privateKeyArg = getSshPrivateKeyArg()
-    let args = $"{privateKeyArg} {portArg} -o BatchMode=yes -o ConnectTimeout=10 {user}@{server} \"echo 'ok'\""
+    // 加 StrictHostKeyChecking=no：BatchMode=yes 下无法交互确认主机键，若 known_hosts 缺条目会直接失败误判"未配置"
+    let args = $"{privateKeyArg} {portArg} -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 {user}@{server} \"echo 'ok'\""
     
     let psi = ProcessStartInfo("ssh", args)
     psi.RedirectStandardOutput <- true

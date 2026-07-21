@@ -384,7 +384,17 @@ let routine
     let errEvents = ResizeArray<string>()
     
     try
-        sshPrivateKeyPath <- devDir + "/id_rsa"
+        // SSH 私钥解析优先级（一劳永逸，确保配置阶段与实际部署都能免密，不再误判"未配置"）：
+        //   1) 环境变量 SSH_PRIVATE_KEY_PATH（最高优先，便于临时覆盖 / 调试）
+        //   2) 项目目录 devDir/id_rsa（既有设计，服务器已信任该密钥）
+        //   3) 用户 profile 下已可用且 ACL 正确的 ~/.ssh/id_rsa_wyi（兜底，确保始终能免密）
+        let envSshKey = Environment.GetEnvironmentVariable("SSH_PRIVATE_KEY_PATH")
+        let projKey = devDir + "/id_rsa"
+        let userKey = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh", "id_rsa_wyi")
+        sshPrivateKeyPath <-
+            if not (String.IsNullOrEmpty envSshKey) && File.Exists(envSshKey) then envSshKey
+            elif File.Exists(projKey) then projKey
+            else userKey
         startedAt <- DateTime.UtcNow.ToString("o")
         $">>> 开始部署至 {user}@{server}..." |> cyan |> output
         localGitHash <- gitHashLocal()

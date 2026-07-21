@@ -10,10 +10,10 @@
     <Compile Include="AI/Autograd.fs" />
     <Compile Include="AI/Model.fs" />
     <Compile Include="AI/LLM.fs" />
-    <Compile Include="ai\ImgProc.fs" />
-    <None Include="Music\music.md" />
-    <Compile Include="music\Types.fs" />
-    <Compile Include="Music\SheetMusic.fs" />
+    <Compile Include="AI/ImgProc.fs" />
+    <None Include="Music/music.md" />
+    <Compile Include="Music/Types.fs" />
+    <Compile Include="Music/SheetMusic.fs" />
   </ItemGroup>
 
   <ItemGroup />

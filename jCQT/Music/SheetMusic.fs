@@ -1193,6 +1193,8 @@ let markBarLines (output: string -> unit)
         let stroke = max 3.0f (float32 h / 400.0f)
         use bluePaint = new SKPaint(Color = SKColors.Blue, Style = SKPaintStyle.Stroke,
                                      StrokeWidth = stroke, IsAntialias = true)
+        use lightBluePaint = new SKPaint(Color = SKColors.LightBlue, Style = SKPaintStyle.Stroke,
+                                         StrokeWidth = max 1.0f (stroke * 0.6f), IsAntialias = true)
         // 每段检测到的小节线 x 坐标（按 regions 顺序对齐），供 detectStaffGapByInkComponents 复用
         let barLinesPerRegion = ResizeArray<int list>()
         // 头部块（谱号/调号/拍号）右边界来自 detectClefKeyTimeRegions（共识精修）：
@@ -1231,15 +1233,67 @@ let markBarLines (output: string -> unit)
         let mutable totalBars = 0
         for ri in 0 .. regionsArr.Length - 1 do
             let reg = regionsArr.[ri]
-            let yT = max 0 reg.topY
-            let yB = min h (reg.bottomY + 1)
-            if yB > yT then
+            // 精确纵向跨度：小节线必须连接「高音最上线」(min lineYs) 与「低音最下线」(max lineYs)。
+            // 不再用含 padding / 高低音谱表外（歌词、力度记号、加线）的整段 region 带。
+            let lineYsS = reg.lineYs |> List.sort
+            let (yT, yB) =
+                if lineYsS.Length >= 2 then
+                    (max 0 (List.head lineYsS), min h (List.last lineYsS + 1))
+                else
+                    (max 0 reg.topY, min h (reg.bottomY + 1))   // 无 lineYs 兜底：沿用原 region 带
+            if yB <= yT then
+                // 整段跨度退化（lineYs 缺失且 region 带退化）→ 该段完全跳过，记日志避免"静默漏检"
+                output (sprintf "[小节线] 段#%d 跳过：纵向跨度退化 yT=%d yB=%d (lineYs数=%d, reg.topY=%d reg.bottomY=%d)"
+                                  ri yT yB lineYsS.Length reg.topY reg.bottomY)
+            elif yB > yT then
                 // 起始列 = 头部块右缘 + 8px（共识精修），与 braceZone 取较大者兜底
                 let hr = if ri < headRights.Length then headRights.[ri] else 0
-                let startX = min w (max braceZone (hr + 8))
+                // 起始列 = 头部块右缘 + 8px（共识精修），与 braceZone 取较大者兜底。
+                // 关键修复：上限钳制为 w-5，避免 hr+8>=w 时 startX=w 导致候选循环空转（整段无蓝线）。
+                let hrClamped = max braceZone (hr + 8)
+                let startX = min (w - 5) hrClamped
+                if hrClamped >= w - 5 then
+                    output (sprintf "[小节线] 段#%d 警告：头部块右界过大 hr=%d → startX 钳制为 %d（候选区间偏窄，可能漏检左部小节线）"
+                                  ri hr startX)
+                // ── 竖线"贯穿连通性 + 两端细度"辅助（区分小节线 / 长符干 / 跨谱表和弦）──
+                let lumaAt (xx, yy) =
+                    if xx < 0 || xx >= w || yy < 0 || yy >= h then 255
+                    else
+                        let idx = yy * w * 4 + xx * 4
+                        (int arr.[idx] + int arr.[idx + 1] + int arr.[idx + 2]) / 3
+                // 行 yy 上以列 xx 为中心的横向墨宽（px）；非墨返回 999
+                let rowWidthAt (xx, yy) =
+                    if lumaAt(xx, yy) >= 200 then 999
+                    else
+                        let mutable left = xx
+                        while left > startX && lumaAt(left - 1, yy) < 200 do left <- left - 1
+                        let mutable right = xx
+                        while right < w - 1 && lumaAt(right + 1, yy) < 200 do right <- right + 1
+                        right - left + 1
+                // 连续段 [rTop, rBot] 在其两端（顶/底各采样 3 行）必须仍为细线、没有膨胀成宽墨团。
+                //   小节线全程 1~2px 细 → 过；和弦符干顶端/底端是 notehead 宽团(≥4px) → 不过；单符干同理。
+                //   关键：采样行可能落在贯穿全宽的五线谱线上（小节线顶端恰在高音最上线），
+                //   此时 rowWidthAt 会被谱线拉长到几十~上百 px —— 这种"极宽"是谱线穿越、不是 notehead，
+                //   须跳过(不计入失败)；只有"中等宽"(maxW < w <= staffLineMax) 才是 notehead → 失败。
+                let runEndsThin (xx, rTop, rBot, maxW) =
+                    let staffLineMax = 20
+                    let rowOk (yy) =
+                        let wdt = rowWidthAt(xx, yy)
+                        if   wdt <= maxW       then true   // 细 → 通过
+                        elif wdt > staffLineMax then true   // 极宽(谱线穿越) → 跳过，不失败
+                        else false                        // 中等宽(notehead) → 失败
+                    let topYs = [| max yT rTop; min (yB - 1) (rTop + 1); min (yB - 1) (rTop + 2) |]
+                    let botYs = [| max yT (rBot - 2); max yT (rBot - 1); min (yB - 1) rBot |]
+                    Array.forall rowOk (Array.append topYs botYs)
                 let bandH = float (yB - yT)
-                // 竖直中点把 band 一分为二；midY 归入下支
-                let midY = (yT + yB) / 2
+                // 子带分界精确落在「高音最下线」与「低音最上线」之间的空隙中心：
+                // - 大谱表(10 线)：第5线(lineYsS.[4]) 与 第6线(lineYsS.[5]) 之间
+                // - 单行谱(5 线)：中间线(lineYsS.[2]) 与 lineYsS.[3] 之间
+                // - 退化情形：整段中点
+                let midY =
+                    if   lineYsS.Length >= 10 then (lineYsS.[4] + lineYsS.[5]) / 2
+                    elif lineYsS.Length >= 5  then (lineYsS.[2] + lineYsS.[3]) / 2
+                    else (yT + yB) / 2
                 let upH = float (midY - yT)
                 let downH = float (yB - midY)
                 // 列投影 + 上支/下支分别投影（luma<200 视为印刷墨）
@@ -1256,23 +1310,62 @@ let markBarLines (output: string -> unit)
                             colInk.[x] <- colInk.[x] + 1L
                             if isUp then upColInk.[x] <- upColInk.[x] + 1L
                             else downColInk.[x] <- downColInk.[x] + 1L
-                let minProj = int64 (0.3 * bandH)
+                let minProj = int64 (0.15 * bandH)
                 let minUp = int64 (0.3 * upH)
                 let minDown = int64 (0.3 * downH)
-                // 判据1: 列投影局部峰值提名候选列
+                // 判据1(候选, 尽量放宽): 仅做"有实墨 + 弱局部峰 + 一侧略陡"的宽松提名，
+                //   把所有可能是小节线的列都放进候选（浅蓝标记），再由排除判据(2/3/5)收紧为最终(深蓝)。
+                //   - 幅值门槛降至 0.15*bandH（仍排除孤立单音符头）；
+                //   - 允许平台(>=左右邻)以覆盖宽/双像素小节线两端；
+                //   - 陡峭改为"任一侧落差>=0.15*bandH"的弱条件，避免紧邻音符簇的小节线被误杀。
+                let peakWin = 4
+                let steepTh = int64 (0.15 * bandH)
                 let candidates =
                     [| for x in startX .. w - 1 do
-                        if colInk.[x] >= minProj &&
-                           (x = startX || colInk.[x] >= colInk.[x - 1]) &&
-                           (x = w - 1 || colInk.[x] > colInk.[x + 1]) then
-                            yield x |]
-                // 判据2+3: 子带双峰值 + 连续性（maxRun >= 0.4*bandH）
-                let minRun = 0.4 * bandH
+                        let peak = colInk.[x]
+                        if peak >= minProj &&
+                           (x = startX || peak >= colInk.[x - 1]) &&
+                           (x = w - 1 || peak >= colInk.[x + 1]) then
+                            // 左侧窗口最小值（含边界保护）
+                            let lMin =
+                                let mutable m = peak
+                                for d in 1 .. peakWin do
+                                    let xx = x - d
+                                    if xx >= startX && colInk.[xx] < m then m <- colInk.[xx]
+                                m
+                            // 右侧窗口最小值
+                            let rMin =
+                                let mutable m = peak
+                                for d in 1 .. peakWin do
+                                    let xx = x + d
+                                    if xx <= w - 1 && colInk.[xx] < m then m <- colInk.[xx]
+                                m
+                            if peak - lMin >= steepTh || peak - rMin >= steepTh then
+                                yield x |]
+                // 浅蓝标记所有候选列（供与最终深蓝检测对比、校准候选阈值）
+                for x in candidates do
+                    canvas.DrawLine(float32 x, float32 yT,
+                                    float32 x, float32 (yB - 1), lightBluePaint)
+                // 判据2+3(加强版): 子带双峰值 + 上下贯穿连通性 + 两端细度
+                //   - 判据2: 上支/下支投影都达 0.3 子带高 → 排除只占单谱表的符干（上下支缺一）。
+                //   - 判据3a 连续性: 最长连续暗段 maxRun >= 0.65*bandH（小节线贯通整段；
+                //     单谱表符干≈0.5*bandH 被拒；容忍顶底抗锯齿断点）。
+                //   - 判据3b 贯穿触达: 该连续段必须"触达"上下两端
+                //     (rTop <= yT+0.20*bandH 且 rBot >= yB-0.20*bandH)，
+                //     即真正从高音最上线连到低音最下线；长符干只在一侧、不触达对端 → 拒。
+                //   - 判据3c 两端细度: 连续段顶端/底端各采样行的横向墨宽必须 ≤ maxEndWidth(3px)，
+                //     排除顶端/底端是宽 notehead 的跨谱表和弦（和弦符干细、但两端 notehead 宽）。
+                let minRun = 0.65 * bandH
+                let reachTol = 0.20 * bandH
+                let maxEndWidth = 3
                 let pass234 =
                     [| for x in candidates do
                         if upColInk.[x] >= minUp && downColInk.[x] >= minDown then
-                            let runLen, _, _ = longestVerticalRun x yT yB 200
-                            if float runLen >= minRun then
+                            let runLen, rTop, rBot = longestVerticalRun x yT yB 200
+                            if float runLen >= minRun &&
+                               float rTop <= float yT + reachTol &&
+                               float rBot >= float yB - reachTol &&
+                               runEndsThin (x, rTop, rBot, maxEndWidth) then
                                 yield x |]
                 // 判据5（v6）: 列宽严格性——真实小节线是孤立 1~2px 竖线。
                 //   对候选列 x，以 colInk[x] 的 50% 为阈值，向左右扩展到
@@ -1320,11 +1413,17 @@ let markBarLines (output: string -> unit)
                         regionBars.Add(x)
                 barLinesPerRegion.Add(regionBars |> Seq.toList)
                 totalBars <- totalBars + drawnThis
+                let pass2Count =
+                    candidates |> Array.filter (fun x -> upColInk.[x] >= minUp && downColInk.[x] >= minDown) |> Array.length
                 let widthFiltered =
                     pass234 |> Array.filter (fun x -> lineWidthStrict colInk x startX w <= 2) |> Array.length
-                output (sprintf "[小节线] 段#%d bandH=%.0f 上支高=%.0f 下支高=%.0f 候选=%d 判据2-3=%d 列宽过滤后=%d 结束线兜底=%d 绘制=%d"
-                                  ri bandH upH downH candidates.Length pass234.Length
-                                  widthFiltered endBarCandidates.Length drawnThis)
+                // 诊断拆分：判据2(上下支双峰) / 判据3(贯穿连通性+两端细度) / 判据5(列宽) 各剔除多少
+                let fail2 = candidates.Length - pass2Count
+                let fail3 = pass2Count - pass234.Length
+                let fail5 = pass234.Length - widthFiltered
+                output (sprintf "[小节线] 段#%d bandH=%.0f 上支高=%.0f 下支高=%.0f startX=%d hr=%d lyN=%d 候选=%d 判据2过=%d(剔%d) 判据3过=%d(剔%d) 判据5过=%d(剔%d) 兜底=%d 绘制=%d"
+                                  ri bandH upH downH startX hr lineYsS.Length candidates.Length pass2Count fail2
+                                  pass234.Length fail3 widthFiltered fail5 endBarCandidates.Length drawnThis)
         output (sprintf "[小节线] 完成：%d 段共绘制 %d 根蓝色竖线" regionsArr.Length totalBars)
         (out, barLinesPerRegion |> Seq.toList)
 

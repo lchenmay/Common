@@ -258,6 +258,82 @@ let detectOnsetsTimeDomain (pcm: float32[]) (sr: int) : float[] =
     detectOnsetsTimeDomainWith pcm sr 10.0 5.0 2.5 0.02 1.0 500.0 60.0
 
 // ---------------------------------------------------------------------------
+//  基于触键点间隔(IOI)的网格量化法估计 1/32 音符基准时长 τ 与全曲 BPM。
+//  思路（MIR 经典做法）：人类演奏存在 Rubato，IOI 不会是完美倍数，但绝大部分
+//  间隔 Δt_i ≈ k_i·τ（k_i∈{1,2,3,4,6,8,12,16…}）。遍历 τ 候选区间，取使
+//  Σ(Δt_i - round(Δt_i/τ)·τ)² 最小者作为最优 τ；再反推四分音符 BPM = 60/(8τ)。
+//  另提供 ioiNoteName 把倍数 k 映射为乐理时值名，便于展示。
+// ---------------------------------------------------------------------------
+
+/// 把间隔倍数 k 映射为乐理时值名（k = 整数倍 · 1/32 音符）
+let ioiNoteName (k: int) : string =
+    match k with
+    | 1  -> "1/32"
+    | 2  -> "1/16"
+    | 3  -> "附点1/16"
+    | 4  -> "1/8"
+    | 6  -> "附点1/8"
+    | 8  -> "1/4"
+    | 12 -> "附点1/4"
+    | 16 -> "1/2"
+    | _  -> sprintf "%dx1/32" k
+
+/// 基于 IOI 网格量化的速度/时值估计。
+/// onsetTimes: 触键点时刻(秒)；minBpm/maxBpm: 四分音符 BPM 搜索范围。
+/// 返回 (tau32nd, bpm, multipliers)：τ(1/32)=秒，bpm=四分音符速度，
+///   multipliers[i]=第 i 个有效间隔 Δt_i 取整到最近 k·τ 的倍数 k（时值，1→1/32…）。
+let estimateGridByIOI (onsetTimes: float[]) (minBpm: float) (maxBpm: float)
+        : float * float * int[] =
+    let iois = [| for i in 0 .. onsetTimes.Length - 2 ->
+                    onsetTimes.[i + 1] - onsetTimes.[i] |]
+    // 剔除极大异常间隔（漏检/长休止符 > 3s）与非法负值
+    let valid = iois |> Array.filter (fun d -> d > 0.0 && d < 3.0)
+    if valid.Length < 2 then (0.0, 0.0, [||])
+    else
+        // τ 候选区间：1/32 音符 = 四分音符 / 8；BPM 范围 → τ 范围
+        let tauMin = (60.0 / maxBpm) / 8.0
+        let tauMax = (60.0 / minBpm) / 8.0
+        let nCand = 1000
+        let cands =
+            [| for k in 0 .. nCand - 1 ->
+                tauMin + (tauMax - tauMin) * float k / float (nCand - 1) |]
+        let mutable bestTau = cands.[0]
+        let mutable bestLoss = infinity
+        for tau in cands do
+            let mutable s = 0.0
+            for d in valid do
+                let k = max 1.0 (round (d / tau))
+                let e = d - k * tau
+                s <- s + e * e
+            let loss = s / float valid.Length
+            if loss < bestLoss then
+                bestLoss <- loss
+                bestTau <- tau
+        let tau = bestTau
+        let bpm = 60.0 / (tau * 8.0)
+        let multipliers = valid |> Array.map (fun d -> max 1 (int (round (d / tau))))
+        (tau, bpm, multipliers)
+
+/// 生成 IOI 网格估计的可读摘要（多行），供 UI 日志输出
+let estimateGridSummary (onsetTimes: float[]) (minBpm: float) (maxBpm: float) : string =
+    let tau, bpm, mults = estimateGridByIOI onsetTimes minBpm maxBpm
+    let totalIOI = max 0 (onsetTimes.Length - 1)
+    if mults.Length = 0 then
+        sprintf "🎼 IOI 网格估计：触键点不足（共 %d 个 onset），无法估计" onsetTimes.Length
+    else
+        let counts = System.Collections.Generic.Dictionary<int, int>()
+        for m in mults do
+            match counts.TryGetValue m with
+            | true, c -> counts.[m] <- c + 1
+            | _ -> counts.[m] <- 1
+        let dist =
+            counts.Keys |> Seq.sort
+            |> Seq.map (fun k -> sprintf "%s×%d" (ioiNoteName k) counts.[k])
+            |> String.concat "，"
+        sprintf "🎼 IOI 网格估计：τ(1/32)=%.1fms，BPM≈%.0f（有效间隔 %d/%d）\n   时值分布：%s"
+                (tau * 1000.0) bpm mults.Length totalIOI dist
+
+// ---------------------------------------------------------------------------
 //  颜色映射：v ∈ [0,1] → 暗蓝→青→品红→黄→白（类 magma）
 // ---------------------------------------------------------------------------
 let private colormap (v: float) : byte * byte * byte =

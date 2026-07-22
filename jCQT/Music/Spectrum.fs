@@ -181,6 +181,69 @@ let detectBeatsByVolume (pcm: float32[]) (sg: Spectrogram) : float[] =
                     yield frameTime sg f |]
 
 // ---------------------------------------------------------------------------
+//  纯时域钢琴触键点（onset）检测：不依赖任何频域变换（无 FFT/STFT/梅尔）。
+//  原始 PCM → 短时 RMS 能量包络 → 一阶差分(半波整流) → 动态门限寻峰 + 前沿回溯。
+//  击弦的本质是"振幅变化率爆发"而非"振幅大"，故天然避开余音/延音踏板背景误检，
+//  对 pp 弱奏与 legato 连奏比 detectBeatsByVolume（找"振幅大"）更鲁棒。
+//  复杂度 O(N)，适合实时低延迟场景。
+//  可调参数版本为 detectOnsetsTimeDomainWith；detectOnsetsTimeDomain 是其默认封装。
+// ---------------------------------------------------------------------------
+
+/// 纯时域 onset 检测的可调参数版本。
+/// frameMs/hopMs=能量窗/步长(ms)，alpha=动态门限灵敏度，beta=绝对底噪地板，
+/// smooth=包络平滑 σ(帧)，winMs=动态门限局部均值窗(ms)，minGapMs=最小 onset 间隔(ms)。
+let detectOnsetsTimeDomainWith (pcm: float32[]) (sr: int)
+        (frameMs: float) (hopMs: float) (alpha: float) (beta: float)
+        (smooth: float) (winMs: float) (minGapMs: float) : float[] =
+    let frame = max 1 (int (float sr * frameMs / 1000.0))
+    let hop   = max 1 (int (float sr * hopMs / 1000.0))
+    if pcm.Length < frame || frame <= 0 then [||]
+    else
+        let nf = (pcm.Length - frame) / hop + 1
+        // 步骤1：短时 RMS 能量包络（= 全波整流 + 窗口平滑的等效）
+        let env = Array.zeroCreate<float> nf
+        for f in 0 .. nf - 1 do
+            let s0 = f * hop
+            let mutable s = 0.0
+            for i in 0 .. frame - 1 do
+                let x = float pcm.[s0 + i]
+                s <- s + x * x
+            env.[f] <- sqrt (s / float frame)
+        // 轻高斯平滑（σ 帧），吸收窗边界抖动，但不过度抹平峰值
+        let env = if smooth > 0.0 then gaussianSmooth1D smooth env else env
+        // 步骤2：一阶差分 + 半波整流（只保留振幅急剧上升的爆发）
+        let diff = Array.zeroCreate<float> nf
+        for i in 1 .. nf - 1 do
+            let d = env.[i] - env.[i - 1]
+            diff.[i] <- if d > 0.0 then d else 0.0
+        // 步骤3：动态门限（前缀和求局部均值 O(N)）+ 局部极大 + 前沿回溯
+        let cum = Array.scan (+) 0.0 diff
+        let win  = max 1 (int (winMs / hopMs))
+        let minGap = max 1 (int (minGapMs / hopMs))
+        let onsets = ResizeArray<float>()
+        let mutable last = -100000
+        for i in 1 .. nf - 2 do
+            let lo = max 0 (i - win / 2)
+            let hi = min nf (i + win / 2)
+            let localMean = (cum.[hi] - cum.[lo]) / float (hi - lo)
+            let thr = localMean * alpha + beta
+            if diff.[i] > thr && diff.[i] > diff.[i - 1] && diff.[i] >= diff.[i + 1] then
+                // 前沿回溯：从峰值往回退，直到差分值跌到门限 25% 以下，
+                // 定位"振幅开始起飞"的物理击弦起点（而非峰值最高点）
+                let mutable j = i
+                while j - 1 >= 0 && diff.[j - 1] > max beta (thr * 0.25) do
+                    j <- j - 1
+                if i - last >= minGap then
+                    last <- i
+                    onsets.Add(float j * float hop / float sr)
+        onsets.ToArray()
+
+/// 纯时域 onset 检测默认封装：frameMs=10, hopMs=5, alpha=1.5, beta=1e-4,
+/// smooth=1.0, winMs=500, minGapMs=40。其余语义与 detectOnsetsTimeDomainWith 一致。
+let detectOnsetsTimeDomain (pcm: float32[]) (sr: int) : float[] =
+    detectOnsetsTimeDomainWith pcm sr 10.0 5.0 1.5 1e-4 1.0 500.0 40.0
+
+// ---------------------------------------------------------------------------
 //  颜色映射：v ∈ [0,1] → 暗蓝→青→品红→黄→白（类 magma）
 // ---------------------------------------------------------------------------
 let private colormap (v: float) : byte * byte * byte =

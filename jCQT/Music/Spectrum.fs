@@ -190,10 +190,11 @@ let detectBeatsByVolume (pcm: float32[]) (sg: Spectrogram) : float[] =
 // ---------------------------------------------------------------------------
 
 /// 纯时域 onset 检测的可调参数版本。
-/// frameMs/hopMs=能量窗/步长(ms)，alpha=动态门限灵敏度，beta=绝对底噪地板，
-/// smooth=包络平滑 σ(帧)，winMs=动态门限局部均值窗(ms)，minGapMs=最小 onset 间隔(ms)。
+/// frameMs/hopMs=能量窗/步长(ms)，alpha=门限灵敏度(越大越严)，
+/// noiseFloorRatio=绝对底噪比例(基于全曲最大差分值，过滤尾音/静音微小抖动)，
+/// smooth=包络平滑 σ(帧)，winMs=局部稳健门限统计窗(ms)，minGapMs=最小音符间隔(不应期)。
 let detectOnsetsTimeDomainWith (pcm: float32[]) (sr: int)
-        (frameMs: float) (hopMs: float) (alpha: float) (beta: float)
+        (frameMs: float) (hopMs: float) (alpha: float) (noiseFloorRatio: float)
         (smooth: float) (winMs: float) (minGapMs: float) : float[] =
     let frame = max 1 (int (float sr * frameMs / 1000.0))
     let hop   = max 1 (int (float sr * hopMs / 1000.0))
@@ -216,32 +217,45 @@ let detectOnsetsTimeDomainWith (pcm: float32[]) (sr: int)
         for i in 1 .. nf - 1 do
             let d = env.[i] - env.[i - 1]
             diff.[i] <- if d > 0.0 then d else 0.0
-        // 步骤3：动态门限（前缀和求局部均值 O(N)）+ 局部极大 + 前沿回溯
-        let cum = Array.scan (+) 0.0 diff
+        // 全局绝对底噪：基于全曲最大差分值的比例，低于此的波动直接忽略
+        let maxDiff = if nf > 0 then Array.max diff else 0.0
+        let floor = maxDiff * noiseFloorRatio
+        // 步骤3：稳健动态门限（局部 均值 + α·标准差，O(1) 前缀和）+ 局部极大 + 不应期 + 前沿回溯
+        let cum  = Array.scan (+) 0.0 diff
+        let cum2 = Array.scan (+) 0.0 (diff |> Array.map (fun v -> v * v))
         let win  = max 1 (int (winMs / hopMs))
         let minGap = max 1 (int (minGapMs / hopMs))
         let onsets = ResizeArray<float>()
-        let mutable last = -100000
+        let mutable last = -1000000          // 上一次实际标记的 onset 帧（前沿回溯后的 j）
         for i in 1 .. nf - 2 do
-            let lo = max 0 (i - win / 2)
-            let hi = min nf (i + win / 2)
-            let localMean = (cum.[hi] - cum.[lo]) / float (hi - lo)
-            let thr = localMean * alpha + beta
-            if diff.[i] > thr && diff.[i] > diff.[i - 1] && diff.[i] >= diff.[i + 1] then
-                // 前沿回溯：从峰值往回退，直到差分值跌到门限 25% 以下，
-                // 定位"振幅开始起飞"的物理击弦起点（而非峰值最高点）
-                let mutable j = i
-                while j - 1 >= 0 && diff.[j - 1] > max beta (thr * 0.25) do
-                    j <- j - 1
-                if i - last >= minGap then
-                    last <- i
-                    onsets.Add(float j * float hop / float sr)
+            // 不应期：距上一个触键点太近，直接跳过（防单个音符起振段连续重触发）
+            if i - last < minGap then ()
+            else
+                let lo = max 0 (i - win / 2)
+                let hi = min nf (i + win / 2)
+                let n = float (hi - lo)
+                let localMean = (cum.[hi] - cum.[lo]) / n
+                let localVar  = (cum2.[hi] - cum2.[lo]) / n - localMean * localMean
+                let localStd  = sqrt (max 0.0 localVar)
+                // 稳健门限：局部均值 + α·标准差（背景/延音下均值趋零时仍由标准差把门抬高）
+                let thr = localMean + alpha * localStd
+                if diff.[i] >= floor
+                   && diff.[i] > thr
+                   && diff.[i] > diff.[i - 1] && diff.[i] >= diff.[i + 1] then
+                    // 前沿回溯：从峰值往回退，直到差分值跌到门限 25% 以下，
+                    // 定位"振幅开始起飞"的物理击弦起点（而非峰值最高点）
+                    let mutable j = i
+                    while j - 1 >= 0 && diff.[j - 1] > max floor (thr * 0.25) do
+                        j <- j - 1
+                    if j - last >= minGap then
+                        last <- j
+                        onsets.Add(float j * float hop / float sr)
         onsets.ToArray()
 
-/// 纯时域 onset 检测默认封装：frameMs=10, hopMs=5, alpha=1.5, beta=1e-4,
-/// smooth=1.0, winMs=500, minGapMs=40。其余语义与 detectOnsetsTimeDomainWith 一致。
+/// 纯时域 onset 检测默认封装：frameMs=10, hopMs=5, alpha=2.5, noiseFloorRatio=0.02,
+/// smooth=1.0, winMs=500, minGapMs=60。其余语义与 detectOnsetsTimeDomainWith 一致。
 let detectOnsetsTimeDomain (pcm: float32[]) (sr: int) : float[] =
-    detectOnsetsTimeDomainWith pcm sr 10.0 5.0 1.5 1e-4 1.0 500.0 40.0
+    detectOnsetsTimeDomainWith pcm sr 10.0 5.0 2.5 0.02 1.0 500.0 60.0
 
 // ---------------------------------------------------------------------------
 //  颜色映射：v ∈ [0,1] → 暗蓝→青→品红→黄→白（类 magma）
@@ -452,5 +466,112 @@ let drawSlice (tilt: float) (sg: Spectrogram) (t: float) (w: int) (h: int) : SKB
         lastX <- x
     use curvePaint = new SKPaint(Color = SKColors.Lime, StrokeWidth = 1.5f, IsAntialias = true)
     canvas.DrawPath(curvePath, curvePaint)
+    use img = surface.Snapshot()
+    SKBitmap.FromImage(img)
+
+// ---------------------------------------------------------------------------
+//  色谱图（Chromagram / Pitch Class Profile, PCP）：抹去八度差异，把全频谱
+//  折叠到 12 个半音类 (C,C#,D,…,B)。每个 bin 的频率 f → MIDI → pitch class
+//  (pc = round(midi) mod 12)，把该 bin 的线性功率(10^(db/10))累加到对应 pc。
+//  chromagram: frames×12 矩阵；globalChroma: 全曲累加 L1 归一化 → 调号能量指纹。
+// ---------------------------------------------------------------------------
+
+/// 半音类名称（pc 索引 0..11 → 音名）
+let pitchClassNames =
+    [| "C"; "C#"; "D"; "D#"; "E"; "F"; "F#"; "G"; "G#"; "A"; "A#"; "B" |]
+
+/// 单帧频谱 (dB 行向量) → 12 维 Chroma 向量（线性功率累加，抹去八度）
+let frameChroma (sg: Spectrogram) (frame: int) : float[] =
+    let c = Array.zeroCreate<float> 12
+    for b in 1 .. sg.nBins - 1 do          // 跳过 DC (bin 0, f=0)
+        let f = binFreq sg b
+        if f > 0.0 then
+            let midi = 69.0 + 12.0 * Math.Log(f / 440.0) / Math.Log(2.0)
+            let pc = ((int (Math.Round midi)) % 12 + 12) % 12
+            let power = Math.Pow(10.0, sg.frames.[frame, b] / 10.0)  // dB → 线性功率
+            c.[pc] <- c.[pc] + power
+    c
+
+/// 整段声谱图 → Chromagram 矩阵 (frames × 12)
+let chromagram (sg: Spectrogram) : float[,] =
+    let n = Array2D.length1 sg.frames
+    let chroma = Array2D.zeroCreate<float> n 12
+    for fi in 0 .. n - 1 do
+        let row = frameChroma sg fi
+        for pc in 0 .. 11 do chroma.[fi, pc] <- row.[pc]
+    chroma
+
+/// 全曲全局 Chroma 向量（帧累加后 L1 归一化到 [0,1]）——调号能量指纹
+let globalChroma (chroma: float[,]) : float[] =
+    let n = Array2D.length1 chroma
+    let g = Array.zeroCreate<float> 12
+    for fi in 0 .. n - 1 do
+        for pc in 0 .. 11 do g.[pc] <- g.[pc] + chroma.[fi, pc]
+    let s = Array.sum g
+    if s > 0.0 then g |> Array.map (fun v -> v / s) else g
+
+/// Krumhansl–Schmuckler 大调/小调权重轮廓
+let private ksMajor = [| 6.35; 2.23; 3.48; 2.33; 4.38; 4.09; 2.52; 5.19; 2.39; 3.66; 2.29; 2.88 |]
+let private ksMinor = [| 6.33; 2.68; 3.52; 5.38; 2.60; 3.53; 2.54; 4.75; 3.98; 2.69; 3.34; 3.17 |]
+
+/// 调号判定：globalChroma 与 12 候选根音 × (大/小调) 旋转模板做皮尔逊相关，
+/// 返回 (音名, 是否大调, 相关度)
+let detectKey (g: float[]) : string * bool * float =
+    let corr (weights: float[]) (root: int) : float =
+        let prof = Array.init 12 (fun pc -> weights.[(pc - root + 12) % 12])
+        let mg = Array.average g
+        let mp = Array.average prof
+        let mutable num, dg, dp = 0.0, 0.0, 0.0
+        for i in 0 .. 11 do
+            let a = g.[i] - mg
+            let b = prof.[i] - mp
+            num <- num + a * b
+            dg <- dg + a * a
+            dp <- dp + b * b
+        if dg > 0.0 && dp > 0.0 then num / sqrt (dg * dp) else 0.0
+    let mutable bestRoot, bestMajor, bestCorr = 0, true, -infinity
+    for root in 0 .. 11 do
+        let cm = corr ksMajor root
+        if cm > bestCorr then bestCorr <- cm; bestRoot <- root; bestMajor <- true
+        let cn = corr ksMinor root
+        if cn > bestCorr then bestCorr <- cn; bestRoot <- root; bestMajor <- false
+    pitchClassNames.[bestRoot], bestMajor, bestCorr
+
+/// 把 Chromagram 矩阵渲染成热力图（时间→宽, 12 半音类→高, 能量→颜色，对数压缩）
+/// 底=C(pc=0)，顶=B(pc=11)
+let drawChromagram (chroma: float[,]) (w: int) (h: int) : SKBitmap =
+    let nFrames = Array2D.length1 chroma
+    let bmp = new SKBitmap(w, h, SKColorType.Bgra8888, SKAlphaType.Premul)
+    let lg x = Math.Log(1.0 + max 0.0 x)
+    let mutable mx = 0.0
+    for fi in 0 .. nFrames - 1 do
+        for pc in 0 .. 11 do mx <- max mx (lg chroma.[fi, pc])
+    let norm = if mx > 0.0 then 1.0 / mx else 0.0
+    for py in 0 .. h - 1 do
+        let pc = max 0 (min 11 (11 - int (0.5 + float py / float (max 1 (h - 1)) * 11.0)))
+        for px in 0 .. w - 1 do
+            let fi = if nFrames > 1
+                     then max 0 (min (nFrames - 1) (int (float px / float (max 1 (w - 1)) * float (nFrames - 1))))
+                     else 0
+            let v = max 0.0 (min 1.0 (lg chroma.[fi, pc] * norm))
+            let (r, g, b) = colormap v
+            bmp.SetPixel(px, py, SKColor(r, g, b, 255uy))
+    bmp
+
+/// 全局 Chroma 条形图（12 竖条 + 音名标签），配合 detectKey 文本显示
+let drawGlobalChroma (gvec: float[]) (w: int) (h: int) : SKBitmap =
+    let info = SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul)
+    use surface = SKSurface.Create(info)
+    let canvas = surface.Canvas
+    canvas.Clear(SKColors.Black)
+    let bw = float w / 12.0
+    use barPaint = new SKPaint(Color = SKColors.Orange, IsAntialias = true)
+    use labelPaint = new SKPaint(Color = SKColors.LightGray)
+    use labelFont = new SKFont(SKTypeface.Default, 11f)
+    for pc in 0 .. 11 do
+        let x0 = float32 (pc * int bw)
+        let bh = float32 (gvec.[pc] * float h)
+        canvas.DrawRect(x0 + 1f, float32 h - bh, float32 bw - 2f, bh, barPaint)
+        canvas.DrawText(pitchClassNames.[pc], x0 + float32 bw * 0.15f, float32 h - 2f, labelFont, labelPaint)
     use img = surface.Snapshot()
     SKBitmap.FromImage(img)

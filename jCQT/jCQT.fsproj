@@ -14,12 +14,14 @@
     <None Include="Music/music.md" />
     <Compile Include="Music/Types.fs" />
     <Compile Include="Music/SheetMusic.fs" />
+    <Compile Include="Music/Spectrum.fs" />
   </ItemGroup>
 
   <ItemGroup />
 
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="4.150.1" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
   </ItemGroup>
 
 </Project>

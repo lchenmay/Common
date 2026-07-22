@@ -265,6 +265,70 @@ let drawWaveform (pcm: float32[]) (w: int) (h: int) (onsetCols: int[] option) : 
     use img = surface.Snapshot()
     SKBitmap.FromImage(img)
 
+/// 渲染声谱图 [t0,t1] 时间子区间（时间→宽, 对数频率轴→高, dB→颜色）
+/// 仅对时间轴做缩放，频率轴保持全频段不变——波形与频谱都在 zoom 范围内绘制
+let drawSpectrogramRange (sg: Spectrogram) (w: int) (h: int) (t0: float) (t1: float) : SKBitmap =
+    let bmp = new SKBitmap(w, h, SKColorType.Bgra8888, SKAlphaType.Premul)
+    let fmin = max 1.0 (binFreq sg 1)
+    let fmax = binFreq sg (sg.nBins - 1)
+    let logMin = Math.Log fmin
+    let logMax = Math.Log fmax
+    let nFrames = Array2D.length1 sg.frames
+    let hop = float sg.hop
+    let sr = float sg.sr
+    let fStart = max 0 (int (t0 * sr / hop))
+    let fEnd   = min (nFrames - 1) (int (t1 * sr / hop))
+    let span = max 0 (fEnd - fStart)
+    for py in 0 .. h - 1 do
+        // py=0 顶部 → 高频；py=h-1 底部 → 低频
+        let frac = 1.0 - float py / float (max 1 (h - 1))
+        let freq = Math.Exp(logMin + frac * (logMax - logMin))
+        let bin = int (freq * float sg.win / float sg.sr) |> max 0 |> min (sg.nBins - 1)
+        for px in 0 .. w - 1 do
+            let fi =
+                if span <= 0 then fEnd
+                else fStart + int (float px / float (max 1 (w - 1)) * float span)
+                |> max fStart |> min fEnd
+            let (r, g, b) = colormap (dbNorm sg.frames.[fi, bin])
+            bmp.SetPixel(px, py, SKColor(r, g, b, 255uy))
+    bmp
+
+/// 渲染时域波形 [t0,t1] 子区间（min/max 包络 + 拍点竖线），onsets 为时刻（秒）
+let drawWaveformRange (pcm: float32[]) (sr: int) (w: int) (h: int)
+                      (t0: float) (t1: float) (onsets: float[] option) : SKBitmap =
+    let info = SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul)
+    use surface = SKSurface.Create(info)
+    let canvas = surface.Canvas
+    canvas.Clear(SKColors.Black)
+    let mid = float32 h / 2.0f
+    use midPaint = new SKPaint(Color = SKColor(70uy, 70uy, 70uy, 255uy), StrokeWidth = 1f)
+    canvas.DrawLine(0f, mid, float32 w, mid, midPaint)
+    if pcm.Length > 0 then
+        let s0 = max 0 (int (t0 * float sr))
+        let s1 = min pcm.Length (int (t1 * float sr))
+        let samplesPerCol = max 1 ((s1 - s0) / w)
+        use wavePaint = new SKPaint(Color = SKColors.Cyan, StrokeWidth = 1f)
+        let scale = mid - 2f
+        for x in 0 .. w - 1 do
+            let a = s0 + x * samplesPerCol
+            let b = min pcm.Length (s0 + (x + 1) * samplesPerCol)
+            let mutable mn, mx = 0.0f, 0.0f
+            for s in a .. b - 1 do
+                let v = pcm.[s]
+                if v < mn then mn <- v
+                if v > mx then mx <- v
+            canvas.DrawLine(float32 x, mid - mx * scale, float32 x, mid - mn * scale, wavePaint)
+    // 拍点标记：在波形之上画红色竖线（全高），仅绘制落在视图区间内者
+    if onsets.IsSome then
+        use onsetPaint = new SKPaint(Color = SKColors.Red, StrokeWidth = 1.5f, IsAntialias = true)
+        let dur = max 1e-6 (t1 - t0)
+        for ot in onsets.Value do
+            if ot >= t0 && ot <= t1 then
+                let x = float32 w * float32 ((ot - t0) / dur)
+                canvas.DrawLine(x, 0f, x, float32 h, onsetPaint)
+    use img = surface.Snapshot()
+    SKBitmap.FromImage(img)
+
 /// 在时刻 t 画 1D 切片谱线（对数频率轴 + C 音符网格线，无填充折线）
 /// tilt: 每倍频程补偿量（dB/oct）。0 = 原始；正值（如 3）= 频率补偿，使宽带音频包络趋平
 let drawSlice (tilt: float) (sg: Spectrogram) (t: float) (w: int) (h: int) : SKBitmap =

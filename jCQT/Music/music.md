@@ -317,3 +317,37 @@ rowInk 分布（示意）：
 **复杂度**：O(b - t) 像素扫描 + O(B log B) 排序（B = 阈值数 = band 高度内不同 ink 值的个数） + 单次 `tryPick` 命中即停（最坏 case 才扫完所有阈值）。实测 96 DPI 单 band 几 ms。
 
 **调用位置**：`detectGrandStaffs` 第 453 行，传入 `rowInk t (b - 1)`，返回的 `lineYs` 经 `List.sort` 后写入 `StaffRegion.lineYs`，由 `drawStaffLines` 画淡紫色水平线叠加在页面上供肉眼核对（见截图：4 页大谱表的 10 根线全部精确对齐）。
+
+## 3. 视频生成：锚点驱动切片时序（PDF → segment → Video 的下游）
+
+§1 产出的 `segments/seg-{page}-{row}.png`（原始切片）与 `layer-*.png`（成品透明图层）是视频的
+帧素材；本模块宿主 **`TabMusicSheetToVideo`** 把它们与 `AudioView` 的音频、`anchorTimes` 一起交给
+`AIO/MusicVideo`（ffmpeg 滤镜链）生成滚动浏览视频。视频切片时序由**锚点**驱动。
+
+### 3.1 锚点（Anchor）的由来
+
+锚点 = 用户希望"每段谱切片正中央"精确对齐到的 BGM 时刻（通常为演奏触键 onset）。两种来源：
+
+1. **UI 点选**：`AudioView` 勾选"锚点编辑"后，在波形图上按 BGM 触键点选，自动吸附最近 onset
+   （`snapToOnset`）；再点取消；普通锚点暗绿、激活锚点洋红加粗。切分完成后宿主以切片数 `n` 调
+   `SetExpectedCount n`，提示"需 N 个锚点"。`AnchorTimes`（升序）经 `TabMusicSheetToVideo` 传给引擎。
+2. **命令行 `--timeline <file>`**：每行一个秒数、空行与 `#` 注释忽略、自动升序，用于无 UI / 批处理。
+
+### 3.2 段时刻推算（居中锚定）
+
+设切片数 `n`、锚点升序 `anchor_0..anchor_{n-1}`：
+
+- `slot_i = anchor_{i+1} − anchor_i`（`i = n−1` 末段取 `anchor_{n-1} − anchor_{n-2}`，或 `n=1` 取全长）；下限钳 `0.1s`。
+- `entry_i = anchor_i − slot_i/2` → 第 `i` 段正中央精确落在 `anchor_i`。
+- **无锚点** → 向后兼容均匀切分：`slot = dur/n`、`entry_i = i·slot`。
+
+ffmpeg overlay 逐段滑入滑出：`x(t)=viewW−(viewW+overlay_w)·(t−entry_i)/slot_i`、
+`enable=between(t, entry_i, entry_i+slot_i)`。锚点数量 ≠ `n` 时 `buildVideo` 报错中止（错误码 4）。
+
+> 段居中 + 段时长填满到下一锚点 → 段间留与 Rubato 一致的间隙，属该语义固有结果。
+
+### 3.3 与其他段落的衔接
+
+- 帧素材来自 §1.5 的 `saveSegments`；墨色由 `recolorInk`（§1.2）决定，不影响时序。
+- 锚点吸附的 onset 来自 `AudioView` 的 `detectOnsetsTimeDomain`（§见 `AIO/architecture.md` §3.1.4），
+  与谱图像处理无耦合，仅共享"切片数 `n`"这一契约。

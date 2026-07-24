@@ -333,21 +333,62 @@ rowInk 分布（示意）：
    `SetExpectedCount n`，提示"需 N 个锚点"。`AnchorTimes`（升序）经 `TabMusicSheetToVideo` 传给引擎。
 2. **命令行 `--timeline <file>`**：每行一个秒数、空行与 `#` 注释忽略、自动升序，用于无 UI / 批处理。
 
-### 3.2 段时刻推算（居中锚定）
+### 3.2 段时刻推算（左缘对齐锚定）
 
 设切片数 `n`、锚点升序 `anchor_0..anchor_{n-1}`：
 
 - `slot_i = anchor_{i+1} − anchor_i`（`i = n−1` 末段取 `anchor_{n-1} − anchor_{n-2}`，或 `n=1` 取全长）；下限钳 `0.1s`。
-- `entry_i = anchor_i − slot_i/2` → 第 `i` 段正中央精确落在 `anchor_i`。
+- `entry_i = anchor_i` → 第 `i` 段**左缘进入视口**的时刻 = 触键点 `anchor_i`；段时长填满到下一锚点，相邻段在下一触键点处无缝交接。
 - **无锚点** → 向后兼容均匀切分：`slot = dur/n`、`entry_i = i·slot`。
 
 ffmpeg overlay 逐段滑入滑出：`x(t)=viewW−(viewW+overlay_w)·(t−entry_i)/slot_i`、
 `enable=between(t, entry_i, entry_i+slot_i)`。锚点数量 ≠ `n` 时 `buildVideo` 报错中止（错误码 4）。
 
-> 段居中 + 段时长填满到下一锚点 → 段间留与 Rubato 一致的间隙，属该语义固有结果。
+> 段左缘进入视口 = 触键点，段时长填满到下一锚点 → 相邻段在下一触键点处无缝交接（无额外间隙）。
 
 ### 3.3 与其他段落的衔接
 
 - 帧素材来自 §1.5 的 `saveSegments`；墨色由 `recolorInk`（§1.2）决定，不影响时序。
 - 锚点吸附的 onset 来自 `AudioView` 的 `detectOnsetsTimeDomain`（§见 `AIO/architecture.md` §3.1.4），
   与谱图像处理无耦合，仅共享"切片数 `n`"这一契约。
+
+## 4. MusicXML → LaTeX 转换（MusicXML.fs，AIO）
+
+> 代码位于 `AIO/AvaloniaApp/Comp/MusicXML.fs`，**纯转换逻辑、无 UI / 工程依赖**；UI 控件在
+> `AIO/AvaloniaApp/Comp/MusicSheetToLatex.fs`（详见 `AIO/architecture.md` §3.1.7）。
+> 二者共同把 MusicXML 乐谱转成 lyluatex/LaTeX 片段，与工程 `.json` 完全解耦。
+
+### 4.1 数据模型与解析
+
+- **类型链**：`Score → Part → Measure → Note`；`MeasureState` 携带 `divisions / clef / key / time`，
+  并**跨小节向前继承**（小节若省略这些属性，沿用上一小节的状态）——这是 MusicXML 的官方约定。
+- **`load (path)`**：
+  - `.mxl`（zip）：**按 MusicXML 规范**读取 `META-INF/container.xml` 的 `rootfile` 的 `full-path`
+    指向真正的乐谱 xml；退化策略排除 `META-INF` / `container.xml` 后取第一个 `.musicxml/.xml`。
+    （注意：早期实现直接用「第一个以 `.xml` 结尾的 entry」会误选 `container.xml` 清单 → 解析出 0 个
+    part → 显示"无音符"。这是 ballade-no4 等真实文件实测踩过的坑。）
+  - `.xml / .musicxml`：直接 `XDocument.Load`。
+  - 解析时**忽略默认命名空间**（统一用 `XName.LocalName` 比较），避免命名空间导致的元素查找失败。
+- 音高：`step`（c/d/e/f/g/a/b）+ `alter`（升降半音）+ `octave` 映射到 lilypond
+  字母 + 升降号 + 八度逗号（`'` 升 / `,` 降，以 C4 = `c'` 为基准）。升降号用 nederlands 默认命名
+  （`is` 升、`es` 降），但 A 降=`as`、E 降=`es` 是**特殊拼写**（A-flat 不是 `aes`、E-flat 不是
+  `ees`）；实现见 `stepAccToLily`（step 感知，不能用简单的 `base+"es"` 拼接，否则 `aes`/`ees`
+  会被 LilyPond 拒绝为非法音高）。
+- 时值：`type`（whole/half/quarter/eighth…）优先；否则用 `divisions` + `duration` 反推拍数；
+  附点 `<dot/>` 追加 0.5× 当前时值。
+- 休止 `<rest/>` → `r`；`<chord/>` 在音符前加 `<` 转为和弦；多 `<voice>` / `<staff>` 按声部、谱表分组渲染。
+
+### 4.2 区间抽取与片段生成
+
+- **`extractRange start end score`**：`end = 0` 表示「到曲尾」（`Int32.MaxValue`）；按小节号
+  `m.Number ∈ [start, end]` 过滤。空区间返回带「无音符」提示的空片段。
+- **`toLilyPond`**：按 part → staff → voice 拼接；每个 voice 内音符用空格连接，小节以 `|` 分隔，
+  开头注入谱号/调号/拍号（来自继承的 `MeasureState`）。
+- **`toLatexFragment score`**：用 lyluatex 包裹——
+  `\begin{lilypond} … \end{lilypond}`，头部注入 `\version "2.24.4"` 与
+  `\paper{ indent=0\mm }`，可直接 `\usepackage{lyluatex}` 编译。
+
+### 4.3 已知限制（v1，片段可手工微调）
+
+连音线 / 装饰音 / 反复 / 跳房子、连音符三元组、歌词 / 力度 / 速度记号、移调乐器暂未处理；
+跨谱表声部、非常规 `divisions` 下的复合拍重音仅作近似。

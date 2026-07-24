@@ -448,7 +448,7 @@ let drawSpectrogramRange (sg: Spectrogram) (w: int) (h: int) (t0: float) (t1: fl
 
 /// 渲染时域波形 [t0,t1] 子区间（min/max 包络 + 拍点竖线），onsets 为时刻（秒）
 let drawWaveformRange (pcm: float32[]) (sr: int) (w: int) (h: int)
-                      (t0: float) (t1: float) (onsets: float[] option) : SKBitmap =
+    (t0: float) (t1: float) (onsets: float[] option) (onsetOpacity: float) : SKBitmap =
     let info = SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul)
     use surface = SKSurface.Create(info)
     let canvas = surface.Canvas
@@ -472,8 +472,10 @@ let drawWaveformRange (pcm: float32[]) (sr: int) (w: int) (h: int)
                 if v > mx then mx <- v
             canvas.DrawLine(float32 x, mid - mx * scale, float32 x, mid - mn * scale, wavePaint)
     // 拍点标记：在波形之上画红色竖线（全高），仅绘制落在视图区间内者
+    // onsetOpacity 随 zoom 调节：缩小(全曲)时变淡以减少遮挡，放大时变清晰
     if onsets.IsSome then
-        use onsetPaint = new SKPaint(Color = SKColors.Red, StrokeWidth = 1.5f, IsAntialias = true)
+        let onsetAlpha = byte (max 0.05 (min 1.0 onsetOpacity) * 255.0)
+        use onsetPaint = new SKPaint(Color = SKColor(255uy, 0uy, 0uy, onsetAlpha), StrokeWidth = 1.5f, IsAntialias = true)
         let dur = max 1e-6 (t1 - t0)
         for ot in onsets.Value do
             if ot >= t0 && ot <= t1 then

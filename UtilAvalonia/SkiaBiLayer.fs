@@ -52,9 +52,10 @@ let flushFinal (bilayer: BiLayer) =
         bilayer.drawerForeground ctx)
 
 /// 将 BiLayer 最终结果输出为 Avalonia WriteableBitmap（用于 Image 控件）
+/// 合成出的临时 SKBitmap 在像素拷贝完成后立即释放，避免泄漏。
 let flushFinalToWriteableBitmap (bilayer: BiLayer) =
-    flushFinal bilayer
-    |> SKBitmap__WriteableBitmap
+    use final = flushFinal bilayer
+    SKBitmap__WriteableBitmap final
 
 /// 将 BiLayer 最终结果输出为 GDI+ Bitmap（用于兼容旧代码）
 /// 注意：UtilAvalonia 不依赖 System.Drawing.Common，如需 GDI+ Bitmap 请在调用方自行转换

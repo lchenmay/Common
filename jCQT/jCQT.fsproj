@@ -22,6 +22,7 @@
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="4.150.1" />
     <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="FSharp.Core" Version="10.1.302" />
   </ItemGroup>
 
 </Project>

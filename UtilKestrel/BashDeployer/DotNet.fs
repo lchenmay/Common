@@ -81,9 +81,11 @@ let buildBackend output credential code =
                     false
                 else
                     // 有正常输出 或 输出为空（实时回调已消费）→ 都做文件级验证
-                    // bashWithRetry: 15s 超时 + 3 次重试（指数退避），避免并行构建时 SSH 竞争超时导致误判构建失败
+                    // 构建刚结束，服务器仍在从内存/IO 峰值恢复，sshd 处理新连接可能很慢。
+                    // 先 sleep 给系统喘息，再用更宽超时(30s × 5 次)做文件级验证，避免"构建成功却被超时误杀"。
+                    bash output credential "sleep 3" |> ignore
                     let verifyCmd = $"if [ -d /root/publish/{code} ] && [ -f /root/publish/{code}/Server.dll ]; then echo 'PUBLISH_OK'; else echo 'PUBLISH_MISSING'; fi"
-                    let verify = bashWithRetry output credential verifyCmd 15000 3
+                    let verify = bashWithRetry output credential verifyCmd 30000 5
                     if verify = "PUBLISH_OK" then
                         "✓ 后端构建完成" |> green |> output
                         true

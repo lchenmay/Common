@@ -90,11 +90,11 @@ type FileTreeView(getMainWindow: unit -> Window, onRootPathChanged: string -> un
         let ctxMenu = ContextMenu()
         let changeItem = MenuItem(Header = "更换文件夹")
         changeItem.Click.Add(fun _ -> changeRoot())
-        ctxMenu.Items.Add changeItem
+        ctxMenu.Items.Add changeItem |> ignore
         rootNode.ContextMenu <- ctxMenu
 
         // 将文件服务根节点添加到树
-        treeView.Items.Add(rootNode)
+        treeView.Items.Add rootNode |> ignore
         
         // 使用布局函数创建界面
         let layout = createFileTreeLayout treeView selectedPaths clearSelectedPaths log

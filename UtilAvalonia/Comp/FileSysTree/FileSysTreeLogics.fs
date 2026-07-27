@@ -93,7 +93,7 @@ let rec loadDirectoryWithCheckbox
                         match cbOpt with
                         | Some cb ->
                             cb.IsCheckedChanged.Add(fun _ ->
-                                if cb.IsChecked = true then
+                                if cb.IsChecked.Value then
                                     if not (selectedPaths.Contains(fullPath)) then
                                         selectedPaths.Add(fullPath)
                                         log $"复选框选中添加: {fullPath}"
@@ -116,7 +116,7 @@ let rec loadDirectoryWithCheckbox
                         match cbOpt with
                         | Some cb ->
                             cb.IsCheckedChanged.Add(fun _ ->
-                                if cb.IsChecked = true then
+                                if cb.IsChecked.Value then
                                     if not (selectedPaths.Contains(fullPath)) then
                                         selectedPaths.Add(fullPath)
                                         log $"复选框选中添加: {fullPath}"

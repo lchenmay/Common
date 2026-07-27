@@ -8,7 +8,7 @@ open Avalonia.Layout
 open Avalonia.Threading
 open UtilAvalonia.UiUtil
 
-type MainStatus(?log: string -> unit) as this =   // 添加 as this 使 this 可用
+type MainStatus(?log: string -> unit) =
     let log = defaultArg log ignore
     let statusPanel = Border()
     let statusText = TextBlock()

@@ -144,10 +144,10 @@ echo '[后端] 依赖安装完成'
             bashWithTimeout output credential installCmd 120000 |> ignore
     }
     
-    // 串行构建：2GB 机器上前后端并行会同时吃满内存+swap，导致 sshd 处理校验连接超时，
+    // 串行执行：2GB 机器上前后端并行会同时吃满内存+swap，导致 sshd 处理校验连接超时，
     // 触发"构建成功却误判失败"。改为串行（先后端、再前端），降低内存峰值、提升校验稳定性。
-    do! backendJob
-    do! frontendJob
+    backendJob |> Async.RunSynchronously |> ignore
+    frontendJob |> Async.RunSynchronously |> ignore
 
 /// 串行构建前后端（先后端、再前端，降低弱机器内存峰值）
 /// 返回 (前端成功, 后端成功)

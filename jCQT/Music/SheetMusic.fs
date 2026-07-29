@@ -968,7 +968,7 @@ let alignVertical (segs: GrandStaffSegment list) : GrandStaffSegment list =
             let out = new SKBitmap(bmp.Width, commonH, SKColorType.Bgra8888, SKAlphaType.Premul)
             out.Erase(SKColors.Transparent)
             use canvas = new SKCanvas(out)
-            canvas.DrawBitmap(bmp, 0.0f, float32 pad)
+            canvas.DrawBitmap(bmp, 0.0f, float32 pad, SKSamplingOptions.Default)
             bmp.Dispose()
             { s with bmp = out
                      firstLineY = maxBase
@@ -989,7 +989,7 @@ let stitchHorizontally (bitmaps: SKBitmap list) (separator: int) =
         use canvas = new SKCanvas(out)
         let mutable x = 0
         for b in bitmaps do
-            canvas.DrawBitmap(b, float32 x, 0.0f)
+            canvas.DrawBitmap(b, float32 x, 0.0f, SKSamplingOptions.Default)
             x <- x + b.Width + sep
         out
 

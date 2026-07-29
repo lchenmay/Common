@@ -43,7 +43,7 @@ let binarizeTransparent (bmp: SKBitmap) =
             i <- i + 4
         let out = new SKBitmap(src.Width, src.Height, SKColorType.Bgra8888, SKAlphaType.Premul)
         use canvas = new SKCanvas(out)
-        canvas.DrawBitmap(src, 0.0f, 0.0f)
+        canvas.DrawBitmap(src, 0.0f, 0.0f, SKSamplingOptions.Default)
         let outArr = Array.zeroCreate<byte> out.ByteCount
         Marshal.Copy(out.GetPixels(), outArr, 0, outArr.Length)
         for p in 0 .. count - 1 do
@@ -84,7 +84,7 @@ let scaleBitmap (src: SKBitmap) (scale: float) (bg: SKColor option) =
         use paint = new SKPaint(IsAntialias = false)
         canvas.Save() |> ignore
         canvas.Scale(float32 scale, float32 scale)
-        canvas.DrawBitmap(src, 0.0f, 0.0f, paint)
+        canvas.DrawBitmap(src, 0.0f, 0.0f, SKSamplingOptions(SKFilterMode.Nearest), paint)
         canvas.Restore()
         dst
 
@@ -117,7 +117,7 @@ let drawPageHistograms (page: SKBitmap) (content: SKBitmap) =
     let out = new SKBitmap(outW, outH, SKColorType.Bgra8888, SKAlphaType.Premul)
     out.Erase(SKColors.White)
     use canvas = new SKCanvas(out)
-    canvas.DrawBitmap(content, float32 histW, 0.0f)
+    canvas.DrawBitmap(content, float32 histW, 0.0f, SKSamplingOptions.Default)
     use greenPaint = new SKPaint(Color = SKColors.Green, Style = SKPaintStyle.Fill, IsAntialias = false)
     for x in 0 .. w - 1 do
         let bh = int (float colInk.[x] / float maxCol * float histH)
@@ -145,7 +145,7 @@ let drawBandProjections (page: SKBitmap) (content: SKBitmap)
         let out = new SKBitmap(w, outH, SKColorType.Bgra8888, SKAlphaType.Premul)
         out.Erase(SKColors.White)
         use canvas = new SKCanvas(out)
-        canvas.DrawBitmap(content, 0.0f, 0.0f)
+        canvas.DrawBitmap(content, 0.0f, 0.0f, SKSamplingOptions.Default)
         let sortedBands = bands |> List.sortBy (fun (tY, _) -> tY) |> List.toArray
         let (_, arr) = copyPixels page
         use greenPaint = new SKPaint(Color = SKColors.Green, Style = SKPaintStyle.Fill, IsAntialias = false)

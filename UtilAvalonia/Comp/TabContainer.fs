@@ -38,9 +38,12 @@ type TabContainer() as this =
         titleText.VerticalAlignment <- VerticalAlignment.Center
         
         let closeBtn = Button(Content = "✕")
-        closeBtn.Width <- 18.0
-        closeBtn.Height <- 18.0
-        closeBtn.Margin <- Thickness(6.0, 0.0, 0.0, 0.0)
+        // 关闭按钮尺寸随标题文字字号，避免过大；仅比文字略大一点作点击热区
+        let btnSize = winControl.fontSizeTab + 3.0
+        closeBtn.Width <- btnSize
+        closeBtn.Height <- btnSize
+        closeBtn.FontSize <- winControl.fontSizeTab
+        closeBtn.Margin <- Thickness(4.0, 0.0, 0.0, 0.0)
         closeBtn.Background <- Brushes.Transparent
         closeBtn.Foreground <- BuildInColor.DefaultForeground |> color__Brush
         closeBtn.BorderThickness <- Thickness(0.0)

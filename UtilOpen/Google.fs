@@ -241,6 +241,40 @@ let GeminiUploadFile output apiKey (path: string) (mime: string) (onProgress: in
                     return ("", "", "")
                 else
                     let u = values |> Seq.head
+
+                    // 统一使用 raw 简单上传（流式发送整个文件，无 8 MiB chunk granularity 约束），
+                    // 支持任意大小文件；彻底修复"<8 MiB 文件无法用 resumable 上传"的问题。
+                    try
+                        use sClient = new System.Net.Http.HttpClient()
+                        sClient.Timeout <- System.TimeSpan.FromSeconds 1200.0
+                        let sReq = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, startUrl)
+                        sReq.Headers.Add("X-Goog-Upload-Protocol", "raw")
+                        sReq.Headers.Add("X-Goog-Upload-Command", "upload, finalize")
+                        sReq.Headers.Add("X-Goog-Upload-Header-Content-Length", len.ToString())
+                        sReq.Headers.Add("X-Goog-Upload-Header-Content-Type", mime)
+                        sReq.Content <- new ProgressHttpContent(path, mime, (fun (d,t)->onProgress(d,t)), 0L, len, System.TimeSpan.FromSeconds 1200.0)
+                        let! sResp = sClient.SendAsync sReq |> Async.AwaitTask
+                        let! sBody = sResp.Content.ReadAsStringAsync() |> Async.AwaitTask
+                        if sResp.IsSuccessStatusCode then
+                            let root = sBody |> Util.Json.str__root
+                            let uri = tryFindByPath [| "file"; "uri" |] root |> function Some (_, Json.Str s) -> s | _ -> ""
+                            let name = tryFindByPath [| "file"; "name" |] root |> function Some (_, Json.Str s) -> s | _ -> ""
+                            let state = tryFindByPath [| "file"; "state" |] root |> function Some (_, Json.Str s) -> s | _ -> ""
+                            if uri <> "" && name <> "" then
+                                output $"uploaded file {System.IO.Path.GetFileName path} -> {state}"
+                                return (uri, name, state)
+                            else
+                                output $"GeminiUploadFile simple upload returned no uri/name"
+                                return ("", "", "")
+                        else
+                            output $"GeminiUploadFile simple upload failed: {sResp.StatusCode} {sBody}"
+                            return ("", "", "")
+                    with ex ->
+                        output $"GeminiUploadFile simple upload error: {ex.Message}"
+                        return ("", "", "")
+
+                    (* 已废弃的 resumable 分块上传：Gemini File API 的 8 MiB chunk granularity 约束导致
+                        <8 MiB 及非 8 MiB 整数倍的文件上传必然失败（BadRequest），故统一改用上方 raw 简单上传。
                     // 查询 resumable 会话已确认接收的字节数，用于断点续传
                     let queryReceived (uploadUrl: string) : int64 =
                         try
@@ -260,8 +294,13 @@ let GeminiUploadFile output apiKey (path: string) (mime: string) (onProgress: in
                     // 注意：HttpClient.Timeout 不计入"请求体发送阶段"，卡在写请求体时它不触发；
                     // 故不依赖它，改用块内进度看门狗 + CancelPendingRequests 强制断连（真正打断 socket 写阻塞）。
                     upClient.Timeout <- System.TimeSpan.FromSeconds 1200.0
-                    // 真分块上传：每块 4 MiB 独立请求、独立超时、失败可续传
-                    let chunkSize = 4L * 1024L * 1024L
+                    // 真分块上传：每块 8 MiB 独立请求、独立超时、失败可续传。
+                    // 关键约束：Gemini File API resumable 协议要求【非末块】大小必须是 8 MiB
+                    // (8388608) 的整数倍，否则返回
+                    //   "BadRequest ... not a multiple of the 8388608 byte chunk granularity"。
+                    // 故 chunkSize 须为 8 MiB 倍数；小于 8 MiB 的文件会作为单块（末块）一次性
+                    // 上传，末块允许不足 granularity，从而通过校验。
+                    let chunkSize = 8L * 1024L * 1024L
                     let maxAttempts = 3
                     // 块内进度停滞超过该时长即判定网络卡死，强制取消并关闭连接。
                     // 设为 600s（10 分钟）以容忍本地直连 Google 的真实慢网络；死网络的真正兜底是放弃前的"复活"查询。
@@ -352,6 +391,7 @@ let GeminiUploadFile output apiKey (path: string) (mime: string) (onProgress: in
                         let state = tryFindByPath [| "file"; "state" |] root |> function Some (_, Json.Str s) -> s | _ -> ""
                         output $"已上传文件 {System.IO.Path.GetFileName path} -> {state}"
                         return (uri, name, state)
+                    *)
         with ex ->
             output $"⚠️ GeminiUploadFile 异常: {ex.Message}"
             return ("", "", "")

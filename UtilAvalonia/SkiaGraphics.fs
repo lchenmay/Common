@@ -16,7 +16,7 @@ let private calibriFont (fontSize: float32) =
     new SKFont(SKTypeface.FromFamilyName("Calibri"), fontSize)
 
 /// 创建 Courier SKFont
-let private courierFont (fontSize: float32) =
+let courierFont (fontSize: float32) =
     new SKFont(SKTypeface.FromFamilyName("Courier"), fontSize)
 
 /// 测量文本尺寸——替代 UtilVortice.Graphics.measureText

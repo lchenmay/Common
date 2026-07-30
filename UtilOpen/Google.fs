@@ -419,7 +419,7 @@ let GeminiMultimodal
 
             if valid.Length = 0 then
                 output "⚠️ 所有文件上传到 Gemini 失败，跳过 AI 分析。"
-                return ("所有文件上传到 Gemini 失败，请稍后重试或手动填写。", "")
+                return ("All files failed to upload to Gemini. Please try again later or fill in manually.", "")
             else
                 output $"已成功上传 {valid.Length}/{files.Length} 个文件，正在请求 {model} 分析..."
                 onPhase "analyzing"

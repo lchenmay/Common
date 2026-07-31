@@ -80,24 +80,42 @@ let sample__histogram (samples:float[]) =
 
 
 let samples__stat (samples:float[]) = 
-    let mean,var,middle,min,max = meanVarMiddleRange samples
-    let median, qinf, qsup, oinf, osup = median3 samples
+    if samples.Length = 0 then
+        // 空样本（如数据不足 / 时间帧 bar 数 < lookahead 时采样器返回空）：返回零值统计，
+        // 交由 spot__SpotInStat 的 count=0 分支降级，绝不 Array.min/max 空数组抛异常。
+        let histogram = { inf = 0.0; sup = 0.0; max = 0; grid = 1 }
+        {   mean = 0.0
+            var = 0.0
+            middle = 0.0
+            median = 0.0
+            qinf = 0.0
+            qsup = 0.0
+            oinf = 0.0
+            osup = 0.0
+            inf = 0.0
+            sup = 0.0
+            count = 0
+            histogram = histogram 
+            histogramData = [| 0 |] }
+    else
+        let mean,var,middle,min,max = meanVarMiddleRange samples
+        let median, qinf, qsup, oinf, osup = median3 samples
 
-    let histogram,bars = sample__histogram samples
+        let histogram,bars = sample__histogram samples
 
-    {   mean = mean
-        var = var
-        middle = middle
-        median = median
-        qinf = qinf
-        qsup = qsup
-        oinf = oinf
-        osup = osup
-        inf = min
-        sup = max
-        count = samples.Length
-        histogram = histogram 
-        histogramData = bars }
+        {   mean = mean
+            var = var
+            middle = middle
+            median = median
+            qinf = qinf
+            qsup = qsup
+            oinf = oinf
+            osup = osup
+            inf = min
+            sup = max
+            count = samples.Length
+            histogram = histogram 
+            histogramData = bars }
 
 
 let spot__SpotInStat (digit,unit) spot samples = 

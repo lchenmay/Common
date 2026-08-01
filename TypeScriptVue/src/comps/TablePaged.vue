@@ -190,11 +190,21 @@ interface TablePagedProps {
   hpostdata?: Function
   onRowClick?: (data: Data) => void
   selected?: Data[]
+  defaultSort?: string
 }
 
 const props = defineProps<TablePagedProps>()
 
 // theme 从 common.ts 导入
+
+// 根据 defaultSort（如 "-ID" / "+Createdat" / "Email"）推导初始排序状态
+function initSort(d: string | undefined) {
+  if (!d) return { sort: '', field: '', dir: '' as '' | 'asc' | 'desc' }
+  const dir: '' | 'asc' | 'desc' = d.startsWith('-') ? 'desc' : 'asc'
+  const field = d.replace(/^[+-]/, '')
+  return { sort: (dir === 'desc' ? '-' : '+') + field, field, dir }
+}
+const sortInit = initSort(props.defaultSort)
 
 const s = vue.shallowReactive({
   npps: [10,30,50,100,200],
@@ -205,9 +215,9 @@ const s = vue.shallowReactive({
     pages: 0
   } as Paging,
   items: [] as Data[],
-  sort: '',
-  sortField: '',
-  sortDirection: '' as '' | 'asc' | 'desc',
+  sort: sortInit.sort,
+  sortField: sortInit.field,
+  sortDirection: sortInit.dir,
   trigger: 0,
   loading: false
 })

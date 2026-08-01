@@ -37,6 +37,7 @@ interface CrudProps {
   data__id?: (data: Data) => string
   data__desc?: (data: Data) => string
   tag?: any
+  defaultSort?: string
 }
 
 const props = defineProps<CrudProps>()
@@ -72,6 +73,7 @@ vue.onMounted(async () => {
       api: props.api!,
       hpostdata: props.hpostdata,
       selected: props.selected,
+      defaultSort: props.defaultSort,
       onRowClick: openTab
     },
     closable: false

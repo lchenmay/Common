@@ -1,0 +1,11 @@
+name: yhb-chrono
+channels:
+  - projectchrono
+  - conda-forge
+dependencies:
+  - python=3.12.13=h0159041_0_cpython
+  - pychrono=10.0.0=py312h418371c_677
+  - numpy=2.5.1=py312ha3f287d_0
+  - packaging
+  - setuptools=83.0.0
+  - wheel=0.47.0

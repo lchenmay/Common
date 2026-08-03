@@ -8,6 +8,13 @@ TypeScriptVue/.npmrc
 *.lock
 node_modules
 
+# Shared YHB native/tool runtimes (rebuilt from yhb-tooling lock files)
+/yhb-tooling/chrono-env/
+/yhb-tooling/cadquery-ocp/
+/yhb-tooling/mamba-root/
+/yhb-tooling/micromamba/
+/yhb-tooling/npm-cache/
+
 # AI 调试临时文件
 *.tmp
 build_output.txt

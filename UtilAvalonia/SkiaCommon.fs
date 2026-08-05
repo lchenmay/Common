@@ -76,6 +76,32 @@ let SKBitmap__WriteableBitmap (skbmp: SKBitmap) =
 
     avbmp
 
+/// 直接在已存在的 WriteableBitmap 像素缓冲上绘制。
+/// 与 drawToSKBitmap + SKBitmap__WriteableBitmap 的组合等价，但：
+///   零新建 SKSurface 后备位图、零像素拷贝、零新建 WriteableBitmap。
+/// 高频帧（鼠标移动合成前景）必须走这条路径，否则每帧都会分配一张全尺寸位图，
+/// 原生内存靠 GC 回收，持续移动时 Gen2 停顿越来越频繁 → 表现为"用一会就越来越卡"。
+let drawToWriteableBitmap (wbmp: Avalonia.Media.Imaging.WriteableBitmap) (drawer: Ctx -> unit) =
+    use cw = new CodeWrapper("UtilAvalonia.Skia.drawToWriteableBitmap")
+
+    use lck = wbmp.Lock()
+    let info = SKImageInfo(lck.Size.Width, lck.Size.Height, SKColorType.Bgra8888, SKAlphaType.Premul)
+    // raster-direct：surface 直接以 WriteableBitmap 的像素为后备存储
+    use surface = SKSurface.Create(info, lck.Address, lck.RowBytes)
+    if isNull (box surface) then
+        failwithf "SKSurface.Create(raster-direct) failed: %dx%d rowBytes=%d" info.Width info.Height lck.RowBytes
+    let canvas = surface.Canvas
+
+    let ctx = {
+        w = float32 info.Width
+        h = float32 info.Height
+        surface = surface
+        canvas = canvas }
+
+    drawer ctx
+
+    canvas.Flush()
+
 /// 从 Avalonia WriteableBitmap 创建渲染上下文
 let writeableBitmap__Ctx (wbmp: Avalonia.Media.Imaging.WriteableBitmap) =
     let info = SKImageInfo(wbmp.PixelSize.Width, wbmp.PixelSize.Height)

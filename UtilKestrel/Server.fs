@@ -17,8 +17,10 @@ open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.FileProviders
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Primitives
 open Microsoft.AspNetCore.WebUtilities
 open System.Net.WebSockets
+open System.Net.Http
 
 open Util.Perf
 open Util.Linux.Bash
@@ -350,6 +352,65 @@ let runServer
     let app = builder.Build()
 
     app.UseResponseCompression() |> ignore
+
+    // Optional same-origin reverse proxy for a separately deployed physics engine.
+    // Keeping this at the shared HTTP layer prevents business APIs from becoming
+    // coupled to the simulator implementation or to external DNS configuration.
+    let physicsEngineBase =
+        match Environment.GetEnvironmentVariable("UTILKESTREL_PHYSICS_ENGINE_URL") with
+        | value when not (String.IsNullOrWhiteSpace value) -> Some(value.TrimEnd('/'))
+        | _ -> None
+    let physicsProxyClient = new HttpClient(new HttpClientHandler(AllowAutoRedirect = false))
+    physicsProxyClient.Timeout <- TimeSpan.FromMinutes(5.0)
+    let isPhysicsProxyPath (path: PathString) =
+        path.StartsWithSegments("/simulator")
+        || path.StartsWithSegments("/physics-engine")
+        || path.StartsWithSegments("/api/device-packages")
+        || path.StartsWithSegments("/models")
+    let isHopByHopHeader (name: string) =
+        name.Equals("Connection", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Proxy-Authenticate", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("TE", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Trailer", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Upgrade", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Host", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)
+
+    app.Use(fun (context: HttpContext) (next: Func<Task>) ->
+        match physicsEngineBase with
+        | Some baseUrl when isPhysicsProxyPath context.Request.Path ->
+            task {
+                try
+                    let requestPath = context.Request.Path.Value
+                    let upstreamPath =
+                        if requestPath.StartsWith("/physics-engine/", StringComparison.Ordinal) then
+                            requestPath.Substring("/physics-engine".Length)
+                        else requestPath
+                    let target = baseUrl + upstreamPath + context.Request.QueryString.Value
+                    use request = new HttpRequestMessage(HttpMethod(context.Request.Method), target)
+                    if not (HttpMethods.IsGet context.Request.Method || HttpMethods.IsHead context.Request.Method) then
+                        request.Content <- new StreamContent(context.Request.Body)
+                    for header in context.Request.Headers do
+                        if not (isHopByHopHeader header.Key) then
+                            let values = header.Value.ToArray()
+                            if not (request.Headers.TryAddWithoutValidation(header.Key, values)) && not (isNull request.Content) then
+                                request.Content.Headers.TryAddWithoutValidation(header.Key, values) |> ignore
+                    use! response = physicsProxyClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted)
+                    context.Response.StatusCode <- int response.StatusCode
+                    for header in response.Headers do
+                        if not (isHopByHopHeader header.Key) then context.Response.Headers.[header.Key] <- StringValues(header.Value |> Seq.toArray)
+                    for header in response.Content.Headers do
+                        if not (isHopByHopHeader header.Key) then context.Response.Headers.[header.Key] <- StringValues(header.Value |> Seq.toArray)
+                    do! response.Content.CopyToAsync(context.Response.Body, context.RequestAborted)
+                with ex ->
+                    ("[Physics Proxy Error] " + ex.ToString()) |> red |> output
+                    if not context.Response.HasStarted then context.Response.StatusCode <- StatusCodes.Status502BadGateway
+            } :> Task
+        | _ -> next.Invoke()
+    ) |> ignore
 
     // --- CORS 手动中间件（替代 UseCors，确保跨域头绝对生效）---
     // UseCors() + AllowAnyOrigin() 在 net10.0 上不追加 Access-Control-Allow-Origin

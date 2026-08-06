@@ -297,9 +297,16 @@ let sortBy__functoro direction sortBy =
     else
         None
 
-let apiBuilder
+/// 列表聚合器：对「已 listFilter 过滤、已排序、未分页」的全集计算数值汇总。
+/// 返回值必须是 Json.Braket，键 = 前端列 key，值 = 数值（float / int32）。
+/// 约定：只对数值字段（float / integer）做聚合，字符串/枚举字段不参与。
+type ListAggregate<'Data,'User> = 'User option -> 'Data[] -> Json
+
+/// 带列表聚合的 CRUD builder。aggregateo = None 时行为与 apiBuilder 完全一致。
+let apiBuilderAgg
     output 
     (adx:ApiDbCtx<'Data,'p,'User>)
+    (aggregateo: ListAggregate<'Data,'User> option)
     json = 
 
       (fun usero ->
@@ -333,11 +340,21 @@ let apiBuilder
             |> InternalEr.Ok
 
         | "ls" ->  
-            adx.__items usero
-            |> Array.filter (adx.listFilter usero json)
-            |> sorting
-            |> paging adx.marshall.data__json json 
-            |> InternalEr.Ok
+            // full = 已过滤、已排序、未分页的全集；聚合基于它计算，
+            // 因此总额始终对应当前 filter 条件下的所有记录（跨页），而非当前页。
+            let full = 
+                adx.__items usero
+                |> Array.filter (adx.listFilter usero json)
+                |> sorting
+
+            let rep = paging adx.marshall.data__json json full
+
+            match aggregateo with
+            | Some aggregate -> 
+                [| rep; [| ("aggregates", aggregate usero full) |] |]
+                |> Array.concat
+                |> InternalEr.Ok
+            | None -> rep |> InternalEr.Ok
 
         | "search" ->
             let term = (json |> tryFindStrByAtt "term").ToLower()
@@ -378,6 +395,13 @@ let apiBuilder
             match adx.continueo with
             | Some switcher -> switcher usero act json
             | None -> InternalEr.InvalideParameter)
+
+/// 无聚合的标准 CRUD builder（等价于 apiBuilderAgg ... None）。
+let apiBuilder
+    output 
+    (adx:ApiDbCtx<'Data,'p,'User>)
+    json = 
+    apiBuilderAgg output adx None json
 
 let apiMonitorPerf x = 
 

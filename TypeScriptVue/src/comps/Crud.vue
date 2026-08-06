@@ -15,7 +15,7 @@
 import * as vue from 'vue'
 
 import { ref, markRaw, type Component } from 'vue'
-import TablePaged, { type TableField } from './TablePaged.vue'
+import TablePaged, { type TableField, type AggregateConfig } from './TablePaged.vue'
 import TabContainer from './TabContainer.vue'
 import SearchField from './SearchField.vue';
 import { theme } from '../lib/common'
@@ -38,6 +38,8 @@ interface CrudProps {
   data__desc?: (data: Data) => string
   tag?: any
   defaultSort?: string
+  /** 列表表尾的数值聚合显示配置，透传给 TablePaged */
+  aggregate?: AggregateConfig[]
 }
 
 const props = defineProps<CrudProps>()
@@ -74,6 +76,7 @@ vue.onMounted(async () => {
       hpostdata: props.hpostdata,
       selected: props.selected,
       defaultSort: props.defaultSort,
+      aggregate: props.aggregate,
       onRowClick: openTab
     },
     closable: false

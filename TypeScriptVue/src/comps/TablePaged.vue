@@ -82,6 +82,22 @@
                         </td>
                     </tr>
                 </tbody>
+
+                <!-- 聚合表尾：按列 key 对齐显示后端返回的数值汇总 -->
+                <tfoot v-if="hasAggregates">
+                    <tr class="table-footer-row">
+                        <td class="table-cell table-footer-cell text-center" style="width: 50px"></td>
+
+                        <td v-for="f in props.fields"
+                          :key="f.key"
+                          :style="[
+                            f.width ? { width: f.width, textAlign: f.text === 'right' ? 'right' : 'left' } : 
+                            { textAlign: f.text === 'right' ? 'right' : 'left' }]"
+                          :class="['table-cell', 'table-footer-cell', f.text ? 'text-' + f.text : '']">
+                          <span v-if="aggCell(f) !== null">{{ aggCell(f) }}</span>
+                        </td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
         
@@ -183,6 +199,21 @@ export interface Paging{
   pages: number
 }
 
+/**
+ * 列表聚合显示配置。
+ * 后端在 `ls` 响应的 `aggregates` 字段里返回 { 字段名: 数值 }，
+ * 这里按 field 把值落到同名列（fields[].key）的表尾单元格。
+ * 约定：只有数值字段（float / integer）可以聚合；非数值一律显示 '-'。
+ */
+export interface AggregateConfig {
+  /** 必须同时是列的 key 与后端 aggregates 的键 */
+  field: string
+  /** 可选前缀标题（如 "Total"），只在第一个有值的聚合列上显示 */
+  label?: string
+  /** 可选格式化，入参恒为 number */
+  format?: (v: number) => string
+}
+
 interface TablePagedProps {
   lang?: string
   fields: TableField[]
@@ -191,6 +222,8 @@ interface TablePagedProps {
   onRowClick?: (data: Data) => void
   selected?: Data[]
   defaultSort?: string
+  /** 声明哪些数值列在表尾显示聚合值；不传则不渲染表尾 */
+  aggregate?: AggregateConfig[]
 }
 
 const props = defineProps<TablePagedProps>()
@@ -215,6 +248,7 @@ const s = vue.shallowReactive({
     pages: 0
   } as Paging,
   items: [] as Data[],
+  aggregates: {} as Record<string, any>,
   sort: sortInit.sort,
   sortField: sortInit.field,
   sortDirection: sortInit.dir,
@@ -342,6 +376,31 @@ const buildStyleTd = (f:TableField) => (row:any) => {
   return classes
 }
 
+// 取当前有聚合值的第一个字段，用于决定 label 前缀挂在哪一列
+const firstAggField = computed(() => {
+  void s.trigger
+  return props.aggregate?.find(a => typeof s.aggregates?.[a.field] === 'number')?.field
+})
+
+// 是否渲染聚合表尾
+const hasAggregates = computed(() => 
+  !!props.aggregate && props.aggregate.length > 0 && firstAggField.value !== undefined)
+
+// 单个表尾单元格内容；返回 null 表示该列不参与聚合（留空）
+const aggCell = (f: TableField): string | null => {
+  void s.trigger
+  const cfg = props.aggregate?.find(a => a.field === f.key)
+  if (!cfg) return null
+
+  const raw = s.aggregates?.[cfg.field]
+  // 护栏：只接受有限数值（float / integer），误配到非数值列时优雅降级
+  if (typeof raw !== 'number' || !isFinite(raw)) return '-'
+
+  const val = cfg.format ? cfg.format(raw) : String(raw)
+  const prefix = (cfg.label && cfg.field === firstAggField.value) ? cfg.label + ': ' : ''
+  return prefix + val
+}
+
 const loadPage = (page:number) => {
   s.paging.page = page
   s.loading = true
@@ -358,6 +417,7 @@ const loadPage = (page:number) => {
   loader(props.api, postdata, (rep: any) => {
     s.items = rep.data as Data[]
     s.paging = rep.paging
+    s.aggregates = rep.aggregates ?? {}
     s.loading = false
     s.trigger++ 
   })
@@ -457,6 +517,17 @@ vue.onMounted(async () => {
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
   line-height: 1.25rem;
+  color: #111827;
+}
+
+/* 聚合表尾 */
+.table-footer-row {
+  border-top: 2px solid #d1d5db;
+}
+
+.table-footer-cell {
+  font-weight: 600;
+  background-color: #f9fafb;
   color: #111827;
 }
 
@@ -568,6 +639,13 @@ vue.onMounted(async () => {
   background-color: #1e293b;
 }
 [data-theme="dark"] .table-cell {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .table-footer-row {
+  border-top: 2px solid #334155;
+}
+[data-theme="dark"] .table-footer-cell {
+  background-color: #0f172a;
   color: #e2e8f0;
 }
 [data-theme="dark"] .table-pagination {

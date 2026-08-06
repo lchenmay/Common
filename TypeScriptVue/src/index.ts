@@ -6,7 +6,7 @@
 export { default as Crud } from './comps/Crud.vue'
 export { default as TabContainer } from './comps/TabContainer.vue'
 export { default as TablePaged } from './comps/TablePaged.vue'
-export type { TableField, Paging, AggregateConfig } from './comps/TablePaged.vue'
+export type { TableField, Paging, AggregateConfig } from './comps/crud-types'
 export { default as SearchField } from './comps/SearchField.vue'
 export { default as Markdown } from './comps/Markdown.vue'
 export { default as FileUploader } from './comps/FileUploader.vue'
@@ -62,3 +62,11 @@ export * from './lib/mod/panel'
 
 // --- route 工厂函数 (泛型路由，参数化 routes) ---
 export { createProjectRouter } from './lib/mod/route'
+
+// ============================================
+// 导出 ORM 工具 —— 枚举自动识别
+// ============================================
+export { registerOrm, getEnumMap, getCssFieldName } from './lib/orm/registry'
+export type { EnumValue, EnumField, CssFieldNameMap } from './lib/orm/registry'
+export { probeBindings, makeAutoRowStyle, makeFilterKey } from './lib/orm/probe'
+export type { FieldBinding } from './lib/orm/probe'

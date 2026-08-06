@@ -74,7 +74,8 @@
                           :key="f.key"
                           :style="[
                             f.width ? { width: f.width, textAlign: f.text === 'right' ? 'right' : 'left' } : 
-                            { textAlign: f.text === 'right' ? 'right' : 'left' }]"
+                            { textAlign: f.text === 'right' ? 'right' : 'left' },
+                            buildStyleTdInline(f)(i)]"
                           :class="buildStyleTd(f)(i)">
                           <span v-if="f.row__cell">
                             {{ f.row__cell(i) }}
@@ -177,55 +178,17 @@
 <script setup lang="ts" generic="Data">
 
 import * as vue from 'vue'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { loader } from '~/lib/api'
 import { theme } from '../lib/common'
 import { key__text } from '../lib/util/lang'
 
-export interface TableField {
-  key: string,
-  row__cell?: Function,
-  row__style?: Function,
-  sortable?: boolean,
-  style?: string | Function,
-  text?: string,
-  width?: string
-}
 
-export interface Paging{
-  npp: number,
-  page: number,
-  total: number,
-  pages: number
-}
-
-/**
- * 列表聚合显示配置。
- * 后端在 `ls` 响应的 `aggregates` 字段里返回 { 字段名: 数值 }，
- * 这里按 field 把值落到同名列（fields[].key）的表尾单元格。
- * 约定：只有数值字段（float / integer）可以聚合；非数值一律显示 '-'。
- */
-export interface AggregateConfig {
-  /** 必须同时是列的 key 与后端 aggregates 的键 */
-  field: string
-  /** 可选前缀标题（如 "Total"），只在第一个有值的聚合列上显示 */
-  label?: string
-  /** 可选格式化，入参恒为 number */
-  format?: (v: number) => string
-}
-
-interface TablePagedProps {
-  lang?: string
-  fields: TableField[]
-  api: string
-  hpostdata?: Function
-  onRowClick?: (data: Data) => void
-  selected?: Data[]
-  defaultSort?: string
-  /** 声明哪些数值列在表尾显示聚合值；不传则不渲染表尾 */
-  aggregate?: AggregateConfig[]
-}
-
+import type {
+  TableField,
+  Paging,
+  TablePagedProps
+} from './crud-types'
 const props = defineProps<TablePagedProps>()
 
 // theme 从 common.ts 导入
@@ -376,6 +339,15 @@ const buildStyleTd = (f:TableField) => (row:any) => {
   return classes
 }
 
+/** 行单元格 inline 样式（与 buildStyleTd 的 class 互补），用于 filter 命中选项的 inline 注入 */
+const buildStyleTdInline = (f: TableField) => (row: any): Record<string, string> => {
+  if (f.row__style_inline) {
+    const s = f.row__style_inline(row)
+    return (s && typeof s === 'object') ? s : {}
+  }
+  return {}
+}
+
 // 取当前有聚合值的第一个字段，用于决定 label 前缀挂在哪一列
 const firstAggField = computed(() => {
   void s.trigger
@@ -426,6 +398,20 @@ const loadPage = (page:number) => {
 vue.onMounted(async () => {
   loadPage(0)
 })
+
+// 外部触发重载（如 Crud 的字段筛选变化）。props.trigger 可能是 ref 或数字：
+// 经 TabContainer 的 v-bind 透传后会被自动解包成数字，故这里统一取值并始终注册 watch。
+watch(
+  () => {
+    const t = props.trigger as any
+    if (t && typeof t === 'object') {
+      if ('n' in t) return t.n          // Crud 传来的 reactive({ n }) 触发对象
+      if ('value' in t) return t.value  // 兼容直接传 ref 的情况
+    }
+    return t
+  },
+  () => { loadPage(0) }
+)
 
 </script>
 

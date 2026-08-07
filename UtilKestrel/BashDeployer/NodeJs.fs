@@ -238,6 +238,9 @@ let buildFrontend output credential code =
             // 步骤3: 用系统 node 运行 vite build（不用 bun bd，因 bun 内嵌 Node 版本可能不够 Vite 8 要求）
             // 参考：bun 1.2.15 内嵌 Node 22.6.0，Vite 8 要求 22.12+，导致构建静默失败
             "[DEBUG] --- 步骤3: node vite build ---" |> yellow |> output
+            // 构建前打时间戳标记：用固定文件而非 package.json 作基准，
+            // 避免 bun install --frozen-lockfile 改写 package.json mtime 导致与 dist 同秒、被 -nt 误判 STALE
+            bash output credential "touch /tmp/wyi_frontend_prebuild" |> ignore
             let buildResult = bashDetached output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[VITE_EXIT=$?]'" 90000
             buildResult |> output
             
@@ -260,8 +263,12 @@ let buildFrontend output credential code =
             // 验证构建真正成功 + dist 有产物 + 产物为本次新构建
             let viteExit = extractExitCode buildResult "[VITE_EXIT="
             let distCount = remoteDistFileCount output credential vscodeDir
-            let fresh = remoteDistFresh output credential vscodeDir
-            if viteExit = 0 && distCount <> "0" && fresh then
+            let fresh = remoteDistFresh output credential vscodeDir "/tmp/wyi_frontend_prebuild"
+            // 判定：dist 有产物 且 产物为本次构建（比构建前标记新）。
+            // viteExit 仅作诊断——若标记存在且非 0，说明 vite 明确报错，优先判失败；
+            // 若回显标记未被捕获（极少数情况），以 fresh 为准，避免误判。
+            let viteReportedFail = (viteExit <> -1) && (viteExit <> 0)
+            if distCount <> "0" && fresh && not viteReportedFail then
                 $"✓ 前端构建完成 (vite exit={viteExit}, dist 产物: {distCount} 项, 产物已更新)" |> green |> output
                 true
             else
@@ -282,14 +289,21 @@ let buildFrontend output credential code =
             
             // 步骤2: vite build（用 node 跑，不用 bun bd）
             "[DEBUG] --- npm: node vite build ---" |> yellow |> output
+            // 构建前打时间戳标记：用固定文件而非 package.json 作基准，
+            // 避免 bun install 改写 package.json mtime 导致与 dist 同秒、被 -nt 误判 STALE
+            bash output credential "touch /tmp/wyi_frontend_prebuild" |> ignore
             let buildResult = bashDetached output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[VITE_EXIT=$?]'" 90000
             buildResult |> output
             
             // 验证构建真正成功 + dist 有产物 + 产物为本次新构建
             let viteExit = extractExitCode buildResult "[VITE_EXIT="
             let distCount = remoteDistFileCount output credential vscodeDir
-            let fresh = remoteDistFresh output credential vscodeDir
-            if viteExit = 0 && distCount <> "0" && fresh then
+            let fresh = remoteDistFresh output credential vscodeDir "/tmp/wyi_frontend_prebuild"
+            // 判定：dist 有产物 且 产物为本次构建（比构建前标记新）。
+            // viteExit 仅作诊断——若标记存在且非 0，说明 vite 明确报错，优先判失败；
+            // 若回显标记未被捕获（极少数情况），以 fresh 为准，避免误判。
+            let viteReportedFail = (viteExit <> -1) && (viteExit <> 0)
+            if distCount <> "0" && fresh && not viteReportedFail then
                 $"✓ 前端构建完成 (vite exit={viteExit}, dist 产物: {distCount} 项, 产物已更新)" |> green |> output
                 true
             else

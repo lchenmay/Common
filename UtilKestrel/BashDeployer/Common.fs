@@ -106,12 +106,16 @@ let remoteDistFileCount output credential vscodeDir =
         result.Trim()
     with _ -> "0"
 
-/// 远程检查 dist/index.html 是否为本次新构建（比源码 package.json 更新）
+/// 远程检查 dist/index.html 是否为本次新构建（比构建前打的标记文件更新）
 /// 用于捕获 vite 在 --emptyOutDir 清空 dist 之前就崩溃、旧产物被保留的静默失败场景
+/// 注意：基准不能用 package.json —— bun install --frozen-lockfile 会改写 package.json 的 mtime，
+///       它与 vite 生成的 dist/index.html 常常落在同一秒，而 -nt 是严格大于，会被误判 STALE，
+///       导致"构建其实成功却报失败"。改用 buildFrontend 在构建前 touch 的固定标记文件作基准。
 /// vscodeDir 应该是相对路径（如 Dev/WYI/vscode），函数会自动添加 ~/ 前缀
-let remoteDistFresh output credential vscodeDir =
+/// markerFile 是构建前 touch 的绝对路径（如 /tmp/wyi_frontend_prebuild）
+let remoteDistFresh output credential vscodeDir markerFile =
     try
-        let cmd = $"if [ -f ~/{vscodeDir}/dist/index.html ] && [ ~/{vscodeDir}/dist/index.html -nt ~/{vscodeDir}/package.json ]; then echo 'FRESH'; else echo 'STALE'; fi"
+        let cmd = $"if [ -f ~/{vscodeDir}/dist/index.html ] && [ ~/{vscodeDir}/dist/index.html -nt {markerFile} ]; then echo 'FRESH'; else echo 'STALE'; fi"
         let result = bash output credential cmd
         result.Trim().Contains("FRESH")
     with _ -> false

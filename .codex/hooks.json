@@ -1,0 +1,8 @@
+{
+  "description": "Common deterministic policy and completion gate.",
+  "hooks": {
+    "PreToolUse": [{ "matcher": "^(Bash|apply_patch|Edit|Write)$", "hooks": [{ "type": "command", "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\DEV\\Common\\CodexPolicy\\PreToolUse.ps1\" -PolicyPath \"D:\\DEV\\Common\\.codex\\policy.json\"", "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\DEV\\Common\\CodexPolicy\\PreToolUse.ps1\" -PolicyPath \"D:\\DEV\\Common\\.codex\\policy.json\"", "timeout": 10, "statusMessage": "Checking Common policy" }] }],
+    "PostToolUse": [{ "matcher": "^(Bash|apply_patch|Edit|Write)$", "hooks": [{ "type": "command", "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\DEV\\Common\\CodexPolicy\\PostToolUse.ps1\" -PolicyPath \"D:\\DEV\\Common\\.codex\\policy.json\"", "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\DEV\\Common\\CodexPolicy\\PostToolUse.ps1\" -PolicyPath \"D:\\DEV\\Common\\.codex\\policy.json\"", "timeout": 10, "statusMessage": "Tracking Common verification state" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\DEV\\Common\\CodexPolicy\\Stop.ps1\" -PolicyPath \"D:\\DEV\\Common\\.codex\\policy.json\"", "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\DEV\\Common\\CodexPolicy\\Stop.ps1\" -PolicyPath \"D:\\DEV\\Common\\.codex\\policy.json\"", "timeout": 10, "statusMessage": "Checking Common completion gate" }] }]
+  }
+}

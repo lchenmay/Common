@@ -1,0 +1,11 @@
+{
+  "solution": {
+    "path": "Common-All.sln",
+    "projects": [
+      "Util/Util.fsproj",
+      "UtilCs/UtilCs.csproj",
+      "Demo/Demo.fsproj",
+      "UtilKestrel/UtilKestrel.fsproj"
+    ]
+  }
+}

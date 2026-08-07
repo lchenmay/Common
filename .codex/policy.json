@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "mode": "enforce",
+  "repositoryName": "Common",
+  "repositoryRoot": "D:\\DEV\\Common",
+  "verificationCommand": "scripts/codex-verify.ps1",
+  "generatedPathFragments": [],
+  "directGeneratorFragments": [],
+  "trustedGeneratorFragments": [],
+  "siblingRepositoryRoots": [
+    "D:\\DEV\\Aiarwa",
+    "D:\\DEV\\JCS",
+    "D:\\DEV\\TempOfficeKH",
+    "D:\\DEV\\yhb-simulation-engine"
+  ],
+  "completionGate": { "enabled": true }
+}

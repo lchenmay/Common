@@ -106,6 +106,16 @@ let remoteDistFileCount output credential vscodeDir =
         result.Trim()
     with _ -> "0"
 
+/// 远程检查 dist/index.html 是否为本次新构建（比源码 package.json 更新）
+/// 用于捕获 vite 在 --emptyOutDir 清空 dist 之前就崩溃、旧产物被保留的静默失败场景
+/// vscodeDir 应该是相对路径（如 Dev/WYI/vscode），函数会自动添加 ~/ 前缀
+let remoteDistFresh output credential vscodeDir =
+    try
+        let cmd = $"if [ -f ~/{vscodeDir}/dist/index.html ] && [ ~/{vscodeDir}/dist/index.html -nt ~/{vscodeDir}/package.json ]; then echo 'FRESH'; else echo 'STALE'; fi"
+        let result = bash output credential cmd
+        result.Trim().Contains("FRESH")
+    with _ -> false
+
 /// 远程通过 curl 查询 monitorVersion API 获取运行时版本
 let remoteQueryVersion output credential port code =
     try

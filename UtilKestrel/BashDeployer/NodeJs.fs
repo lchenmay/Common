@@ -172,6 +172,16 @@ let ensureEnvironment output credential =
 
 // ==================== 构建函数 ====================
 
+/// 从 bashDetached 回显的日志文本中解析 vite 退出码标记（格式: [VITE_EXIT=0]）
+/// bashDetached 只返回 stdout 文本、不返回退出码，故退出码需嵌在输出里再解析
+let private extractExitCode (outputText: string) (marker: string) =
+    let idx = outputText.LastIndexOf(marker)
+    if idx >= 0 then
+        let rest = outputText.Substring(idx + marker.Length)
+        let m = System.Text.RegularExpressions.Regex.Match(rest, "\d+")
+        if m.Success then try int m.Value with _ -> -1 else -1
+    else -1
+
 /// 构建前端（逐条执行）- 使用 code 参数
 let buildFrontend output credential code =
     "\n--- 构建前端 ---" |> cyan |> output
@@ -228,7 +238,7 @@ let buildFrontend output credential code =
             // 步骤3: 用系统 node 运行 vite build（不用 bun bd，因 bun 内嵌 Node 版本可能不够 Vite 8 要求）
             // 参考：bun 1.2.15 内嵌 Node 22.6.0，Vite 8 要求 22.12+，导致构建静默失败
             "[DEBUG] --- 步骤3: node vite build ---" |> yellow |> output
-            let buildResult = bashDetached output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 90000
+            let buildResult = bashDetached output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[VITE_EXIT=$?]'" 90000
             buildResult |> output
             
             // 调试4: 构建后 dist 目录内容
@@ -247,12 +257,16 @@ let buildFrontend output credential code =
             "[DEBUG] --- 构建调试结束 ---" |> yellow |> output
             
             // 验证 dist 产物是否生成
+            // 验证构建真正成功 + dist 有产物 + 产物为本次新构建
+            let viteExit = extractExitCode buildResult "[VITE_EXIT="
             let distCount = remoteDistFileCount output credential vscodeDir
-            if distCount <> "0" then
-                $"✓ 前端构建完成 (dist 产物: {distCount} 项)" |> green |> output
+            let fresh = remoteDistFresh output credential vscodeDir
+            if viteExit = 0 && distCount <> "0" && fresh then
+                $"✓ 前端构建完成 (vite exit={viteExit}, dist 产物: {distCount} 项, 产物已更新)" |> green |> output
                 true
             else
-                "❌ 前端构建后 dist 目录为空或不存在！" |> red |> output
+                $"❌ 前端构建失败 (vite exit={viteExit}, dist 产物: {distCount} 项, 新鲜度: {fresh})" |> red |> output
+                $"   诊断: 查看上方 [DEBUG] 构建日志中的 vite 错误（常见: 依赖缺失/语法错误/config 解析失败）；旧 dist 被保留时新鲜度=STALE。" |> red |> output
                 false
         else
             "  使用 npm 安装 + 构建前端（Bun 不可用）..." |> cyan |> output
@@ -268,13 +282,17 @@ let buildFrontend output credential code =
             
             // 步骤2: vite build（用 node 跑，不用 bun bd）
             "[DEBUG] --- npm: node vite build ---" |> yellow |> output
-            let buildResult = bashDetached output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[DEBUG] vite build exit code:' $?" 90000
+            let buildResult = bashDetached output credential $"cd $HOME/{vscodeDir} && node ./node_modules/vite/bin/vite.js build --emptyOutDir 2>&1; echo '[VITE_EXIT=$?]'" 90000
             buildResult |> output
             
+            // 验证构建真正成功 + dist 有产物 + 产物为本次新构建
+            let viteExit = extractExitCode buildResult "[VITE_EXIT="
             let distCount = remoteDistFileCount output credential vscodeDir
-            if distCount <> "0" then
-                $"✓ 前端构建完成 (dist 产物: {distCount} 项)" |> green |> output
+            let fresh = remoteDistFresh output credential vscodeDir
+            if viteExit = 0 && distCount <> "0" && fresh then
+                $"✓ 前端构建完成 (vite exit={viteExit}, dist 产物: {distCount} 项, 产物已更新)" |> green |> output
                 true
             else
-                "❌ 前端构建后 dist 目录为空或不存在！" |> red |> output
+                $"❌ 前端构建失败 (vite exit={viteExit}, dist 产物: {distCount} 项, 新鲜度: {fresh})" |> red |> output
+                $"   诊断: 查看上方 [DEBUG] 构建日志中的 vite 错误（常见: 依赖缺失/语法错误/config 解析失败）；旧 dist 被保留时新鲜度=STALE。" |> red |> output
                 false

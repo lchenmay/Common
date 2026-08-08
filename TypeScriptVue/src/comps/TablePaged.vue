@@ -189,7 +189,7 @@ import type {
   Paging,
   TablePagedProps
 } from './crud-types'
-const props = defineProps<TablePagedProps>()
+const props = defineProps<TablePagedProps & { data__id?: (data: any) => any }>()
 
 // theme 从 common.ts 导入
 
@@ -267,10 +267,20 @@ const handleSort = (fieldKey: string) => {
   loadPage(0)
 }
 
-// 判定某行对象是否被多选勾选
+// 行 id 提取：优先用 data__id（稳定，跨页 reload 后对象引用变化仍可比），
+// 否则回退到对象引用（与原逻辑兼容）。
+const idOf = (item: Data): any => {
+  if (props.data__id) {
+    try { return props.data__id(item) } catch { /* 字段缺失时退化为引用 */ }
+  }
+  return item
+}
+
+// 判定某行对象是否被多选勾选（基于 id 集合，跨页持久）
 const isRowSelected = (item: Data): boolean => {
   if (!props.selected) return false
-  return s.trigger >= 0 && props.selected.includes(item)
+  const id = idOf(item)
+  return s.trigger >= 0 && props.selected.some(x => idOf(x) === id)
 }
 
 // 判定当前页数据是否处于全选状态
@@ -290,7 +300,7 @@ const isIndeterminate = computed(() => {
 const toggleRow = (item: Data) => {
   if (!props.selected) return
 
-  const idx = props.selected.indexOf(item)
+  const idx = props.selected.findIndex(x => idOf(x) === idOf(item))
   if (idx !== -1) {
     props.selected.splice(idx, 1)
   } else {
@@ -306,7 +316,7 @@ const toggleAll = () => {
 
   if (isAllSelected.value) {
     s.items.forEach(item => {
-      const idx = selected.indexOf(item)
+      const idx = selected.findIndex(x => idOf(x) === idOf(item))
       if (idx !== -1) {
         selected.splice(idx, 1)
       }

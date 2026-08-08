@@ -246,6 +246,14 @@ vue.onMounted(async () => {
     ;(filterBindings as any).splice(0, filterBindings.length, ...bs)
   }
 
+  // 应用字段筛选默认值：调用方给出要「预选」的选项下标集合；未列出的字段保持默认（全选）。
+  // 用于 §3.4 场景：如 enabled 筛选默认仅预选 [1]（Enabled）→ 列表默认隐藏 disabled。
+  if (props.filterDefaults) {
+    for (const [fieldKey, idxs] of Object.entries(props.filterDefaults)) {
+      filterSelections.set(fieldKey, new Set(idxs as any[]))
+    }
+  }
+
   const augmentedFields = buildAugmentedFields()
 
   tabRef.value?.createTab({
@@ -259,6 +267,7 @@ vue.onMounted(async () => {
       api: props.api!,
       hpostdata: wrapHpostdata(),
       selected: props.selected,
+      data__id: props.data__id,
       defaultSort: props.defaultSort,
       aggregate: props.aggregate,
       onRowClick: openTab,

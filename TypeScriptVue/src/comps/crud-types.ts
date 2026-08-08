@@ -92,4 +92,10 @@ export interface CrudProps<Data = any> {
   defaultSort?: string
   /** 列表表尾的数值聚合显示配置，透传给 TablePaged */
   aggregate?: AggregateConfig[]
+  /**
+   * 字段筛选默认值：调用方给出「要预选的选项下标集合」（valuePath 对应字段的枚举值下标）。
+   * 形如 { enabled: [1] } 表示 enabled 筛选默认仅选中下标 1。
+   * 未列出的字段保持默认（全选）。用于在 §3.4 场景下默认隐藏特定记录（如 disabled 用户）。
+   */
+  filterDefaults?: Record<string, any[]>
 }
